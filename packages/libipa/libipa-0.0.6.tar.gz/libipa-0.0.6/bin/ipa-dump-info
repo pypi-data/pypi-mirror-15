@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
+from __future__ import print_function
+from datetime import date, datetime
+from os.path import isdir, join as path_join, realpath
+from shutil import move as move_file, rmtree
+from tempfile import mkdtemp
+import argparse
+import json
+import sys
+
+from ipa import IPAFile, InvalidApplicationNameError
+
+
+def date_encoder(obj):
+    """
+    datetime.datetime() JSON serialisation handler.
+    http://stackoverflow.com/a/34303655/374110
+    """
+    if isinstance(obj, datetime) or isinstance(obj, date):
+        return obj.isoformat()
+    return None
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('ipas', metavar='IPA_FILES', nargs='*')
+    parser.add_argument('-i', '--ignore-bad', action='store_true')
+    parser.add_argument('-j', '--json', action='store_true')
+
+    args = parser.parse_args()
+
+    for path in args.ipas:
+        with IPAFile(path) as fp:
+            out = fp.app_info
+
+            try:
+                out['IPAFilename'] = fp.get_ipa_filename()
+            except InvalidApplicationNameError as e:
+                if args.ignore_bad:
+                    continue
+                else:
+                    raise e
+
+            out['IPAIsUniversal'] = fp.is_universal()
+            out['UIUserInterfaceIdiomPad'] = fp.is_ipad()
+            out['UIUserInterfaceIdiomPhone'] = fp.is_iphone()
+
+            if args.json:
+                out = json.dumps(out, default=date_encoder)
+
+            print(out)
