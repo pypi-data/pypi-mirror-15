@@ -1,0 +1,78 @@
+Adapter for `Nucleic Acid Database <http://ndbserver.rutgers.edu/>`_
+====================================================================
+
+.. image:: https://img.shields.io/pypi/status/ndb_adapter.svg
+    :target: https://pypi.python.org/pypi/ndb_adapter
+
+.. image:: https://img.shields.io/pypi/v/ndb_adapter.svg
+    :target: https://pypi.python.org/pypi/ndb_adapter
+
+.. image:: https://img.shields.io/pypi/dm/ndb_adapter.svg
+        :target: https://pypi.python.org/pypi/ndb_adapter
+
+.. image:: https://img.shields.io/pypi/l/ndb_adapter.svg
+        :target: https://pypi.python.org/pypi/ndb_adapter
+
+.. image:: https://img.shields.io/pypi/pyversions/ndb_adapter.svg
+    :target: https://pypi.python.org/pypi/ndb_adapter
+
+Adapter for easy access to NDB resources directly from python (3.*).
+
+Usage
+-----
+
+To get summary of structure, type:
+
+.. code-block:: python
+
+    >>> from ndb_adapter import NDB
+    >>> res = NDB.summary('4Z4B')
+    >>> res.ndb_id
+    '4Z4B'
+    >>> res.title
+    '2-PYRIDYL HOECHST - A NEW GENERATION DNA-BINDING RADIOPROTECTOR'
+    >>> res.description
+    "DNA (5'-D(*CP*GP*CP*AP*AP*AP*TP*TP*TP*GP*CP*G)-3')"
+    >>> res.get_dict()
+    {'Molecular Description': "DNA (5'-D(*CP*GP*CP*AP*AP*AP*TP*TP*TP*GP*CP*G)-3')", ...}
+
+As you see some properties are available for result. Full list of them is
+`here <http://michsior14.github.io/ndb_adapter/ndb_adapter.html#module-ndb_adapter.summary_result>`_.
+Almost on every result of search you can download related files `(.pdb, .cif, .xml etc.)
+<http://michsior14.github.io/ndb_adapter/ndb_adapter.html#ndb_adapter.ndb_download.DownloadType>`_
+to buffer or save on disc.
+
+.. code-block:: python
+
+    >>> res.download() #Pdb is default
+    "HEADER DNA 01-APR-15 4Z4B ..."
+
+    from ndb_adapter import DownloadType
+    >>> res.download(download_type=DownloadType.Cif)
+    'data_4Z4B\n# \n_entry.id   4Z4B ...'
+
+    >>> res.download(save=True) #saves in current directory
+    >>> res.download(save=True, target_dir='~/Downloads/') #saves in /Downloads/
+
+To be continued...
+
+Requirements
+------------
+
+- python 3.*
+- `requests <https://pypi.python.org/pypi/requests>`_
+- `xlrd <https://pypi.python.org/pypi/xlrd>`_
+
+Installation
+------------
+
+To install, simply:
+
+.. code-block:: bash
+
+    $ pip install ndb_adapter
+
+Documentation
+-------------
+
+Documentation is available at https://michsior14.github.io/ndb_adapter/.
