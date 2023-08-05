@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block main %}
+<h1>{% trans "Sprint" %}{% if board %}{% blocktrans with board_name=board.name sprint_name=sprint.name %} for project {{ board_name }} / {{ sprint_name }}{% endblocktrans %}{% endif %}</h1>
+{% if cards %}
+    <h2>{% trans "Time booked on Trello cards" %}</h2>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>{% trans "List" %}</th>
+                <th>{% trans "ID" %}</th>
+                <th>{% trans "Name" %}</th>
+                <th>{% trans "Estimated time" %}</th>
+                <th>{% trans "Estimated cost" %}</th>
+                <th>{% trans "Waived time" %}</th>
+                <th>{% trans "Waived cost" %}</th>
+                <th>{% trans "Actual time" %}</th>
+                <th>{% trans "Actual cost" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for card in cards %}
+                <tr>
+                    <td>{{ card.list_name }}</td>
+                    <td><a href="{{ card.shortUrl }}" target="_blank">{{ card.idShort }}</a></td>
+                    <td>{{ card.name }}</td>
+                    <td>{{ card.time_estimated }}</td>
+                    <td>{{ card.cost_estimated|floatformat:2 }}</td>
+                    <td>{{ card.time_free }}</td>
+                    <td>{{ card.cost_free|floatformat:2 }}</td>
+                    <td>{{ card.time_actual }}</td>
+                    <td>{{ card.cost_actual|floatformat:2 }}</td>
+                </tr>
+            {% endfor %}
+                <tr>
+                    <td colspan="3"><strong>{% trans "Total" %}</strong></td>
+                    <td><strong>{{ board.time_estimated_total }}</strong></td>
+                    <td><strong>{{ board.cost_estimated_total|floatformat:2 }}</strong></td>
+                    <td><strong>{{ board.time_free_total }}</strong></td>
+                    <td><strong>{{ board.cost_free_total|floatformat:2 }}</strong></td>
+                    <td><strong>{{ board.time_actual_total }}</strong></td>
+                    <td><strong>{{ board.cost_actual_total|floatformat:2 }}</strong></td>
+                </tr>
+        </tbody>
+    </table>
+{% endif %}
+
+{% if entries.has_non_cards %}
+    <h2>{% trans "Time booked without Trello cards" %}</h2>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>{% trans "Date" %}</th>
+                <th>{% trans "Description" %}</th>
+                <th>{% trans "Minutes" %}</th>
+                <th>{% trans "Cost" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries.entries %}
+                {% if not entry.entry.has_card and entry.entry.billable %}
+                    <tr>
+                        <td>{{ entry.entry.date }}</td>
+                        <td>{{ entry.entry.description }}</td>
+                        <td>{{ entry.entry.minutes }}</td>
+                        <td>{{ entry.entry.cost|floatformat:2 }}</td>
+                    </tr>
+                {% endif %}
+            {% endfor %}
+            <tr>
+                <td colspan="1"><strong>{% trans "Total" %}</strong></td>
+                <td></td>
+                <td><strong>{{ entries.total_non_card_time }}</strong></td>
+                <td><strong>{{ entries.total_non_card_cost|floatformat:2 }}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+{% endif %}
+
+{% if entries.has_free_non_cards %}
+    <h2>{% trans "Waived time booked without Trello cards" %}</h2>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>{% trans "Date" %}</th>
+                <th>{% trans "Description" %}</th>
+                <th>{% trans "Minutes" %}</th>
+                <th>{% trans "Cost" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries.entries %}
+                {% if not entry.entry.has_card and not entry.entry.billable %}
+                    <tr>
+                        <td>{{ entry.entry.date }}</td>
+                        <td>{{ entry.entry.description }}</td>
+                        <td>{{ entry.entry.minutes }}</td>
+                        <td>{{ entry.entry.cost|floatformat:2 }}</td>
+                    </tr>
+                {% endif %}
+            {% endfor %}
+            <tr>
+                <td colspan="1"><strong>{% trans "Total" %}</strong></td>
+                <td></td>
+                <td><strong>{{ entries.total_free_non_card_time }}</strong></td>
+                <td><strong>{{ entries.total_free_non_card_cost|floatformat:2 }}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+{% endif %}
+
+<table class="table table-striped">
+    <h2>{% trans "Grand totals" %}</h2>
+    <thead>
+        <tr>
+            <th colspan="1"></th>
+            <th>{% trans "Minutes" %}</th>
+            <th>{% trans "Cost" %}</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="width:100%;"><strong>{% trans "Grand total waived" %}</strong></td>
+            <td><strong>{{ board.time_free_total|add:entries.total_free_non_card_time }}</strong></td>
+            <td><strong>{{ board.cost_free_total|add:entries.total_free_non_card_cost }}</strong></td>
+        </tr>
+        <tr>
+            <td style="width:100%;"><strong>{% trans "Grand total billable" %}</strong></td>
+            <td><strong>{{ board.time_actual_total|add:entries.total_non_card_time }}</strong></td>
+            <td><strong>{{ board.cost_actual_total|add:entries.total_non_card_cost }}</strong></td>
+        </tr>
+    </tbody>
+</table>
+
+<form method="get" action=".">
+    <div><label>{% trans "Trello Board ID" %}:</label> <input type="text" name="board" /></div>
+    <div><label>{% trans "Freckle Project ID" %}:</label> <input type="text" name="project" /></div>
+    <div><label>{% trans "Start Date" %}:</label> <input type="text" name="start_date" /></div>
+    <div><label>{% trans "End Date" %}:</label> <input type="text" name="End_date" /></div>
+    <div><label>{% trans "Hourly rate" %}:</label> <input type="text" name="rate" /></div>
+    <div><input type="submit" value="{% trans "Submit" %}" /></div>
+</form>
+{% endblock %}
