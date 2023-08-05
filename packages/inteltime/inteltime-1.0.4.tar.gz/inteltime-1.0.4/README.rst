@@ -1,0 +1,113 @@
+===========
+Intel Times
+===========
+
+This is a simple module for managing checkpoint and cycle information for
+Niantic Labs' Ingress game.
+
+It includes a command-line front end and a flask based daemon for
+responding to Slack slash commands.
+
+Niantic Labs is not responsible for this program, and neither endorses nor
+supports it.
+
+Installation
+------------
+
+    pip install inteltime
+
+After installing, you will end up with a set of applications (mostly used for
+testing) and the eyeop module:
+
+- `inteltime` - command line utility for testing
+- `inteltime-flask` - stantalone (for debugging only) flask daemon for Slack
+
+Use
+---
+
+Use the source, or try the `inteltime` test-jig command.  This is mainly an
+API, the slack plugin and test-jig are just fun examples.
+
+Slack Use
+---------
+
+There is rudimentary natural language time/date processing available, and
+timezone support.  Timezones are separated by commas.
+
+By default, checkpoint will give you the next checkpoint, and cycle will give
+you the current cycle.
+
+    /checkpoint
+    /checkpoint on today, America/Los_Angeles
+    /checkpoint ,UTC
+    /checkpoint 2016-05-04,Asia/Bejing
+
+    /cycle
+    /cycle next Monday,UTC
+
+
+
+Apache with mod_wsgi for Slack
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Configure Apache with HTTPS and valid (not self-signed) SSL certificates.
+Slack requires that your certificates are not self-signed.
+
+Configure Apache to serve WSGI files out of of a particular directory,
+in this example, we're using `/srv/prod/wsgi`
+
+::
+
+    WSGIScriptAlias /inteltime /srv/prod/wsgi/inteltime.wsgi
+    <Directory "/srv/prod/wsgi">
+	Require all granted
+        SSLOptions +StdEnvVars
+	Order allow,deny
+	Allow from all
+    </Directory>
+
+Install mod_wsgi and copy the .wsgi file in this module to the directory
+where you decided to serve .wsgi files (as above).
+
+::
+
+    sudo pip install mod_wsgi
+    sudo a2enmod mod_wsgi
+    cp inteltime/examples/inteltime.wsgi /srv/prod/wsgi/inteltime.wsgi
+
+Restart apache with the new configuration and modules.
+
+::
+
+    systemctl apache2 restart
+
+
+Slack
+~~~~~
+
+Create a two slack custom integration slash commands.
+(See https://.slack.com/apps/manage/custom-integrations)
+
+::
+
+    command: /checkpoint
+    url: https://address.of.your.server/inteltime/checkpoint
+    method: POST
+
+    command: /cycle
+    url: https://address.of.your.server/inteltime/cycle
+    method: POST
+
+When someone uses the ``/checkpoint`` slash-command, a HTTPS post will be issued
+to the URL you specified, which, in turn, will cause Apache to execute
+the shim script, which will, in turn, execute the wsgi module.
+
+
+Changelog
+=========
+
+- 1.0.4 - Fri May  6 09:54:39 PDT 2016
+  Checkpoint number was off by one
+  Add home page url to packaging.
+  Improve documentation.
+  Pylint cleanup.
