@@ -1,0 +1,140 @@
+{% load i18n %}
+
+{% url 'widget_update' widget.get_ct_name widget.id as update_url %}
+{% url 'widget_copy' widget.get_ct_name widget.id as copy_url %}
+{% url 'widget_delete' widget.get_ct_name widget.id as delete_url %}
+{% url 'widget_reorder' widget.get_ct_name widget.id -1 as order_up_url %}
+{% url 'widget_reorder' widget.get_ct_name widget.id 1 as order_down_url %}
+{% url 'widget_reorder' widget.get_ct_name widget.id 0 as order_first_url %}
+{% url 'widget_reorder' widget.get_ct_name widget.id 5 as order_last_url %}
+
+<div class="btn-group wide">
+  <a class="ajax-modal leonardo-btn leonardo-btn-info aylen" href="{{ update_url }}"><i class="fa fa-pencil-square-o"></i></a>
+  <a class="leonardo-btn leonardo-btn-info aylen" href="{{ copy_url }}"><i class="fa fa-files-o"></i></a>
+  <a id="ajax-info-{{ widget.fe_identifier }}" class="leonardo-btn leonardo-btn-info aylen" href='#'><i class="fa fa-info-circle"></i></a>
+  <a class="ajax-modal leonardo-btn leonardo-btn-danger aylen" href="{{ delete_url }}"><i class="fa fa-times"></i></a>
+  <button data-toggle="dropdown" class="leonardo-btn btn-box-tool leonardo-btn-success dropdown-toggle aylen" id="edit-position"><i class="fa fa-exchange"></i></button>
+  <ul class="dropdown-menu dropdown-menu-right">
+    <li><a href="{{ order_up_url }}">{% trans 'Up' %}</a></li>
+    <li><a href="{{ order_down_url }}">{% trans 'Down' %}</a></li>
+    <li><a href="{{ order_first_url }}">{% trans 'As first' %}</a></li>
+    <li><a href="{{ order_last_url }}">{% trans 'As Last' %}</a></li>
+  </ul>
+</div>
+
+<div class="btn-group narrow">
+  <button data-toggle="dropdown" class="leonardo-btn btn-box-tool leonardo-btn-info dropdown-toggle aylen" id="edit-position"><i class="fa fa-pencil-square-o"></i></button>
+  <ul class="dropdown-menu dropdown-menu-right">
+    <li><a class="ajax-modal" href="{{ update_url }}">{% trans 'Edit' %}</a></li>
+    <li><a href="{{ copy_url }}">{% trans 'Copy' %}</a></li>
+    <li><a id="ajax-info-{{ widget.fe_identifier }}" href="#">{% trans 'Info' %}</a></li>
+    <li><a class="ajax-modal" href="{{ delete_url }}">{% trans 'Delete' %}</a></li>
+    <li class="dropdown-submenu pull-left">
+      <a tabindex="-1" href="#">Position</a>
+      <ul class="dropdown-menu">
+        <li><a href="{{ order_up_url }}">{% trans 'Up' %}</a></li>
+        <li><a href="{{ order_down_url }}">{% trans 'Down' %}</a></li>
+        <li><a href="{{ order_first_url }}">{% trans 'As first' %}</a></li>
+        <li><a href="{{ order_last_url }}">{% trans 'As Last' %}</a></li>
+      </ul>
+    </li>
+  </ul>
+</div>
+
+<script type="text/javascript">
+
+function evaluateWidgetTools() {
+  var widget_width = $("#{{ widget.fe_identifier }}").outerWidth();
+  var widget_position = $("#{{ widget.fe_identifier }} .widget-tools").offset() ? $("#{{ widget.fe_identifier }} .widget-tools").offset().top : "Undefined";
+
+  if (widget_width > 250) {
+      $("#{{ widget.fe_identifier }} .widget-tools .wide").show();
+      $("#{{ widget.fe_identifier }} .widget-tools .narrow").hide();
+  } else {
+      $("#{{ widget.fe_identifier }} .widget-tools .wide").hide();
+      $("#{{ widget.fe_identifier }} .widget-tools .narrow").show();
+  }
+
+  if (widget_position != "Undefined" && widget_position < 50) {
+    $("#{{ widget.fe_identifier }} .widget-tools").css("top", "initial");
+    $("#{{ widget.fe_identifier }} .widget-tools").css("bottom", "-40px");
+  } else {
+    $("#{{ widget.fe_identifier }} .widget-tools").css("top", "-40px");
+    $("#{{ widget.fe_identifier }} .widget-tools").css("bottom", "initial");
+  }
+}
+
+$( document ).ready( evaluateWidgetTools );
+
+$( window ).resize( evaluateWidgetTools );
+
+</script>
+
+
+<script type="text/javascript">
+
+$(function() {
+
+  $('#ajax-info-' + '{{ widget.fe_identifier }}').on('click', function (evt, modal) {
+  	    $.ajax({
+        type: "GET",
+        url: '{% url 'widget_info' widget.get_ct_name widget.id %}',
+        async: true,
+        success: function(data){
+          horizon.autoDismissAlerts();
+        }      
+      });
+  });
+});
+
+$("#{{ widget.fe_identifier }}").dblclick(function (evt) {
+    var $this = $(this);
+
+    // If there's an existing modal request open, cancel it out.
+    if (horizon.modals._request && typeof(horizon.modals._request.abort) !== undefined) {
+      horizon.modals._request.abort();
+    }
+
+    horizon.modals._request = $.ajax("{{ update_url }}", {
+      beforeSend: function () {
+        horizon.modals.modal_spinner(gettext("Loading"));
+      },
+      complete: function () {
+        // Clear the global storage;
+        horizon.modals._request = null;
+        horizon.modals.spinner.modal('hide');
+      },
+      error: function(jqXHR, status, errorThrown) {
+        if (jqXHR.status === 401){
+          var redir_url = jqXHR.getResponseHeader("X-Horizon-Location");
+          if (redir_url){
+            location.href = redir_url;
+          } else {
+            location.reload(true);
+          }
+        }
+        else {
+          if (!horizon.ajax.get_messages(jqXHR)) {
+            // Generic error handler. Really generic.
+            horizon.alert("danger", gettext("An error occurred. Please try again later."));
+          }
+        }
+      },
+      success: function (data, textStatus, jqXHR) {
+        var update_field_id = $this.attr('data-add-to-field'),
+          modal,
+          form;
+        modal = horizon.modals.success(data, textStatus, jqXHR);
+        if (update_field_id) {
+          form = modal.find("form");
+          if (form.length) {
+            form.attr("data-add-to-field", update_field_id);
+          }
+        }
+      }
+    });
+    evt.preventDefault();
+    evt.stopPropagation();
+});
+
+</script>

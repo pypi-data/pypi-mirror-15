@@ -1,0 +1,112 @@
+
+{% load crispy_forms_tags i18n %}
+
+{% block css_extra %}
+<style type="text/css">
+#settings_button {
+    position: fixed;
+    top: 70px;
+    right: 0;
+    z-index: 1040;
+    cursor: pointer;
+}
+
+#settings_menu {
+    padding: 10px;
+    position: fixed;
+    top: 70px;
+    right: -250px;
+    width: 250px;
+    z-index: 1040;
+}
+</style>
+{% endblock %}
+
+<div class="no-print btn btn-primary" id="settings_button"><i class="fa fa-gear"></i></div>
+<div class="no-print panel panel-default" id="settings_menu">
+
+    {% for action in LEONARDO_CONFIG.page_actions %}
+      {% include action %}
+    {% endfor %}
+
+  </div>
+</div>
+
+<script type="text/javascript">
+    var leonardo = function(leonardo) {
+    leonardo.frontend_admin_menu = leonardo.frontend_admin_menu || {};
+
+    leonardo.frontend_admin_menu.initAdminMenu = function(){
+        var defaultTop = 150,
+          $settingsButton = $("#settings_button"),
+          $demoSettings = $('#settings_menu'),
+          setMenuHeight = function(topPosition,testOnly){
+            if(typeof topPosition === 'string'){
+              topPosition = parseInt(topPosition);
+            }
+            if(topPosition && topPosition>= 0){
+               if($(window).height() < topPosition){
+                topPosition=$(window).height()-($settingsButton.height()+20);
+               }
+               $settingsButton.css("top", parseInt(topPosition));
+               $demoSettings.css("top", parseInt(topPosition));
+               return true;
+            }else{
+               $settingsButton.css("top", defaultTop);
+               $demoSettings.css("top", defaultTop);
+              return false;
+            }
+          };
+
+      $settingsButton.draggable({
+        axis:'y',
+        start: function( event, ui ) {
+           event.stopPropagation();
+        },
+        stop: function( event, ui ) {
+            if(setMenuHeight(ui.position.top)){
+              localStorage.setItem('settingsButton_position',ui.position.top);
+            }
+            $settingsButton.css("left", "");
+        },
+        drag: function( event, ui ) {
+          $demoSettings.css("top",ui.position.top);
+        }
+      });
+      $(window).resize(function(){
+        setMenuHeight($settingsButton.css("top"));
+      });
+      
+      setMenuHeight(localStorage.getItem('settingsButton_position'));
+
+      $settingsButton.click(function () {
+        if (!$settingsButton.hasClass("open")) {
+          localStorage.setItem('settingsButton_open',true);
+          $settingsButton.animate({"right": "250px"});
+          $settingsButton.addClass("open");
+          $demoSettings.animate({"right": "0"});
+        } else {
+          leonardo.frontend_admin_menu.hideSettings();
+        }
+      });
+
+      if(localStorage.getItem('settingsButton_open') === "true"){
+        $settingsButton.animate({"right": "250px"});
+        $demoSettings.animate({"right": "0"});
+        $settingsButton.addClass("open");
+      }
+  };
+  leonardo.frontend_admin_menu.hideSettings = function () {
+      var $settingsButton = $("#settings_button"),
+          $demoSettings = $('#settings_menu');
+      localStorage.setItem('settingsButton_open',false);
+      $settingsButton.animate({"right": "0"});
+      $settingsButton.css('left', '');
+      $demoSettings.animate({"right": "-250px"});
+      $settingsButton.removeClass("open"); 
+  };
+  $(leonardo.frontend_admin_menu.initAdminMenu);
+  return leonardo;
+}(leonardo || {});
+
+</script>
