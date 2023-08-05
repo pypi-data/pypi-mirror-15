@@ -1,0 +1,281 @@
+#!python
+
+import click
+from nsx.client import NSXClient
+import json
+import requests
+import time
+import datetime
+import os
+from dimensiondata.dr.utils import get_vm_mapping_from_file
+from dimensiondata.dr.constants import (DIRECTORY,
+                                        BACKUP_DIRECTORY,
+                                        CURRENT_DIRECTORY)
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from requests import HTTPError
+
+from os import listdir
+from os.path import isfile, join
+
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
+
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+
+class NSXCLIClient(object):
+    def __init__(self):
+        self.verbose = False
+
+    def init_client(self, configfile):
+        config = configparser.ConfigParser()
+        config.readfp(configfile)
+        datacenters = config.sections()
+        self.client = {}
+        for datacenter in datacenters:
+            user = config.get(datacenter, 'user')
+            password = config.get(datacenter, 'password')
+            endpoint = config.get(datacenter, 'endpoint')
+            self.client[datacenter] = NSXClient(user, password, endpoint=endpoint)
+
+
+pass_client = click.make_pass_decorator(NSXCLIClient, ensure=True)
+
+
+@click.group()
+@click.option('--verbose', is_flag=True, default=False)
+@click.option('--configFile', type=click.File('rb'), default='./nsx_config',
+              help='The config file to use for credentials/endpoints')
+@pass_client
+def nsx(nsx, verbose, configfile):
+    nsx.init_client(configfile)
+    nsx.verbose = verbose
+
+
+@nsx.command()
+@click.option('--cron', is_flag=True, default=False, help='Use this flag is running via cron')
+@click.option('--outFile', help='The nsx dump file')
+@click.option('--datacenter', required=True, help='The datacenter to dump the config for')
+@pass_client
+def dump_config(nsx, cron, outfile, datacenter):
+    if not outfile and not cron:
+        click.secho("One of --cron or --outFile must be present", fg='red', bold=True)
+        exit(1)
+    dc_security_groups = {}
+    dc_security_groups[datacenter] = nsx.client[datacenter].list_security_groups()
+    current_time = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H:%M')
+    dc_security_groups['snapshot_time'] = current_time
+
+    if cron:
+        outfile = os.path.join(DIRECTORY, CURRENT_DIRECTORY, "LATEST-{0}".format(datacenter))
+        if os.path.isfile(outfile):
+            with open(outfile) as movefile:
+                data = json.load(movefile)
+            file_timestamp = data['snapshot_time']
+            os.rename(outfile, os.path.join(DIRECTORY,
+                                            BACKUP_DIRECTORY,
+                                            "NSX_BACKUP_{0}_{1}".format(datacenter, file_timestamp)))
+    with open(outfile, 'w+') as nsx_dump:
+        nsx_dump.write(json.dumps(dc_security_groups, sort_keys=True, indent=4, separators=(',', ': ')))
+
+
+@nsx.command()
+@click.option('--latest', default=False, is_flag=True)
+@click.option('--go', help='By default this is a dry run, these will actually do the puts', default=False, is_flag=True)
+@click.option('--nsxDumpFile', help="The nsx dump file to use")
+@click.option('--datacenter', required=True, help='The datacenter to apply the config for')
+@pass_client
+def apply_config(nsx, latest, go, nsxdumpfile, datacenter):
+    if not latest and not nsxdumpfile:
+        click.secho("One of --latest or --nsxDumpFile must be present", fg='red', bold=True)
+        exit(1)
+    if not go:
+        click.secho("This is a dry-run, no actions will be taken", fg='yellow', bold=True)
+    current_security_groups = nsx.client[datacenter].list_security_groups()
+
+    if latest:
+        mypath = os.path.join(DIRECTORY, BACKUP_DIRECTORY)
+        nsx_files = [os.path.join(mypath, f)
+                     for f in listdir(mypath)
+                     if isfile(join(mypath, f)) and datacenter in f]
+        nsx_files = sorted(nsx_files, reverse=True)
+    else:
+        nsx_files = [nsxdumpfile]
+
+    changed = False
+    for nsx_file in nsx_files:
+        with open(nsx_file) as f:
+            dc_security_groups = json.load(f)
+
+            if datacenter not in dc_security_groups:
+                click.secho("No dump found for datacenter {0} in file {1}".format(
+                    datacenter, nsx_file), fg='red', bold=True)
+                continue
+
+            security_groups = dc_security_groups[datacenter]
+
+            if nsx.verbose:
+                click.secho("Checking differences in file {0}".format(nsx_file))
+            differences = compare_security_groups(security_groups, current_security_groups)
+
+            if differences:
+                click.secho("Found differences in {0}".format(nsx_file))
+                for security_group in security_groups:
+                    click.secho("Security group {0}".format(security_group['objectId']))
+                    if 'member' not in security_group:
+                        click.secho("Security group has no members skipping...")
+                        continue
+                    if isinstance(security_group['member'], dict):
+                        add_member(nsx.client[datacenter],
+                                   security_group['objectId'],
+                                   security_group['member']['objectId'],
+                                   go)
+                    else:
+                        for member in security_group['member']:
+                            add_member(nsx.client[datacenter], security_group['objectId'], member['objectId'], go)
+                changed = True
+                break
+
+    if changed and go:
+        click.secho("Security Groups Applied", fg='green', bold=True)
+    else:
+        click.secho("No security groups changed", fg='red', bold=True)
+
+
+@nsx.command()
+@click.option('--sourceDC', required=True)
+@click.option('--destDC', required=True)
+@click.option('--vmFile', help="The vm file to use")
+@pass_client
+def compare_nsx_vms(nsx, sourcedc, destdc, vmfile):
+    vm_mapping = get_vm_mapping_from_file(vmfile)
+    source_security_groups = nsx.client[sourcedc].list_security_groups()
+    dest_security_groups = nsx.client[destdc].list_security_groups()
+
+    source_vm_to_security_group = vm_to_security_group_map(source_security_groups)
+    dest_vm_to_security_group = vm_to_security_group_map(dest_security_groups)
+
+    error = False
+    for source_vm in vm_mapping[sourcedc]:
+        if nsx.verbose:
+            click.secho("Attempting to find VM {0} in NSX Config for {1}".format(source_vm, sourcedc))
+        if source_vm not in source_vm_to_security_group:
+            error = True
+            click.secho("Failed to find VM {0} in DC {1} NSX Config".format(source_vm, sourcedc), fg='red')
+            continue
+        else:
+            security_group_name = source_vm_to_security_group[source_vm]
+            if nsx.verbose:
+                click.secho("Found VM {0} in Securitry Group {1}".format(source_vm, security_group_name))
+
+        dest_vm = vm_mapping[sourcedc][source_vm]['vm']
+        if nsx.verbose:
+            click.secho("VM {0} should be replicating to VM {1} in DC {2}".format(source_vm, dest_vm, destdc))
+        if dest_vm_to_security_group[dest_vm] != security_group_name:
+            error = True
+            click.secho("VM {0} is in SG {1} while VM {2} is in SG: {3}".format(
+                source_vm,
+                security_group_name,
+                dest_vm,
+                dest_vm_to_security_group[dest_vm]
+            ), fg='red')
+            click.secho("")
+            continue
+        else:
+            if nsx.verbose:
+                click.secho("Successfully found both {0} and {1} in SG {2}".format(source_vm,
+                                                                                   dest_vm,
+                                                                                   security_group_name),
+                            fg='green')
+                click.secho("")
+
+    if error:
+        click.secho("Failed to match up VMs to security groups", fg='red', bold=True)
+        exit(1)
+    else:
+        click.secho("All rules match!", fg='green', bold=True)
+
+
+def vm_to_security_group_map(security_groups):
+    data_dict = {}
+    for security_group in security_groups:
+        if 'member' not in security_group:
+            continue
+        if isinstance(security_group['member'], dict):
+            data_dict[fix_vm_name(security_group['member']['scope']['name'])] = fix_sg_name(security_group['name'])
+        else:
+            for member in security_group['member']:
+                data_dict[fix_vm_name(member['scope']['name'])] = fix_sg_name(security_group['name'])
+
+    return data_dict
+
+
+def fix_vm_name(vmname):
+    if vmname.startswith('.'):
+        vmname = vmname[1:]
+    if vmname.endswith('.recoverpoint'):
+        vmname = vmname[:-13]
+    return vmname.replace('-', '.')
+
+
+def fix_sg_name(security_group_name):
+    if security_group_name.endswith('-DR'):
+        security_group_name = security_group_name[:-3]
+    return security_group_name
+
+
+def compare_security_groups(sg1, sg2):
+    for security_group in sg1:
+        if 'member' not in security_group:
+            continue
+        # Now check the other group
+        found = False
+        for comp_security_group in sg2:
+            if security_group['objectId'] == comp_security_group['objectId']:
+                if isinstance(security_group['member'], dict):
+                    if not isinstance(comp_security_group['member'], dict):
+                        break
+                    if security_group['member']['objectId'] == comp_security_group['member']['objectId']:
+                        found = True
+                        break
+                    else:
+                        click.secho("Did not find member {0}".format(security_group['member']['objectId']))
+                        break
+                if isinstance(security_group['member'], list):
+                    if not isinstance(comp_security_group['member'], list):
+                        break
+                    member_ids = [x['objectId'] for x in security_group['member']]
+                    comp_member_ids = [x['objectId'] for x in comp_security_group['member']]
+                    member_ids = sorted(member_ids)
+                    comp_member_ids = sorted(comp_member_ids)
+                    if comp_member_ids == member_ids:
+                        found = True
+                        break
+                    else:
+                        click.secho("Member list for {0} {1} does not match {2}".format(
+                            security_group['objectId'], member_ids, comp_member_ids)
+                        )
+                        break
+                break
+        if found is False:
+            click.secho("Differences found in security group {0}".format(security_group['objectId']))
+            return True
+    return False
+
+
+def add_member(client, group, member, go):
+    if not go:
+        click.secho("Would have made call for {0} and {1}".format(group, member), fg='green')
+    else:
+        try:
+            client.add_member_to_security_group(group, member)
+            click.secho("Successfully added: Group {0} Member {1}".format(group, member), fg='green')
+        except HTTPError:
+            click.secho("Skipping Group {0} Member {1} as it already exists".format(group, member))
+            pass
+
+
+if __name__ == '__main__':
+    nsx()

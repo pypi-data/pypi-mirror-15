@@ -1,0 +1,108 @@
+#!/bin/python
+
+import click
+import json
+from dimensiondata.F5.client import F5Client
+from dimensiondata.dr.utils import handle_click_http_exception
+from requests.exceptions import HTTPError
+CONTEXT_SETTINGS = dict(auto_envvar_prefix='DDF5')
+
+
+class F5CLIClient(object):
+    def __init__(self):
+        self.verbose = False
+
+    def init_client(self, user, password, endpoint):
+        self.client = F5Client(user, password, endpoint=endpoint)
+
+pass_client = click.make_pass_decorator(F5CLIClient, ensure=True)
+
+
+@click.group(context_settings=CONTEXT_SETTINGS)
+@click.option('--verbose', is_flag=True, default=False)
+@click.option('--user', prompt=True)
+@click.option('--password', prompt=True, hide_input=True)
+@click.option('--endpoint', default='f5-ash.c4e-internal.c4e.ops')
+@pass_client
+def f5(f5, verbose, user, password, endpoint):
+    f5.init_client(user, password, endpoint)
+    f5.verbose = verbose
+
+
+@f5.group()
+@pass_client
+def gtm(f5):
+    pass
+
+
+@gtm.command()
+@click.option('--name', required=True, help="The name of the gtm wideip")
+@click.option('--partition', default='Common', help="The partition to check")
+@pass_client
+def list_wideip_config(f5, name, partition):
+    config = f5.client.get_gtm_wideip_config(name, partition)
+    click.secho("{0}".format(json.dumps(config, indent=4, sort_keys=True)))
+
+
+@gtm.command()
+@click.option('--name', required=True, help="The name of the gtm wideip")
+@click.option('--partition', default='Common', help="The partition to check")
+@pass_client
+def list_wideip_pools(f5, name, partition):
+    pools = f5.client.get_gtm_wideip_pools(name, partition)
+    click.secho("Name: {0}  Partition: {1}".format(name, partition))
+    for pool in pools:
+        click.secho("{0}".format(pool))
+
+
+@gtm.command()
+@click.option('--name', required=True, help="The name of the gtm wideip")
+@click.option('--partition', default='Common', help="The partition to check")
+@click.option('--pool', required=True, help="Pool to add.  Can specify multiple times", multiple=True)
+@pass_client
+def set_wideip_pools(f5, name, partition, pool):
+    try:
+        f5.client.set_gtm_wideip_pools(name, pool, partition)
+    except HTTPError as e:
+        handle_click_http_exception(e)
+    click.secho("Successfully set gtm wideip pools", fg='green', bold=True)
+    pools = f5.client.get_gtm_wideip_pools(name, partition)
+    click.secho("Name: {0}  Partition: {1}".format(name, partition))
+    for pool in pools:
+        click.secho("{0}".format(pool))
+
+
+@f5.group()
+@pass_client
+def dr(f5):
+    pass
+
+
+@dr.command()
+@click.option('--name', required=True, help="The name of the gtm wideip to flip")
+@click.option('--flip_to_dr', is_flag=True, default=False, help="Set this flag to flip to DR")
+@click.option('--flip_to_prod', is_flag=True, default=False, help="Set this flag to flip to PROD")
+@pass_client
+def flip_gtm_wideip_pools(f5, name, flip_to_dr, flip_to_prod):
+    if not flip_to_dr and not flip_to_prod:
+        click.secho("You must specify either --flip_to_dr or --flip_to_prod", fg='red', bold=True)
+        exit(1)
+    if flip_to_dr and flip_to_prod:
+        click.secho("You must specify only one of --flip_to_dr or --flip_to_prod", fg='red', bold=True)
+        exit(1)
+    if flip_to_dr:
+        pool = name + '-DR'
+    elif flip_to_prod:
+        pool = name + '-PROD'
+    else:
+        click.secho("Invalid options specified", fg='red', bold=True)
+        exit(1)
+    try:
+        f5.client.set_gtm_wideip_pools(name, [pool])
+    except HTTPError as e:
+        handle_click_http_exception(e)
+    click.secho("Successfully set {0} to have pool {1}".format(name, pool), fg='green', bold=True)
+
+
+if __name__ == '__main__':
+    f5()
