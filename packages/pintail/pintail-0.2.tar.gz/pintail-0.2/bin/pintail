@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+# pintail - Build static sites from collections of Mallard documents
+# Copyright (c) 2015 Shaun McCance <shaunm@gnome.org>
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU Lesser General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option) any
+# later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program; see the file COPYING.LGPL.  If not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+# 02111-1307, USA.
+
+import argparse
+import logging
+import os
+import sys
+
+import pintail
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(title='commands', dest='command')
+
+    subparser = subparsers.add_parser('init', help='initialize a new site')
+
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument('--local',
+                        help='make output suitable for local viewing',
+                        action='store_true')
+    common.add_argument('-o', '--output',
+                        help='specify an output directory',
+                        metavar='OUTPUTDIR')
+    common.add_argument('-v', '--verbose',
+                        help='report on the files being created',
+                        action='store_true')
+    common.add_argument('--no-update',
+                        help='do not update from remote repositories',
+                        action='store_true')
+
+    subparser = subparsers.add_parser('build',
+                                      help='build the entire site',
+                                      parents=[common])
+    subparser.add_argument('dirs', nargs='*')
+
+    subparser = subparsers.add_parser('css',
+                                      help='rebuild CSS resources',
+                                      parents=[common])
+
+    subparser = subparsers.add_parser('js',
+                                      help='rebuild JavaScript resources',
+                                      parents=[common])
+
+    subparser = subparsers.add_parser('feeds',
+                                      help='rebuild Atom feeds',
+                                      parents=[common])
+
+    subparser = subparsers.add_parser('files',
+                                      help='rebuild extra files',
+                                      parents=[common])
+    subparser.add_argument('dirs', nargs='*')
+
+    args = parser.parse_args()
+
+    if args.command == 'init':
+        pintail.Site.init_site(os.curdir)
+        sys.exit(0)
+        
+    dir = os.getcwd()
+    config = os.path.join(dir, 'pintail.cfg')
+    while not os.path.exists(config):
+        if os.path.dirname(dir) == dir:
+            break
+        dir = os.path.dirname(dir)
+        config = os.path.join(dir, 'pintail.cfg')
+    if not os.path.exists(config):
+        sys.stderr.write('Could not find a pintail.cfg file\n')
+        sys.exit(1)
+
+    site = pintail.Site(config)
+    if args.verbose:
+        site.logger.setLevel(logging.INFO)
+
+    if args.local:
+        site.config.set_local()
+
+    if args.no_update:
+        site.config.set_update(False)
+
+    if args.output is not None:
+        site.target_path = os.path.abspath(args.output)
+
+    if args.command == 'build':
+        site.set_filter_dirs(args.dirs)
+        site.build()
+    elif args.command == 'css':
+        site.build_cache()
+        site.build_css()
+    elif args.command == 'js':
+        site.build_cache()
+        site.build_js()
+    elif args.command == 'files':
+        site.set_filter_dirs(args.dirs)
+        site.build_files()
+    elif args.command == 'feeds':
+        site.build_cache()
+        site.build_feeds()
