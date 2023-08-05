@@ -1,0 +1,73 @@
+{% extends "bazar/base.html" %}
+{% load i18n autobreadcrumb crispy_forms_tags bazar_tags taggit_templatetags2_tags %}
+
+{% block bazar_maintitle %}{% endblock %}
+{% block bazar_messages %}{% endblock %}
+
+{% block bazar_content %}
+<div class="clearfix">
+    <p class="right"><a href="{% url "bazar:entity-delete" kind=entity_instance.kind entity_id=entity_instance.id %}" class="button small alert round">{% trans "Delete" %}</a></p>
+    <h2>{% current_title_from_breadcrumbs %}</h2>
+</div>
+<div class="row">
+    {% if messages %}
+    <div class="small-12 columns">
+            {% for message in messages %}
+            <div data-alert class="alert-box {% if message.tags %}{{ message.tags }}{% endif %} radius">
+            {{ message }}
+            <a href="#" class="close">&times;</a>
+            </div>
+            {% endfor %}
+    </div>
+    {% endif %}
+    <div class="small-12 medium-6 large-6 columns end">
+        <div class="panel">
+            <p><strong>{% trans "Adress informations" %}</strong></p>
+            {% if not entity_instance.adress and not entity_instance.town and not entity_instance.zipcode and not entity_instance.phone %}
+                <p><em>Empty</em></p>
+            {% endif %}
+            
+            {% if entity_instance.adress %}<p>{{ entity_instance.adress|linebreaks }}</p>{% endif %}
+            
+            {% if entity_instance.town and entity_instance.zipcode %}
+                <p>{{ entity_instance.town }}, {{ entity_instance.zipcode }}</p>
+            {% else %}
+                {% if entity_instance.town %}<p>{{ entity_instance.town }}</p>{% endif %}
+                {% if entity_instance.zipcode %}<p>{{ entity_instance.zipcode }}</p>{% endif %}
+            {% endif %}
+            
+            {% if entity_instance.phone %}<p>{% trans "Phone:" %} {{ entity_instance.phone }}</p>{% endif %}
+            {% if entity_instance.fax %}<p>{% trans "Fax:" %} {{ entity_instance.fax }}</p>{% endif %}
+            
+            <p class="text-right"><a href="{% url "bazar:entity-edit" kind=entity_instance.kind entity_id=entity_instance.id %}" class="button tiny secondary round">{% trans "Edit" %}</a></p>
+        </div>
+    </div>
+</div>
+
+<hr>
+<div class="row">
+    <div class="small-12 columns">
+        <h3>{% trans "Note cards" %}</h3>
+        <a class="button tiny" href="{% url "bazar:entity-note-create" kind=entity_instance.kind entity_id=entity_instance.id %}">{% trans "Add a note" %}</a>
+<ul class="list-group">
+    {% for item in view.get_notes %}
+        <li class="clearfix">
+            <p class="right text-right">
+                <small>
+                    <a href="{% url "bazar:entity-note-edit" kind=entity_instance.kind entity_id=entity_instance.id note_id=item.id %}" class="button tiny round primary">{% trans "Edit" %}</a>
+                    <a href="{% url "bazar:entity-note-delete" kind=entity_instance.kind entity_id=entity_instance.id note_id=item.id %}" class="button tiny round alert">{% trans "Delete" %}</a>
+                </small>
+            </p>
+            <h4>
+                {% if item.file and not item.content %}
+                    <i class="icon-download"></i>{% include 'bazar/note/_attachment_download.html' with sendfile_enabled=ATTACHMENTS_WITH_SENDFILE entity_instance=entity_instance note_instance=item title=item.title only %}
+                {% else %}
+                    <a href="{% url "bazar:entity-note-detail" kind=entity_instance.kind entity_id=entity_instance.id note_id=item.id %}">{{ item.title }}</a>
+                {% endif %}
+            </h4>
+        </li>
+    {% endfor %}
+</ul>
+    </div>
+</div>
+{% endblock %}
