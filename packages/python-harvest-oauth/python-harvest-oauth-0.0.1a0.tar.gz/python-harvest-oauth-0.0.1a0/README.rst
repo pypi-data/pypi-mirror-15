@@ -1,0 +1,38 @@
+Python Harvest Oauth
+====================
+
+This is a fork from https://github.com/bendavis78/python-harvest which is a fork of https://github.com/lionheart/python-harvest, but adapted to use Oauth2.  
+The changes are fairly significant, hence the different version and development status classifier.
+
+Pull requests and issues are welcome!
+---------------------
+
+Improving the unit tests is currently the main priority, but any help is welcome.
+The tasks are managed by a public Taiga project you can access `here <https://tree.taiga.io/project/j4keh4rding-python-harvest-oauth/>`_.
+
+Usage
+=====
+
+This package builds the URL and redirect needed for Harvest authentication, and
+provides methods for initial retrieval and refresh of Oauth2 tokens.  The Harvest 
+domain, client id and redirect URL are needed for instantiation like so::
+
+    HARVEST_DOMAIN = 'Harvest domain that access is needed'
+    HARVEST_CLIENT_ID = 'Harvest client id you get after creating Oauth2 app in Harvest.'
+    HARVEST_CLIENT_SECRET = 'Harvest client secret you get after creating Oauth2 app in Harvest.'
+    REDIRECT = 'Redirect URL for to redirect to after successful authentication.'
+
+    harvest_client = HarvestRestClient(
+        HARVEST_DOMAIN, 
+        client_id=HARVEST_CLIENT_ID, 
+        redirect_uri=REDIRECT
+    )
+
+After instantiation, harvest_client.authorize_url will have the url needed authenticate with Harvest.  
+After successful authentication, Harvest will redirect to REDIRECT with a `code` query param.  
+The value for it is needed to request the access and refresh tokens.
+The tokens need to be saved somewhere by your app.::
+
+    CODE = 'String submitted in query param'
+
+    ACCESS, REFRESH = harvest_client.get_tokens(CODE, HARVEST_CLIENT_SECRET)
