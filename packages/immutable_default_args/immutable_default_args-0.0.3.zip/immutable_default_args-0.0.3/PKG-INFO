@@ -1,0 +1,92 @@
+Metadata-Version: 1.1
+Name: immutable_default_args
+Version: 0.0.3
+Summary: Very small package that offers a metaclass to automatically safeguard mutable function arguments, preventing them from being modified.
+Home-page: UNKNOWN
+Author: Timm Wagener
+Author-email: wagenertimm@gmail.com
+License: UNKNOWN
+Description: Immutable defaults arguments.
+        
+        This module provides facilities for turning mutable default function arguments
+        into immutable ones.
+        
+        You can install this package with the standard ``pip`` command::
+        
+            $ pip install immutable_default_args
+        
+        The issue with `mutable argument default values<http://stackoverflow.com/questions/1132941/least-astonishment-in-python-the-mutable-default-argument>`_ is pretty well known in Python.
+        Basically mutable default values are assigned once at define time and can then
+        be modified within the function body which might come as a surprise.
+        Here is the example from the *SO* thread::
+        
+            def foo(a=[]):
+                a.append(5)
+                return a
+        
+            >>> foo()
+            [5]
+            >>> foo()
+            [5, 5]
+            >>> foo()
+            [5, 5, 5]
+            ...
+        
+        The default way of preventing this behaviour is to use ``None`` as the default
+        and check for it in the function body, like so::
+        
+            def foo(a=None):
+                a = a if (type(a) is list) else []
+                a.append(5)
+                return a
+        
+            >>> foo()
+            [5]
+            >>> foo()
+            [5]
+            ...
+        
+        This package aims to offer two additional options to fix this issue:
+        * With a handy function decorator ``@fix_mutable_kwargs`` to fix a certain function.
+        * With a metaclass to fix all *methods*, *classmethods* and *staticmethods* at once.
+        
+        Using the decorator::
+        
+            from immutable_default_args import fix_mutable_kwargs
+        
+            @fix_mutable_kwargs
+            def foo(a=[]):
+                a.append(5)
+                return a
+        
+            >>> foo()
+            [5]
+            >>> foo()
+            [5]
+            ...
+        
+        It doesn't matter if the iterable is empty or not::
+        
+            @fix_mutable_kwargs
+            def foo(a=[1, 2, {'key': 'value'}, 3, 4]):
+                a.append(5)
+                return a
+        
+            >>> foo()
+            [1, 2, {'key': 'value'}, 3, 4, 5]
+            >>> foo()
+            [1, 2, {'key': 'value'}, 3, 4, 5]
+            ...
+        
+        
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: Freely Distributable
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.3
+Classifier: Programming Language :: Python :: 3.4
+Classifier: Programming Language :: Python :: 3.5
