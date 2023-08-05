@@ -1,0 +1,111 @@
+Metadata-Version: 1.1
+Name: django-wechat-web
+Version: 0.0.14
+Summary: A simple Django app to conduct Web-based.
+Home-page: UNKNOWN
+Author: Eason Smith
+Author-email: uniquecolesmith@gmail.com
+License: BSD License
+Description: ===
+        django-wechat-web
+        ===
+        
+        django-wechat-web is a simple Django app to conduct Wechat-web-based helper. For each
+        question, visitors can choose between a fixed number of answers.
+        
+        Detailed documentation is in the 'docs' directory.
+        
+        Quick start
+        -----------
+        
+        1. Add 'django_wechat_web' to to your INSTALLED_APPS setting like this::
+           
+           INSTALLED_APPS = [
+                ...
+                'django_wechat_web',
+           ]
+        
+        2. Add WECHAT to your settings file::
+        
+           WECHAT = {
+                'appid': 'YOUR APPID',
+                'appsecret': 'YOUR APP Secret',
+           }
+        
+        3. Run `python manage.py makemigrations django_wechat_web; python manage.py migrate` to create the django_wechat_web models.
+        
+        4. In your app view where your need get wechat user openid, do like this::
+        
+           from django_wechat_web import WechatView
+        
+           class YourViewName(WechatView):
+                '''
+                    Extends WechatView and over get method
+                    Here WechatView extends django.views.generic.View
+                '''
+                scope = 'snsapi_base' # default
+        
+                ...
+        
+        
+                def get(self, request, *args, **kwargs):
+                    # your code ....
+        
+                ...
+        
+        5. Now you can do anything the same as `django.views.generic.View`.
+        
+        6. More:
+           django_wechat_web:
+            model:
+                WechatBase
+                WechatUserInfo
+        
+            wechat:
+                WechatView
+        # django-wechat-web 
+        
+        ### 2016-04-30
+        * version 0.0.14
+            * WechatUserInfo Model add objects field, add new Manager method: empty_json
+        
+        ### 2016-04-29
+        * Fix Bug:
+            * save_userinfo_or_not 应该保存在session中，并且使用userinfo完要将其置为False，防止重复获取userinfo
+        * Fix Bug:
+            * 问题: 第一次授权的时候就去哪用户信息导致奔溃
+            * 解决: 设置一个是否存储用户信息的变量save_userinfo_or_not, 默认为False, 只有满足需要获取userinfo的条件时才设为True; 然后save_userinfo_or_not为True, 才获取用户信息
+        * Fix Bug
+            * error function args
+        * update WechatView
+            * scope设置为snsapi_userinfo 时，说明希望保留用户详细信息
+            * 但是, 又不希望用户多次snsapi_userinfo方式授权, 所以过程是这样的
+        
+        ```
+            -> 1.默认snsapi_base方式跳转 
+            -> 2.拿到code, 获取openid, 将openid存到session 
+            -> 3.如果openid存在并且openid对应的WechatUserInfo模型数据不存在并且scope为snsapi_userinfo, 则将再次跳转到snsapi_userinfo方式; 如果openid不存在, 或者openid存在，但WechatUserInfo数据存在, 或者 openid存在，但是scope不是snsapi_userinfo, 则跳转第五步
+            -> 4.跳回步骤2
+            -> 5. 授权结束, 接下来执行你的动作
+        ```
+        
+        ### 2016-04-27
+        * update WechatView
+          * add class boolean attr: swicth
+            * `swicth=True` (default): open wechat redirect/authentication
+            * `swicth=False` : The same as django.views.generic.View
+        
+        
+Platform: UNKNOWN
+Classifier: Environment :: Web Environment
+Classifier: Framework :: Django
+Classifier: Framework :: Django :: 1.9
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.4
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Topic :: Internet :: WWW/HTTP :: Dynamic Content
