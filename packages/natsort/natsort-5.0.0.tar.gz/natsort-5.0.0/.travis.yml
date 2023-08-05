@@ -1,0 +1,36 @@
+language: python
+python:
+- 2.6
+- 2.7
+- 3.3
+- 3.4
+- 3.5
+# - nightly  # inspect.ArgSpec fails on Python3.6
+- pypy
+env:
+- WITH_OPTIONS=true
+- WITH_OPTIONS=false
+matrix:
+  exclude:
+    - python: pypy
+      env: WITH_OPTIONS=true
+before_install:
+- if [[ $WITH_OPTIONS == true ]]; then sudo locale-gen de_DE.UTF-8; fi
+- sudo apt-get install bc
+install:
+- pip install -U pip
+- if [[ $WITH_OPTIONS == true ]]; then sudo apt-get install libicu-dev; fi
+- if [[ $WITH_OPTIONS == true ]]; then pip install fastnumbers; fi
+- if [[ $WITH_OPTIONS == true ]]; then pip install PyICU; fi
+- if [[ 1 -eq $(echo "$TRAVIS_PYTHON_VERSION < 3.4" | bc -l) ]]; then pip install pathlib; fi
+- if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install argparse; fi
+- if [[ $(echo "$TRAVIS_PYTHON_VERSION < 3.3" | bc -l) ]]; then pip install mock; fi
+- pip install pytest-cov pytest-flakes pytest-pep8 hypothesis
+- pip install coveralls
+script:
+- python -m pytest README.rst docs/source/intro.rst docs/source/examples.rst
+- python -m pytest --doctest-modules natsort
+- if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then python -m pytest; fi
+- if [[ $TRAVIS_PYTHON_VERSION != '2.6' ]]; then python -m pytest --cov natsort --flakes --pep8; fi
+after_success:
+  coveralls
