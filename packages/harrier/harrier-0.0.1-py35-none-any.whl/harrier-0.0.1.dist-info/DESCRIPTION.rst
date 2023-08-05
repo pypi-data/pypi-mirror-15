@@ -1,0 +1,44 @@
+harrier
+=======
+
+|Build Status| |codecov.io|
+
+**(Named after the hound, not the plane.)**
+
+Jinja2 & sass/scss aware site builder
+
+What?
+-----
+
+Asset generator in the same vane as webpack/gulp & browsify but tailored
+to sass/scss and Jinja2. Javascript support via integration with
+webpack, also supports arbitrary build steps via composable "tools".
+
+Why?
+----
+
+Well partly because I couldn't find a tools to do what I wanted.
+
+Partly because I'm much happier with everything that doesn't have to be
+javascript not being javascript.
+
+Install
+-------
+
+::
+
+    pip install harrier
+
+Usage
+-----
+
+::
+
+    harrier --help
+
+.. |Build Status| image:: https://travis-ci.org/samuelcolvin/harrier.svg?branch=master
+   :target: https://travis-ci.org/samuelcolvin/harrier
+.. |codecov.io| image:: https://codecov.io/github/samuelcolvin/harrier/coverage.svg?branch=master
+   :target: https://codecov.io/github/samuelcolvin/harrier?branch=master
+
+
