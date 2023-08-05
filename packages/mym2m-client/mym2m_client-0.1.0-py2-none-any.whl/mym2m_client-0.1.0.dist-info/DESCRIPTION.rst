@@ -1,0 +1,31 @@
+# 360 Telemetry MyM2M Web Python SDK
+
+This is the Python Client for the 360 Telemetry MyM2M Web Platform.
+
+### Caveats
+
+* Configuration exchange is currently unsupported in either direction (from the device to the MyM2M Service or vice-versa).
+
+### Getting Started
+
+You can use the client within an existing project by installing it using PyPi:
+
+    pip install mym2m-client
+
+### Example Usage
+
+    # create a new API client
+    my_device = API('asd', 'UNIT00001')
+
+    # create a snapshot with some sample data
+    snapshot = Snapshot()
+    snapshot.set_channel('temp', 25)
+    snapshot.set_channel('humid', 40)
+
+    # add the snapshot
+    my_device.add(snapshot)
+
+    # dispatch!
+    my_device.dispatch()
+
+
