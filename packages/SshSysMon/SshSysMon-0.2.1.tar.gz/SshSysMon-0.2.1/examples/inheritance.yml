@@ -1,0 +1,39 @@
+# This is a simple example of how you can use inheritance to simplify your config
+
+_monitors: &common_monitors
+  monitors:
+    - type: memory
+      alarms:
+        "Swap < 100MB" : "swap_free.mb < 100"
+        "Memory < 10MB" : "mem_free.mb < 10"
+    - type: disk
+      alarms:
+        "Disk > 80%" : "percent_full > 80"
+    - type: loadavg
+      alarms:
+        "Load Average > 1.5" : "load_15m > 1.5"
+
+_channels: &common_channels
+  channels:
+    - type: email
+      config:
+        toAddr: <YOUR EMAIL>
+
+_default: &default
+  <<: *common_monitors
+  <<: *common_channels
+
+servers:
+  localhost:
+    <<: *default
+    driver: local
+  other:
+    <<: *default
+    driver: ssh
+    config:
+      host: bla.example.com
+    monitors+: #Add more monitors in addition to inherited ones
+      - type: tcp
+        config:
+          ports: 22
+
