@@ -1,0 +1,398 @@
+#!/usr/bin/python
+#coding: utf-8
+
+### import module
+import sys
+import os
+import argparse
+import ConfigParser
+import yaml
+import shutil
+from jinja2 import Environment, FileSystemLoader
+import subprocess
+import ansibleart
+
+# preserve order with yaml file
+try:
+    from collections import OrderedDict
+except ImportError:
+    from odict import odict as OrderedDict
+
+def represent_odict(dumper, instance):
+     return dumper.represent_mapping(u'tag:yaml.org,2002:map', instance.items())
+
+yaml.add_representer(OrderedDict, represent_odict)
+
+def construct_odict(loader, node):
+    return OrderedDict(loader.construct_pairs(node))
+
+yaml.add_constructor(u'tag:yaml.org,2002:map', construct_odict)
+
+### constant
+VERSION = "0.2"
+CONFIG_PATH = os.environ['HOME'] + "/.ansible-art.cnf"
+WORK_DIR = ".ansible-art"
+CURRENT_DIR = os.getcwd()
+PLAYBOOK_FILE = "ansible-art_playbook.yml"
+
+### utility function
+def check_roles_dir():
+    return os.path.exists(CONFIG_PATH)
+
+def get_roles_dir():
+    if check_roles_dir():
+        config = ConfigParser.SafeConfigParser()
+        config.read(CONFIG_PATH)
+        if config.has_option("general", "ansible_roles_dir"):
+            return config.get("general", "ansible_roles_dir")
+        else:
+            print "ERROR: " + CONFIG_PATH + " don't have option \"ansible_roles_dir\""
+            sys.exit(1)
+    else:
+        print "ERROR: " + CONFIG_PATH + " is not found"
+        sys.exit(1)
+
+def search_role(role):
+    roles_dir= get_roles_dir()
+    if os.path.isdir(roles_dir):
+        roles = os.listdir(roles_dir)
+    else:
+        print "ERROR: " + roles_dir + "is not found"
+        sys.exit(1)
+    if role in roles:
+        return True
+    else:
+        return False
+
+def search_role_inventory(role, inventory):
+    # search role
+    if not search_role(role):
+        print "ERROR: role \"" + role + "\" is not found"
+        sys.exit(1)
+
+    # search inventory
+    if not os.path.exists(CURRENT_DIR + "/" + inventory):
+        print "ERROR: inventory \"" + CURRENT_DIR + "/" + inventory + "\" is not found"
+        sys.exit(1)    
+
+def copy_vars(params, group_params):
+    if params != "":
+        shutil.copytree(CURRENT_DIR + "/" + params, CURRENT_DIR + "/" + WORK_DIR + "/host_vars")
+    if group_params != "":
+        shutil.copytree(CURRENT_DIR + "/" + group_params, CURRENT_DIR + "/" + WORK_DIR  +"/group_vars")
+
+def exec_playbook(role,inventory,params,group_params,target,verbose):
+    # cout verbose
+    if verbose == None:
+        verbose_opt = ""
+    else:
+        verbose_opt = "-" 
+        for i in range(verbose):
+            verbose_opt = verbose_opt + "v"
+       
+    # search WORK_DIR
+    if os.path.exists(CURRENT_DIR + "/" + WORK_DIR):
+        print "ERROR: " + CURRENT_DIR + "/" + WORK_DIR + " already exists"
+        sys.exit(1)
+
+    # create WORK_DIR
+    os.mkdir(CURRENT_DIR + "/" + WORK_DIR)
+    try:
+        # create ansible.cfg
+        data_path = os.path.dirname(sys.modules["ansibleart"].__file__)
+        env = Environment(loader=FileSystemLoader(data_path + "/data", encoding='utf8'))
+        template = env.get_template("ansible.cfg.j2")
+        ansible_roles_dir = get_roles_dir()
+        ansible_config = template.render({'ansible_roles_dir': ansible_roles_dir})
+        ansible_config_file = open(CURRENT_DIR + "/" + WORK_DIR + "/ansible.cfg","w")
+        ansible_config_file.write(ansible_config.encode("utf-8"))
+        ansible_config_file.close()
+
+        # copy inventory
+        shutil.copy(CURRENT_DIR + "/" + inventory, CURRENT_DIR + "/" + WORK_DIR + "/" + inventory)
+
+        # copy <host_vars>
+        # copy <group_vars>
+        copy_vars(params, group_params)
+
+        # create playbook
+        env = Environment(loader=FileSystemLoader(data_path + "/data", encoding='utf8'))
+        template = env.get_template("ansible-art_playbook.yml.j2")
+        ansible_playbook = template.render({'role': role, 'target': target})
+        ansible_playbook_file = open(CURRENT_DIR + "/" + WORK_DIR + "/" + PLAYBOOK_FILE,"w")
+        ansible_playbook_file.write(ansible_playbook.encode("utf-8"))
+        ansible_playbook_file.close()
+
+        # exec playbook
+        cmd = "ansible-playbook" + " -i " + inventory + " " + PLAYBOOK_FILE + " " + verbose_opt
+        subprocess.Popen([ cmd ],cwd=(CURRENT_DIR + "/" + WORK_DIR), shell=True).wait()
+    except Exception as e:
+        print "ERROR: " + str(type(e))  + " " + e.message
+        sys.exit(1)
+    finally:
+        # remove WORK_DIR in current dir
+        shutil.rmtree(CURRENT_DIR + "/" + WORK_DIR)
+
+### exec command
+def print_role_list():
+    roles_dir= get_roles_dir()
+    if os.path.isdir(roles_dir):
+        roles = os.listdir(roles_dir)
+    else:
+        print "ERROR: " + roles_dir + " is not found"
+        sys.exit(1)
+    for role in roles:
+        if os.path.isdir(roles_dir + "/" + role) and \
+           os.path.exists(roles_dir + "/" + role + "/tasks/main.yml"):
+            print role
+
+def print_role_params(role):
+    roles_dir = get_roles_dir()
+    if os.path.exists(roles_dir + "/" + role):
+        if os.path.exists(roles_dir + "/" + role + "/defaults/main.yml"):
+            defaults = open(roles_dir + "/" + role + "/defaults/main.yml",'r')
+            defaults_yaml = yaml.load(defaults)
+            print "---"
+            print yaml.dump(defaults_yaml, default_flow_style=False)
+            defaults.close()
+        else:
+            print ""
+    else:
+        print "ERROR: role \"" + role + "\" doesn't exist in ansible roles dir"
+
+def print_role_dir():
+    print get_roles_dir()
+
+def set_role_dir(directory):
+    config = ConfigParser.SafeConfigParser()
+    if os.path.exists(CONFIG_PATH):
+        config.read(CONFIG_PATH)
+        if not config.has_section("general"):
+            config.add_section('general')
+        config.set("general", "ansible_roles_dir", directory)
+    else:
+        config.add_section('general')
+        config.set("general", "ansible_roles_dir", directory)
+    conf_file = open(CONFIG_PATH, "w")
+    config.write(conf_file)
+    conf_file.close()
+
+
+def apply_role_pgt(role,inventory,params,group_params,target,verbose):
+    search_role_inventory(role,inventory)
+
+    # search host_vars
+    if not os.path.isdir(CURRENT_DIR + "/" + params):
+        print "ERROR: params dir \"" + CURRENT_DIR + "/" + params + "\" is not found"
+        sys.exit(1)
+    # search group_vars
+    if not os.path.isdir(CURRENT_DIR + "/" + group_params):
+        print "ERROR: group params dir \"" + CURRENT_DIR + "/" + group_params + "\" is not found"
+        sys.exit(1)
+
+    exec_playbook(role,inventory,params,group_params,target,verbose)
+
+def apply_role(role,inventory,verbose):
+    search_role_inventory(role,inventory)
+
+    params = ""
+    group_params = ""
+
+    # search host_vars
+    if os.path.isdir(CURRENT_DIR + "/host_vars"):
+         params = "host_vars"
+
+    # search group_vars
+    if os.path.isdir(CURRENT_DIR + "/group_vars"):
+         group_params = "group_vars"
+
+    exec_playbook(role,inventory,params,group_params,role,verbose)
+
+def apply_role_p(role,inventory,params,verbose):
+    search_role_inventory(role,inventory)
+
+    group_params = ""
+
+    # search host_vars
+    if not os.path.isdir(CURRENT_DIR + "/" + params):
+        print "ERROR: params dir \"" + CURRENT_DIR + "/" + params + "\" is not found"
+        sys.exit(1)
+    # search group_vars
+    if os.path.isdir(CURRENT_DIR + "/group_vars"):
+         group_params = "group_vars"
+
+    exec_playbook(role,inventory,params,group_params,role,verbose)
+
+def apply_role_g(role,inventory,group_params,verbose):
+    search_role_inventory(role,inventory)
+
+    params = ""
+
+    # search host_vars
+    if os.path.isdir(CURRENT_DIR + "/host_vars"):
+         params = "host_vars"
+
+    # search group_vars
+    if not os.path.isdir(CURRENT_DIR + "/" + group_params):
+        print "ERROR: group params dir \"" + CURRENT_DIR + "/" + group_params + "\" is not found"
+        sys.exit(1)
+
+    exec_playbook(role,inventory,params,group_params,role,verbose)
+
+def apply_role_t(role,inventory,target,verbose):
+    search_role_inventory(role,inventory)
+
+    params = ""
+    group_params = ""
+
+    # search host_vars
+    if os.path.isdir(CURRENT_DIR + "/host_vars"):
+         params = "host_vars"
+
+    # search group_vars
+    if os.path.isdir(CURRENT_DIR + "/group_vars"):
+         group_params = "group_vars"
+
+    exec_playbook(role,inventory,params,group_params,target,verbose)
+
+def apply_role_pg(role,inventory,params,group_params,verbose):
+    search_role_inventory(role,inventory)
+
+    # search host_vars
+    if not os.path.isdir(CURRENT_DIR + "/" + params):
+        print "ERROR: params dir \"" + CURRENT_DIR + "/" + params + "\" is not found"
+        sys.exit(1)
+    # search group_vars
+    if not os.path.isdir(CURRENT_DIR + "/" + group_params):
+        print "ERROR: group params dir \"" + CURRENT_DIR + "/" + group_params + "\" is not found"
+        sys.exit(1)
+
+    exec_playbook(role,inventory,params,group_params,role,verbose)
+
+def apply_role_pt(role,inventory,params,target,verbose):
+    search_role_inventory(role,inventory)
+
+    group_params = ""
+
+    # search host_vars
+    if not os.path.isdir(CURRENT_DIR + "/" + params):
+        print "ERROR: params dir \"" + CURRENT_DIR + "/" + params + "\" is not found"
+        sys.exit(1)
+    # search group_vars
+    if os.path.isdir(CURRENT_DIR + "/group_vars"):
+         group_params = "group_vars"
+
+    exec_playbook(role,inventory,params,group_params,target,verbose)
+
+def apply_role_gt(role,inventory,group_params,target,verbose):
+    search_role_inventory(role,inventory)
+
+    params = ""
+
+    # search host_vars
+    if os.path.isdir(CURRENT_DIR + "/host_vars"):
+         params = "host_vars"
+
+    # search group_vars
+    if not os.path.isdir(CURRENT_DIR + "/" + group_params):
+        print "ERROR: group params dir \"" + CURRENT_DIR + "/" + group_params + "\" is not found"
+        sys.exit(1)
+
+    exec_playbook(role,inventory,params,group_params,target,verbose)
+
+### definition parser
+
+# help message
+help_root = 'A simple tool to apply role of ansible'
+help_version = 'show version and exit'
+help_role = 'operate with roles used by ansible-art'
+help_role_list = 'show roles in the dir set in advance by using command "ansible-art dir set DIR"'
+help_role_params = 'show parameters defined in defaults/main.yml of specified role'
+help_role_params_role = 'the role whose parameters are wanted to show'
+help_role_dir = 'operate with the roles dir used by ansible-art'
+help_role_dir_show = 'show the dir path set in advance by using command "ansible-art dir set DIR"'
+help_role_dir_set  = 'set the dir of roles used by other subcommands of ansible-art'
+help_role_dir_set_dir  = 'the dir of roles used by ansible-art'
+help_apply = 'apply role to machines'
+help_apply_role = 'the role wanted to apply'
+help_apply_inventory = 'an inventory file path'
+help_apply_target = 'specify hostname, ip, or group name in inventory file corresponding to target host or group'
+help_apply_params = 'specify the directory including host_vars files. if this parameter is not specified, ansible-art search "host_vars" dir as the directory including host_vars files. If "host_vars" dir is not found, no host_vars files are used'
+help_apply_group_params = 'specify the directory including group_vars files. if this parameter is not specified, ansible-art search "group_vars" dir as the directory including group_vars files. If "group_vars" dir is not found, no group_vars files are used'
+help_apply_verbose = 'verbose output option. if this option is specified, ansible-art deliver this option to ansible-playbook command. the more there is character "v", we can get more detailed output. for example, the output of "-vvvv" option is more detailed than the one of "-v"'
+
+# body of parser
+parser = argparse.ArgumentParser(description=help_root)
+parser.add_argument('-V','--version', action='version', version='%(prog)s.' + VERSION, help=help_version)
+
+subparsers = parser.add_subparsers(title='subcommands',description='valid subcommands',dest='root')
+parser_role = subparsers.add_parser('role',description=help_role, help=help_role)
+parser_apply = subparsers.add_parser('apply',description=help_apply, help=help_apply)
+parser_apply.add_argument('ROLE',help=help_apply_role)
+parser_apply.add_argument('INVENTORY',help=help_apply_inventory)
+parser_apply.add_argument('-t', '--target', metavar='TARGET',help=help_apply_target)
+parser_apply.add_argument('-p', '--params', metavar='DIR',help=help_apply_params)
+parser_apply.add_argument('-g', '--group-params', metavar='DIR',help=help_apply_group_params)
+parser_apply.add_argument('-v', '--verbose',action='count',help=help_apply_verbose)
+
+subparsers_role = parser_role.add_subparsers(title='subcommands',description='valid subcommands', dest='role')
+parser_role_list = subparsers_role.add_parser('list',description=help_role_list, help=help_role_list)
+parser_role_params = subparsers_role.add_parser('params',description=help_role_params, help=help_role_params)
+parser_role_params.add_argument('ROLE', help=help_role_params_role)
+parser_role_dir = subparsers_role.add_parser('dir',description=help_role_dir ,help=help_role_dir)
+
+subparsers_role_dir = parser_role_dir.add_subparsers(title='subcommands',description='valid subcommands', dest='dir')
+parser_role_dir_show = subparsers_role_dir.add_parser('show',description=help_role_dir_show,help=help_role_dir_show)
+parser_role_dir_set = subparsers_role_dir.add_parser('set',description=help_role_dir_set,help=help_role_dir_set)
+parser_role_dir_set.add_argument('DIR',help=help_role_dir_set_dir)
+
+### main
+args = parser.parse_args()
+
+if args.root == "role":
+    if args.role == "list":
+        print_role_list()
+    elif args.role == "params":
+        print_role_params(args.ROLE)
+    elif args.role == "dir":
+        if args.dir == "show":
+            print_role_dir()
+        elif args.dir == "set":
+            set_role_dir(args.DIR)
+    else:
+        print "ERROR: inner error"
+        sys.exit(1)
+elif args.root == "apply":
+    if args.target is not None:
+        if args.params is not None:
+            if args.group_params is not None:
+                apply_role_pgt(args.ROLE, args.INVENTORY, args.params,
+                                args.group_params, args.target, args.verbose)
+            else:
+                apply_role_pt(args.ROLE, args.INVENTORY,args.params,
+                               args.target, args.verbose)
+        else:
+            if args.group_params is not None:
+                apply_role_gt(args.ROLE, args.INVENTORY,args.group_params,
+                               args.target, args.verbose)
+            else:
+                apply_role_t(args.ROLE, args.INVENTORY,
+                               args.target, args.verbose)
+    else:
+        if args.params is not None:
+            if args.group_params is not None:
+                apply_role_pg(args.ROLE, args.INVENTORY, args.params,
+                                args.group_params, args.verbose)
+            else:
+                apply_role_p(args.ROLE, args.INVENTORY,args.params,
+                              args.verbose)
+        else:
+            if args.group_params is not None:
+                apply_role_g(args.ROLE, args.INVENTORY,args.group_params,
+                              args.verbose)
+            else:
+                apply_role(args.ROLE, args.INVENTORY,
+                             args.verbose)
+else:
+    print "ERROR: inner error"
+    sys.exit(1)
