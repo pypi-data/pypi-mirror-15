@@ -1,0 +1,52 @@
+---
+- name: Gather EC2 facts
+  ec2_facts:
+
+- name: Format attached EBS data volume
+  filesystem: fstype={{ data_vol_fs_type }} dev={{ data_vol_real_device_name }}
+
+- name: Mount attached EBS data volume
+  mount: name={{ data_vol_mount_dir }} src={{ data_vol_real_device_name }} fstype={{ data_vol_fs_type }} opts=rw,noatime state=mounted
+
+- name: Add Java8 PPA
+  apt_repository: repo='ppa:webupd8team/java'
+
+- name: Automatically select the Oracle license for Java
+  debconf: name='oracle-java8-installer' question='shared/accepted-oracle-license-v1-1' value='true' vtype='select'
+
+# The Oracle download site is very flaky and there are no mirrors,
+# so we copy the Java SDK tarball to /var/cache/oracle-jdk8-installer/
+# before installing the oracle-java8-installer package.
+
+- name: Create oracle-java8-installer package cache directory since it doesn't exist yet
+  file: path='/var/cache/oracle-jdk8-installer' state=directory mode=0755 owner='root' group='root'
+
+- name: Cache JDK8 tarball to avoid Oracle download
+  get_url: url='{{ jdk8_url }}' dest='{{ jdk8_file }}' mode=0644 validate_certs=no timeout=300
+
+- name: Installing packages
+  apt: name="{{item}}" state=latest update_cache=yes
+  with_items:
+    - git
+    - zip
+    - unzip
+    - oracle-java8-installer
+    - oracle-java8-set-default
+    - libxml2-dev
+    - libxslt1-dev
+    - python-dev
+
+- name: Create group for all Hadoop services
+  group: name={{ hadoop_group }} state=present
+
+- name: Create user for all Hadoop services
+  user: name={{ hadoop_user }} group={{ hadoop_group }} password={{ hadoop_password }}
+
+- name: Create group for all Myria-related services
+  group: name={{ myria_group }} state=present
+
+- name: Create user for all Myria-related services
+  user: name={{ myria_user }} group={{ myria_group }}
+
+- name: Give remote user access to Myria files
+  user: name={{ remote_user }} groups={{ myria_group }},{{ hadoop_group }} append=yes
