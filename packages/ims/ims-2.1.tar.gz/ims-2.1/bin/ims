@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+import requests
+import os
+from bs4 import BeautifulSoup
+import sys
+
+DEBUG = False
+def testSystem():
+    if os.system('npm --version') != 0:
+
+        print 'NPM not installed installed, please read the Readme file for more information.'
+        exit()
+    if os.system('peerflix --version') != 0:
+        print 'Peerflix not installed, installing..'
+        os.system('npm install -g peerflix')
+
+def getInput():
+    try:
+        movie = ' '.join(sys.argv[1:]).replace(' ','%20')
+    except Exception as e:
+        print e
+        exit()
+    return movie
+
+def getTorrentURL(search_url):
+    search_request_response = requests.get(search_url)
+    soup = BeautifulSoup(search_request_response.text, 'html.parser')
+    movie_page = 'https://kat.cr'+(soup.find_all("a", class_="cellMainLink")[0].get('href'))
+
+    search_url = requests.get(movie_page)
+    soup = BeautifulSoup(search_url.text, 'html.parser')
+    print (soup.find_all('a', class_='siteButton')[0].get('href'))
+    torrent_url = 'https:'+soup.find_all('a', class_='siteButton')[0].get('href')
+    return torrent_url
+
+testSystem()
+movie = getInput()
+while movie == '':
+    print 'Enter the search query'
+    movie = raw_input().replace(' ','%20')
+url = 'https://kat.cr/usearch/'+movie
+if DEBUG:
+    print url
+try:
+    print 'Searching....'
+    torrent_url = getTorrentURL(url)
+except Exception as e:
+    print e
+    exit()
+
+print ('Streaming Torrent: '+ torrent_url)
+os.system ('peerflix '+torrent_url+' -a --vlc')
