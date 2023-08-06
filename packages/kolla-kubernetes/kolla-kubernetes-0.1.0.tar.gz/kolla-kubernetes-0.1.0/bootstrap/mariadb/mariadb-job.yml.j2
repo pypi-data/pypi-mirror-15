@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mariadb-bootstrap
+spec:
+  template:
+    metadata:
+      name: mariadb-bootstrap
+    spec:
+      restartPolicy: OnFailure
+      hostNetwork: True
+      containers:
+        - image: "{{ mariadb_image_full }}"
+          name: mariadb-bootstrap
+          volumeMounts:
+            - mountPath: {{ container_config_directory }}
+              name: mariadb-config
+            - mountPath: /var/lib/mysql
+              name: mariadb-persistent-storage
+            - mountPath: /var/log/kolla
+              name: kolla-logs
+          env:
+            - name: KOLLA_KUBERNETES_BOOTSTRAP
+              value: ""
+            - name: KOLLA_CONFIG_STRATEGY
+              value: "{{ config_strategy }}"
+            #TODO: Replace with templated values
+            - name: ETCD_HOST
+              value: "{{ etcd_ip_address }}"
+            - name: ETCD_PORT
+              value: "{{ etcd_port }}"
+            - name: DB_ROOT_PASSWORD
+              value: "{{ database_password }}"
+      volumes:
+        - name: mariadb-config
+          configMap:
+            name: mariadb-configmap
+        - name: mariadb-persistent-storage
+          hostPath:
+            path: /var/lib/mysql
+        - name: kolla-logs
+          emptyDir: {}
