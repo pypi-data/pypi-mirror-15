@@ -1,0 +1,191 @@
+.\" Man page generated from reStructuredText.
+.
+.TH "CDIST-BOOTSTRAP" "7" "May 27, 2016" "4.1.0dp" "cdist"
+.SH NAME
+cdist-bootstrap \- 
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.sp
+Setup cdist environment
+.sp
+Nico Schottelius <\fI\%nico\-cdist\-\-@\-\-schottelius.org\fP>
+.SH INTRODUCTION
+.sp
+This document describes the usual steps recommended for a new
+cdist setup. It is recommended that you have read and understood
+cdist\-quickstart(7) before digging into this.
+.SH LOCATION
+.sp
+First of all, you should think about where to store your configuration
+database and who will be accessing or changing it. Secondly you have to
+think about where to configure your hosts from, which may be a different
+location.
+.sp
+For starters, having cdist (which includes the configuration database) on
+your notebook should be fine.
+Additionally an external copy of the git repository the configuration
+relies on is recommended, for use as backup as well as to allow easy collaboration
+with others.
+.sp
+For more sophisticated setups developing cdist configurations with multiple
+people, have a look at cdist\-best\-practice(7).
+.SH SETUP WORKING DIRECTORY AND BRANCH
+.sp
+I assume you have a fresh copy of the cdist tree in ~/cdist, cloned from
+one of the official urls (see cdist\-quickstart(7) if you don\(aqt).
+Entering the command "git branch" should show you "* master", which indicates
+you are on the \fBmaster\fP branch.
+.sp
+The master branch reflects the latest development of cdist. As this is the
+development branch, it may or may not work. There are also version branches
+available, which are kept in a stable state. Let\(aqs use \fBgit branch \-r\fP
+to list all branches:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+cdist% git branch \-r
+  origin/1.0
+  origin/1.1
+  origin/1.2
+  origin/1.3
+  origin/1.4
+  origin/1.5
+  origin/1.6
+  origin/1.7
+  origin/2.0
+  origin/HEAD \-> origin/master
+  origin/archive_shell_function_approach
+  origin/master
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+So \fB2.0\fP is the latest version branch in this example.
+All versions (2.0.x) within one version branch (2.0) are compatible to each
+other and won\(aqt break your configuration when updating.
+.sp
+It\(aqs up to you to decide which branch you want to base your own work on:
+master contains more recent changes, newer types, but may also break.
+The version branches are stable, but may lack the latest features.
+Your decision can be changed later on, but may result in merge conflicts,
+which you will need to solve.
+.sp
+Let\(aqs assume you want latest stuff and select the master branch as base for
+your own work. Now it\(aqs time to create your branch, which contains your
+local changes. I usually name it by the company/area I am working for:
+ethz\-systems, localch, customerX, ... But this is pretty much up to you.
+.sp
+In this tutorial I use the branch \fBmycompany\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+cdist% git checkout \-b mycompany origin/master
+Branch mycompany set up to track remote branch master from origin.
+Switched to a new branch \(aqmycompany\(aq
+cdist\-user% git branch
+  master
+* mycompany
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+From now on, you can use git as usual to commit your changes in your own branch.
+.SH PUBLISHING THE CONFIGURATION
+.sp
+Usually a development machine like a notebook should be considered
+temporary only. For this reason and to enable shareability, the configuration
+should be published to another device as early as possible. The following
+example shows how to publish the configuration to another host that is
+reachable via ssh and has git installed:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Create bare git repository on the host named "loch"
+cdist% ssh loch "GIT_DIR=/home/nutzer/cdist git init"
+Initialized empty Git repository in /home/nutzer/cdist/
+
+# Add remote git repo to git config
+cdist% git remote add loch loch:/home/nutzer/cdist
+
+# Configure the mycompany branch to push to loch
+cdist% git config branch.mycompany.remote loch
+
+# Configure mycompany branch to push into remote master branch
+cdist% git config branch.mycompany.merge refs/heads/master
+
+# Push mycompany branch to remote branch master initially
+cdist% git push loch mycompany:refs/heads/master
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Now you have setup the git repository to synchronise the \fBmycompany\fP
+branch with the \fBmaster\fP branch on the host \fBloch\fP\&. Thus you can commit
+as usual in your branch and push out changes by entering \fBgit push\fP\&.
+.SH UPDATING FROM ORIGIN
+.sp
+Whenever you want to update your cdist installation, you can use git to do so:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Update git repository with latest changes from origin
+cdist% git fetch origin
+
+# Update current branch with master branch from origin
+cdist% git merge origin/master
+
+# Alternative: Update current branch with 2.0 branch from origin
+cdist% git merge origin/2.0
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH SEE ALSO
+.INDENT 0.0
+.IP \(bu 2
+\fI\%cdist(1)\fP
+.IP \(bu 2
+\fI\%cdist\-tutorial(7)\fP
+.UNINDENT
+.SH COPYING
+.sp
+Copyright (C) 2012 Nico Schottelius. Free use of this software is
+granted under the terms of the GNU General Public License version 3 (GPLv3).
+.\" Generated by docutils manpage writer.
+.

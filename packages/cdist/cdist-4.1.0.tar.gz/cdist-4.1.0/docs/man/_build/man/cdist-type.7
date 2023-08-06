@@ -1,0 +1,404 @@
+.\" Man page generated from reStructuredText.
+.
+.TH "CDIST-TYPE" "7" "May 27, 2016" "4.1.0dp" "cdist"
+.SH NAME
+cdist-type \- 
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.sp
+Functionality bundled
+.sp
+Nico Schottelius <\fI\%nico\-cdist\-\-@\-\-schottelius.org\fP>
+.SH SYNOPSIS
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+__TYPE ID \-\-parameter value [\-\-parameter value ...]
+__TYPE \-\-parameter value [\-\-parameter value ...] (for singletons)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH DESCRIPTION
+.sp
+Types are the main component of cdist and define functionality. If you
+use cdist, you\(aqll write a type for every functionality you would like
+to use.
+.SH HOW TO USE A TYPE
+.sp
+You can use types from the initial manifest or the type manifest like a
+normal shell command:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Creates empty file /etc/cdist\-configured
+__file /etc/cdist\-configured \-\-type file
+
+# Ensure tree is installed
+__package tree \-\-state installed
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+A list of supported types can be found in the cdist\-reference(7) manpage.
+.SH SINGLETON TYPES
+.sp
+If a type is flagged as a singleton, it may be used only
+once per host. This is useful for types which can be used only once on a
+system. Singleton types do not take an object name as argument.
+.sp
+Example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# __issue type manages /etc/issue
+__issue
+
+# Probably your own type \- singletons may use parameters
+__myfancysingleton \-\-colour green
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH HOW TO WRITE A NEW TYPE
+.sp
+A type consists of
+.INDENT 0.0
+.IP \(bu 2
+parameter (optional)
+.IP \(bu 2
+manifest  (optional)
+.IP \(bu 2
+singleton (optional)
+.IP \(bu 2
+explorer  (optional)
+.IP \(bu 2
+gencode   (optional)
+.UNINDENT
+.sp
+Types are stored below cdist/conf/type/. Their name should always be prefixed with
+two underscores (__) to prevent collisions with other executables in $PATH.
+.sp
+To implement a new type, create the directory \fBcdist/conf/type/__NAME\fP\&.
+.SH DEFINING PARAMETERS
+.sp
+Every type consists of required, optional and boolean parameters, which must
+each be declared in a newline separated file in \fBparameter/required\fP,
+\fBparameter/required_multiple\fP, \fBparameter/optional\fP,
+\fBparameter/optional_multiple\fP and \fBparameter/boolean\fP\&.
+Parameters which are allowed multiple times should be listed in
+required_multiple or optional_multiple respectively. All other parameters
+follow the standard unix behaviour "the last given wins".
+If either is missing, the type will have no required, no optional, no boolean
+or no parameters at all.
+.sp
+Default values for optional parameters can be predefined in
+\fBparameter/default/<name>\fP\&.
+.sp
+Example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo servername >> cdist/conf/type/__nginx_vhost/parameter/required
+echo logdirectory >> cdist/conf/type/__nginx_vhost/parameter/optional
+echo loglevel >> cdist/conf/type/__nginx_vhost/parameter/optional
+mkdir cdist/conf/type/__nginx_vhost/parameter/default
+echo warning > cdist/conf/type/__nginx_vhost/parameter/default/loglevel
+echo server_alias >> cdist/conf/type/__nginx_vhost/parameter/optional_multiple
+echo use_ssl >> cdist/conf/type/__nginx_vhost/parameter/boolean
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH USING PARAMETERS
+.sp
+The parameters given to a type can be accessed and used in all type scripts
+(e.g manifest, gencode, explorer). Note that boolean parameters are
+represented by file existence. File exists \-> True,
+file does not exist \-> False
+.sp
+Example: (e.g. in cdist/conf/type/__nginx_vhost/manifest)
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# required parameter
+servername="$(cat "$__object/parameter/servername")"
+
+# optional parameter
+if [ \-f "$__object/parameter/logdirectory" ]; then
+   logdirectory="$(cat "$__object/parameter/logdirectory")"
+fi
+
+# optional parameter with predefined default
+loglevel="$(cat "$__object/parameter/loglevel")"
+
+# boolean parameter
+if [ \-f "$__object/parameter/use_ssl" ]; then
+   # file exists \-> True
+   # do some fancy ssl stuff
+fi
+
+# parameter with multiple values
+if [ \-f "$__object/parameter/server_alias" ]; then
+   for alias in $(cat "$__object/parameter/server_alias"); do
+      echo $alias > /some/where/usefull
+   done
+fi
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH INPUT FROM STDIN
+.sp
+Every type can access what has been written on stdin when it has been called.
+The result is saved into the \fBstdin\fP file in the object directory.
+.sp
+Example use of a type: (e.g. in cdist/conf/type/__archlinux_hostname)
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+__file /etc/rc.conf \-\-source \- << eof
+\&...
+HOSTNAME="$__target_host"
+\&...
+eof
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If you have not seen this syntax (<< eof) before, it may help you to read
+about "here documents".
+.sp
+In the __file type, stdin is used as source for the file, if \- is used for source:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if [ \-f "$__object/parameter/source" ]; then
+    source="$(cat "$__object/parameter/source")"
+    if [ "$source" = "\-" ]; then
+        source="$__object/stdin"
+    fi
+\&....
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH WRITING THE MANIFEST
+.sp
+In the manifest of a type you can use other types, so your type extends
+their functionality. A good example is the __package type, which in
+a shortened version looks like this:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+os="$(cat "$__global/explorer/os")"
+case "$os" in
+      archlinux) type="pacman" ;;
+      debian|ubuntu) type="apt" ;;
+      gentoo) type="emerge" ;;
+      *)
+         echo "Don\(aqt know how to manage packages on: $os" >&2
+         exit 1
+      ;;
+esac
+
+__package_$type "$@"
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+As you can see, the type can reference different environment variables,
+which are documented in cdist\-reference(7).
+.sp
+Always ensure the manifest is executable, otherwise cdist will not be able
+to execute it. For more information about manifests see cdist\-manifest(7).
+.SH SINGLETON - ONE INSTANCE ONLY
+.sp
+If you want to ensure that a type can only be used once per target, you can
+mark it as a singleton: Just create the (empty) file "singleton" in your type
+directory:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+touch cdist/conf/type/__NAME/singleton
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will also change the way your type must be called:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+__YOURTYPE \-\-parameter value
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+As you can see, the object ID is omitted, because it does not make any sense,
+if your type can be used only once.
+.SH THE TYPE EXPLORERS
+.sp
+If a type needs to explore specific details, it can provide type specific
+explorers, which will be executed on the target for every created object.
+.sp
+The explorers are stored under the "explorer" directory below the type.
+It could for instance contain code to check the md5sum of a file on the
+client, like this (shortened version from the type __file):
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if [ \-f "$__object/parameter/destination" ]; then
+   destination="$(cat "$__object/parameter/destination")"
+else
+   destination="/$__object_id"
+fi
+
+if [ \-e "$destination" ]; then
+   md5sum < "$destination"
+fi
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH WRITING THE GENCODE SCRIPT
+.sp
+There are two gencode scripts: \fBgencode\-local\fP and \fBgencode\-remote\fP\&.
+The output of gencode\-local is executed locally, whereas
+the output of gencode\-remote is executed on the target.
+The gencode scripts can make use of the parameters, the global explorers
+and the type specific explorers.
+.sp
+If the gencode scripts encounters an error, it should print diagnostic
+messages to stderr and exit non\-zero. If you need to debug the gencode
+script, you can write to stderr:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Debug output to stderr
+echo "My fancy debug line" >&2
+
+# Output to be saved by cdist for execution on the target
+echo "touch /etc/cdist\-configured"
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH VARIABLE ACCESS FROM THE GENERATED SCRIPTS
+.sp
+In the generated scripts, you have access to the following cdist variables
+.INDENT 0.0
+.IP \(bu 2
+__object
+.IP \(bu 2
+__object_id
+.UNINDENT
+.sp
+but only for read operations, means there is no back copy of this
+files after the script execution.
+.sp
+So when you generate a script with the following content, it will work:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if [ \-f "$__object/parameter/name" ]; then
+   name="$(cat "$__object/parameter/name")"
+else
+   name="$__object_id"
+fi
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH HINTS FOR TYPEWRITERS
+.sp
+It must be assumed that the target is pretty dumb and thus does not have high
+level tools like ruby installed. If a type requires specific tools to be present
+on the target, there must be another type that provides this tool and the first
+type should create an object of the specific type.
+.sp
+If your type wants to save temporary data, that may be used by other types
+later on (for instance __file), you can save them in the subdirectory
+"files" below $__object (but you must create it yourself).
+cdist will not touch this directory.
+.sp
+If your type contains static files, it\(aqs also recommended to place them in
+a folder named "files" within the type (again, because cdist guarantees to
+never ever touch this folder).
+.SH HOW TO INCLUDE A TYPE INTO UPSTREAM CDIST
+.sp
+If you think your type may be useful for others, ensure it works with the
+current master branch of cdist and have a look at cdist\-hacker(7) on
+how to submit it.
+.SH SEE ALSO
+.INDENT 0.0
+.IP \(bu 2
+\fI\%cdist\-explorer(7)\fP
+.IP \(bu 2
+\fI\%cdist\-hacker(7)\fP
+.IP \(bu 2
+\fI\%cdist\-stages(7)\fP
+.IP \(bu 2
+\fI\%cdist\-tutorial(7)\fP
+.UNINDENT
+.SH COPYING
+.sp
+Copyright (C) 2011\-2012 Nico Schottelius. Free use of this software is
+granted under the terms of the GNU General Public License version 3 (GPLv3).
+.\" Generated by docutils manpage writer.
+.
