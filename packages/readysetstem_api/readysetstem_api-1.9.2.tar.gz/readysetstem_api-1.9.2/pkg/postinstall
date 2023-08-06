@@ -1,0 +1,77 @@
+#!/bin/bash
+
+PKG_DIR=$1
+PKG_NAME=$2
+
+# Install setuid root sbin files in /usr/local/bin
+for SRC in ./util/bin/*.sbin; do
+    DEST=/usr/local/bin/`basename $SRC`
+    echo "Installing as setuid root: $DEST"
+    cp $SRC $DEST
+    chown root:root $DEST
+    chmod 4755 $DEST
+done
+
+# Install all other bins in /opt
+mkdir -p /opt/readysetstem/bin
+cp ./util/bin/* /opt/readysetstem/bin
+chmod 755 /opt/readysetstem/bin/*
+
+# Copy udev rule to correct place
+cp ./pkg/90-readysetstem.rules /etc/udev/rules.d/90-readysetstem.rules
+
+# Set up SPI, I2C, etc...  Taken from http://github.com/asb/raspi-config
+CONFIG=/boot/config.txt
+BLACKLIST=/etc/modprobe.d/raspi-blacklist.conf
+if ! [ -e $BLACKLIST ]; then
+    touch $BLACKLIST
+fi
+
+# SPI config
+SETTING=on
+sed $CONFIG -i -r -e "s/^((device_tree_param|dtparam)=([^,]*,)*spi)(=[^,]*)?/\1=$SETTING/"
+if ! grep -q -E "^(device_tree_param|dtparam)=([^,]*,)*spi=[^,]*" $CONFIG; then
+    printf "dtparam=spi=$SETTING\n" >> $CONFIG
+fi
+sed $BLACKLIST -i -e "s/^\(blacklist[[:space:]]*spi[-_]bcm2708\)/#\1/"
+
+# I2C config
+sed $CONFIG -i -r -e "s/^((device_tree_param|dtparam)=([^,]*,)*i2c(_arm)?)(=[^,]*)?/\1=$SETTING/"
+if ! grep -q -E "^(device_tree_param|dtparam)=([^,]*,)*i2c(_arm)?=[^,]*" $CONFIG; then
+    printf "dtparam=i2c_arm=$SETTING\n" >> $CONFIG
+fi
+sed $BLACKLIST -i -e "s/^\(blacklist[[:space:]]*i2c[-_]bcm2708\)/#\1/"
+
+# Add MODULES to /etc/modules if they don't exist
+MODULES="i2c-dev uinput"
+for m in $MODULES; do
+    if ! grep -q "^[[:space:]]*${m}[[:space:]]*$" /etc/modules; then
+        echo $m >> /etc/modules
+    fi
+done
+
+#
+# Create a sounds directory (and fill it with links to Raspbian sounds
+#
+echo "Create links to default Raspbian sounds..."
+mkdir -p /opt/readysetstem/sounds
+chmod 777 /opt/readysetstem/sounds
+SOUND_DIRS=(
+    /opt/sonic-pi/etc/samples
+    /usr/share/scratch/Media/Sounds
+    /usr/share/pyshared/pygame/examples/data
+    /home/pi/python_games
+    )
+find "${SOUND_DIRS[@]}" \( -name "*.wav" -o -name "*.mp3" \) \
+    -exec sh -c 'ln -sf "{}" "/opt/readysetstem/sounds/$(basename "{}")"' \;
+# Create names for sounds used in the projects guide
+ln -sf badswap.wav /opt/readysetstem/sounds/hit.wav
+ln -sf match1.wav /opt/readysetstem/sounds/fire.wav
+echo "...done"
+
+#
+# Install addition required debian packages
+#
+sudo apt-get install -y libudev-dev
+sudo apt-get install -y xdotool
+sudo apt-get install -y wmctrl
