@@ -1,0 +1,19 @@
+long_description='The goal of the project is to provide a way to enable installation of carbon black sensors in a distrubuted manner as well as provide certain extended functionality such as registering users associated with sensors and tracking the sensor ID of systems that are currently being installed.
+
+-Tracking Sensor IDs:
+  In order to track the sensor ID of systems Python is being utilized to perform a 
+  call to the Carbon Black (CB) Web API & return the sensor ID from the a list of all sensors on the CB server where the computer name of the sensor matches the computer name of the  system being installed.
+Home-page: https://pypi.python.org/pypi?%3Aaction=pkg_edit&name=sensoridRequest
+Author: Gregory Gallaway
+Author-email: greg.gallaway@slaitconsulting.com
+License: MIT
+Description: UNKNOWN
+Keywords: Customer Designated,Modified Installer,Carbon Black Installer
+Platform: UNKNOWN
+Classifier: Development Status ::  3 - Beta - Proof of Concept
+Classifier: Intended Audience :: Developers :: Customer Organization
+Classifier: Topic :: Modified Installer :: Carbon Black :: Customer Designated or Designed
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
