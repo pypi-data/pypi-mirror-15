@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+import argparse
+from collections import OrderedDict
+import configparser
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.parse
+import pyotp
+import pyqrcode
+
+
+USAGE = """\
+Usage: 2fa              -- Generate codes
+       2fa name         -- Print a QR code for Google Authenticator
+       2fa name title   -- Register a secret
+"""
+
+DEFAULT_CONFIG = """\
+[gpg]
+program = gpg2
+user = nuta@seiya.me
+"""
+
+def get_secrets_path():
+    return os.path.expanduser('~/.2fa.secrets')
+
+
+def load_config():
+    global config
+
+    path = os.path.expanduser('~/.2fa.conf')
+    config = configparser.ConfigParser()
+
+    try:
+        config.read_file(open(path))
+    except FileNotFoundError:
+        with open(path, 'w') as f:
+            f.write(DEFAULT_CONFIG)
+        return load_config()
+
+    return config
+
+
+def run_gpg(args, input=None):
+    return subprocess.run([config['gpg']['program']] + args, input=input,
+               check=True, stdout=subprocess.PIPE).stdout
+
+
+def load_services():
+    try:
+        encrypted = open(get_secrets_path(), 'rb').read()
+    except FileNotFoundError:
+        return {}
+
+    secrets = run_gpg(['-d', '--batch', '--no-tty'], input=encrypted).decode('utf-8')
+
+    try:
+        services = json.loads(secrets)
+    except json.decoder.JSONDecodeError:
+        return {}
+
+    if services is None:
+        return {}
+
+    return OrderedDict(sorted(services.items()))
+
+
+def save_services(services):
+    encrypted = run_gpg(['-e', '-r', config['gpg']['user']],
+        input=bytes(json.dumps(services), encoding='utf-8'))
+    return open(get_secrets_path(), 'wb').write(encrypted)
+
+
+def totp(secret):
+    return pyotp.TOTP(secret).now()
+
+
+def main(argv):
+    load_config()
+    services = load_services()
+
+    if len(argv) == 1:
+        print()
+        if len(services) == 0:
+            sys.exit(USAGE)
+
+        lines = len(services.keys())
+        while True:
+            expire = 30 - (int(time.time()) % 30)
+
+            for name, secret in services.items():
+                if 5 < expire:
+                    print("\x1b[01;34m{:<20}{}\t({})\x1b[0m".format(name, totp(secret), expire))
+                else:
+                    print("\x1b[0;31m{:<20}{}\t({})\x1b[0m".format(name, totp(secret), expire))
+
+            for i in range(lines):
+                print("\x1b[1F\x1b[0K", end="")
+
+            time.sleep(1)
+
+    elif len(argv) == 2:
+        label = urllib.parse.quote(argv[1])
+        secret = services[argv[1]]
+        qr = pyqrcode.create('otpauth://totp/{label}?secret={secret}'.format(**locals()))
+        print(qr.terminal(quiet_zone=1))
+
+    elif len(argv) > 2:
+        parser = argparse.ArgumentParser(description='2-factor auth token generator')
+        parser.add_argument('name')
+        parser.add_argument('secret')
+
+        args = parser.parse_args(argv[1:])
+        secret = args.secret.replace(' ', '')
+        services.update({args.name: secret})
+        save_services(services)
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv)
+    except KeyboardInterrupt:
+        pass
