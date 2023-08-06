@@ -1,0 +1,138 @@
+###########################
+CFFI binding for fontconfig
+###########################
+
+This package try to be a complete python binding for fontconfig.
+
+This package contains two modules: the low level ``_fontconfig``\ , that
+matches the C APIs, and ``fc``\ , that is an higher abstraction over it.
+
+The C API::
+
+   int FcGetVersion(void);
+   
+in ``_fontconfig``::
+
+   _fontconfig.FcGetVersion()
+
+in ``fc``::
+
+   fc.get_version()
+
+Installation
+============
+
+This package requires the `enum34`_ package. Install it via pypi:
+
+.. code-block:: console
+
+   $ pip install enum34
+
+or use your distribution's package:
+
+.. code-block:: console
+
+   $ apt-get install python-enum34
+
+To compile the ``_fontconfig`` extension, the following C headers are
+required:
+
+.. code-block:: C
+
+   #include <fontconfig/fontconfig.h>
+   #include <fontconfig/fcfreetype.h>
+   #include <ft2build.h>
+   #include FT_FREETYPE_H  // usually <freetype/freetype.h>
+
+and the package `cffi`_. In Debian the following packages are enough:
+
+.. code-block:: console
+
+   $ apt-get install python-cffi libfontconfig1-dev libfreetype6-dev
+
+Finally, to install the package itself:
+
+.. code-block:: console
+
+   $ pip install fontconfig
+
+.. _enum34: https://pypi.python.org/pypi/enum34
+.. _cffi: https://pypi.python.org/pypi/cffi
+
+``_fontconfig`` module
+======================
+
+The module ``_fontconfig`` exports few simbols to test the capabilities
+of the underlying library. These are:
+
+* ``PYFC_HAS_DirCacheRescan``
+* ``PYFC_HAS_FcRange``
+
+Usage:
+------
+
+.. code-block:: pycon
+
+   >>> import _fontconfig
+   >>> print _fontconfig.lib.FcGetVersion()
+   21100
+   >>> _fontconfig.lib.FcInit()  # init the library
+   1
+   >>> config = _fontconfig.lib.FcConfigGetCurrent()
+   >>> sl = _fontconfig.lib.FcConfigGetConfigDirs(config)
+   >>> while True:
+   ...  s = _fontconfig.lib.FcStrListNext(sl)
+   ...  if not s:
+   ...   break
+   ...  print _fontconfig.ffi.string(s)  # doctest: +ELLIPSIS
+   ...
+   /usr/share/fonts
+   /usr/X11R6/lib/X11/fonts
+   /usr/local/share/fonts
+   ...
+   >>> _fontconfig.lib.FcStrListDone(sl)
+
+``fc`` module
+=============
+
+The ``fc`` module would be an higher abstraction moudule but it is still
+uncomplete.
+
+Usage:
+------
+
+The same snippet as above:
+
+.. code-block:: pycon
+
+   >>> import fc
+   >>> fc.get_version()  # fontconfig's version
+   (2, 11, 0)
+   >>> fc.init()
+   >>> config = fc.FcConfig.get_current()
+   >>> config.get_config_dirs()  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+   ['/usr/share/fonts', '/usr/X11R6/lib/X11/fonts',
+   '/usr/local/share/fonts', ...]
+
+Few more examples:
+
+.. code-block:: pycon
+
+   >>> fc.__version__  # python library's version
+   '0.1'
+   >>> pattern = config.get_fonts(fc.SetName.system)[0]
+   >>> pattern.name_unparse()  # doctest: +ELLIPSIS
+   '21 Kilobyte Salute:...'
+   >>> config.get_font_dirs()  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+   ['/usr/share/fonts', '/usr/X11R6/lib/X11/fonts',
+   '/usr/local/share/fonts', ...]
+   >>> pat = fc.FcPattern.name_parse("dejavu serif")
+   >>> for font in config.font_list(pat, [fc.PropertyName.file]):
+   ...  print(font.name_unparse())  # doctest: +ELLIPSIS
+   ...
+   :file=/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf
+   :file=/usr/share/fonts/truetype/dejavu/DejaVuSerifCondensed.ttf
+   ...
+
+
+.. vim:ft=rst:tw=72:et:sts=3:sw=3
