@@ -1,0 +1,241 @@
+<div ng-controller="SettingsController" class="page settings-page scrolling-panel">
+	<div class="inner">
+		
+        <div class="page-header">
+        
+            <span class="menu-reveal-trigger mobile-show" ng-click="showMenu()"><i class="fa fa-bars"></i></span>
+            
+            <h1>
+                <span class="si cog mobile-hide"></span>
+                Settings
+            </h1>
+		
+            <div class="flag bad" ng-show="!mopidyOnline">
+                <i class="fa fa-exclamation-triangle white-text"></i>
+                &nbsp;
+                Mopidy offline
+            </div>
+		
+            <div class="flag bad" ng-show="!spotifyOnline">
+                <i class="fa fa-exclamation-triangle white-text"></i>
+                &nbsp;
+                Spotify offline
+            </div>
+            
+        </div>
+		
+		<div class="settings">
+			
+			<div class="section info">
+			
+				<h4 class="section-title underline">Spotmop</h4>
+
+				<div class="field">
+					<div class="label">Username</div>
+					<div class="input">
+						<input type="text" name="pushername" placeholder="New user" class="autosave" ng-model="settings.pushername" ng-blur="savePusherName( settings.pushername )" />
+						<i class="fa fa-check autosave-success"></i>
+					</div>
+				</div>
+
+				<div class="field">
+					<div class="label">Notifications port</div>
+					<div class="input">
+						<input type="text" name="pusherport" placeholder="6681" class="autosave" ng-model="settings.pusherport" ng-blur="saveField( $event )" />
+						<i class="fa fa-check autosave-success"></i>
+					</div>
+				</div>
+
+				<div class="field">
+					<div class="label">Disable browser notifications</div>
+					<div class="input">
+						<switch class="switch-button" name="pusher.disabled" value="settings.pusher.disabled"></switch>
+					</div>
+				</div>
+
+				<div class="field shortcut-keys">
+					<div class="label">Keyboard shortcuts</div>
+					<div class="input">
+						<switch class="switch-button" name="keyboardShortcutsEnabled" value="settings.keyboardShortcutsEnabled"></switch>
+					</div>
+					<div class="clear-both"></div>
+				</div>
+
+				<div class="field">
+					<div class="label">Current version</div>
+					<div class="input readonly">
+						<span class="spotmop-version" ng-bind="settings.version.installed"></span>						
+						&nbsp;
+                        <span class="upgrading" ng-show="settings.version.root">
+                        
+                            <a ng-click="upgradeCheck()">Check for upgrade</a>
+                            
+                            <span ng-show="settings.version.upgradeAvailable && settings.version.installed < settings.version.latest">
+                                <a ng-click="upgrade()">Upgrade to <span ng-bind="settings.version.latest"></span></a>
+                            </span>
+                            
+                        </span>
+                        <span class="upgrading" ng-show="!settings.version.root">Mopidy must be running as root to upgrade</span>
+					</div>
+					<div class="clear-both"></div>
+				</div>
+				
+				<div class="field">
+					<div class="label">Author</div>
+					<div class="input readonly">Built and maintained by James Barnsley (GitHub: <a href="https://github.com/jaedb" target="_blank">jaedb</a>)</div>
+					<div class="clear-both"></div>
+				</div>
+                
+			</div>
+			
+			<!-- SECTION -->
+			
+			<div class="section mopidy">
+			
+				<h4 class="section-title underline">
+					Mopidy Server
+                    &nbsp;<i class="fa fa-exclamation-triangle red-text" ng-if="!mopidyOnline"></i>
+				</h4>
+
+				<div class="field">
+					<div class="label">Hostname</div>
+					<div class="input">
+						<input type="text" name="mopidyhost" placeholder="localhost" class="autosave" ng-model="settings.mopidyhost" ng-blur="saveField( $event )" />
+						<i class="fa fa-check autosave-success"></i>
+					</div>
+				</div>
+
+				<div class="field">
+					<div class="label">Port</div>
+					<div class="input">
+						<input type="text" name="mopidyport" placeholder="6680" class="autosave" ng-model="settings.mopidyport" ng-blur="SaveFields( $event )" />
+						<i class="fa fa-check autosave-success"></i>
+					</div>
+				</div>
+
+				<div class="field">
+					<div class="label">Consume mode</div>
+					<div class="input">
+						<switch class="switch-button" name="mopidy.consume" value="settings.mopidy.consume"></switch>
+					</div>
+				</div>
+
+				<div class="clear-both"></div>		
+			</div>
+			
+			<!-- SECTION -->
+			
+			<div class="section spotify">
+			
+				<h4 class="section-title underline">
+					Spotify
+                    &nbsp;<i class="fa fa-exclamation-triangle red-text" ng-if="!spotifyOnline"></i>
+				</h4>
+                
+                <div class="field">
+                    <div class="label">Country code</div>
+                    <div class="input">
+                        <input type="text" name="countrycode" placeholder="NZ" class="autosave" ng-model="settings.countrycode" ng-blur="SaveFields( $event )" />
+                        <i class="fa fa-check autosave-success"></i>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="label">Locale</div>
+                    <div class="input">
+                        <input type="text" name="spotifylocale" placeholder="en_NZ" class="autosave" ng-model="settings.spotifylocale" ng-blur="SaveFields( $event )" />
+                        <i class="fa fa-check autosave-success"></i>
+                    </div>
+                </div>
+                
+                <div class="field current-user" ng-if="spotifyAuthorized">
+                    <div class="label">Current user</div>
+                    <div class="input">
+                        <span class="my-profile">
+                            <span class="image-container" ng-repeat="image in settings.spotifyuser.images  | limitTo:1">
+                                <div class="image animate" style="background-image: url({{ image.url }});"></div>
+                            </span>
+                            <span ng-bind="settings.spotifyuser.display_name"></span> (<a ng-bind="settings.spotifyuser.id" href="/browse/user/{{ settings.spotifyuser.uri }}"></a>)
+                            &nbsp;&nbsp;
+                            <a ng-click="spotifyLogout()"><i class="fa fa-close"></i>&nbsp; Log out</a>
+                        </span>
+                    </div>
+                </div>
+            
+                <div class="field" ng-if="!spotifyAuthorized">
+                    <div class="label">Connect to Spotify</div>
+                    <div class="input">
+                        <a class="button primary" ng-click="authorizeSpotify()"><i class="fa fa-tick"></i>&nbsp; Login to Spotify</a>
+                    </div>
+				</div>
+
+                <div class="field" ng-if="settings.spotmop.advancedMode && spotifyOnline">
+                    <div class="label">Spotify authentication</div>
+                    <div class="input">
+                        <a class="button" ng-click="refreshSpotifyToken()"><i class="fa fa-refresh"></i>&nbsp; Force token refresh</a>
+                    </div>
+                </div>
+
+				<div class="clear-both"></div>
+			
+			</div>
+			
+			<!-- SECTION -->
+			
+			<div class="section advanced">
+			
+				<h4 class="section-title underline">Advanced</h4>
+				
+                <div class="field radio">
+                    <div class="label">Touch support</div>
+                    <div class="input">
+                        <label>
+                            <input type="radio" name="spotmop.pointerMode" ng-model="settings.spotmop.pointerMode" value="default" />
+                            <span class="label">Device default (<span ng-if="isTouchDevice()">touch</span><span ng-if="!isTouchDevice()">click</span>)</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="spotmop.pointerMode" ng-model="settings.spotmop.pointerMode" value="click" />
+                            <span class="label">Force click</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="spotmop.pointerMode" ng-model="settings.spotmop.pointerMode" value="touch" />
+                            <span class="label">Force touch</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="label">System reset</div>
+                    <div class="input">
+                    <confirmation-button
+                        extra-classes="destructive"
+                        default-text="Reset all settings"
+                        confirmation-text="Are you sure?"
+                        on-confirmation="resetSettings">
+                    </confirmation-button>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="label">Current connection</div>
+                    <div class="input readonly">
+                        <span ng-bind="::settings.pusherip"></span> <span class="grey-text">(<span ng-bind="::settings.pusherid"></span>)</span>
+                    </div>
+                </div>
+
+                <div class="field current-connections">
+                    <div class="label">Users connected</div>
+                    <div class="input readonly">
+                        <div ng-repeat="client in clientConnections">
+                            <span class="min-width w100 ip" ng-bind="client.ip"></span>
+                            <span class="min-width w100 name" ng-bind="client.name"></span>
+                        </div>
+                    </div>
+                    <div class="clear-both"></div>
+                </div>
+			</div>
+			
+		</div>
+		
+	</div>
+</div>
