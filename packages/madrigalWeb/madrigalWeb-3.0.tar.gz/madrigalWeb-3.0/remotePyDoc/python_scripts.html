@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Remote python scripts</title>
+</head>
+
+<body>
+<h1 align="center">Remote access using python</h1>
+<p>The easiest way to use the Madrigal python remote data access API is to simply let the web interface write the script you need for you. 
+  Just choose the <i>Access data</i> pull-down menu and choose <i>Create a command to download multiple exps</i>. Then follow the instructions, and you will 
+  have the command you need to download whatever you want from Madrigal. Be sure to select python as the language you want to create the command with.
+  You can choose to download files as they are in Madrigal in either column-delimited ascii, Hdf5, or netCDF4 formats, or you can choose the
+  parameters yourself (including derived parameters), and optionally include filters on the data you get back.</p>
+<p>This web interface will generate python commands using one of the following two Python scripts: globalDownload.py and globalIsprint.py. Use globalDownload.py if you want data as it is in Madrigal. Use globalIsprint.py to choose parameters and/or filters. These two scripts are documented below, for those who do not want to use the web interface to generate the needed arguments. There are also some plotting scripts that require matplotlib to be installed, one for scatter plots, the other for pcolor plots.</p>
+<table width="80%" border="2" align="center">
+  <tbody>
+    <tr>
+      <td align="center"><a href="#globalDownload">globalDownload.py</a></td>
+      <td align="center"><a href="#globalIsprint">globalIsprint.py</a></td>
+    </tr>
+    <tr>
+      <td align="center"><a href="#madrigalPColor">madrigalPColor.py</a></td>
+      <td align="center"><a href="#madrigalScatter">madrigalScatter.py</a></td>
+    </tr>
+  </tbody>
+</table>
+<a name="globalDownload"></a>
+<h2>globalDownload.py</h2>
+<pre> Usage:</pre>
+<pre> globalDownload.py --url=&lt;Madrigal url&gt; --outputDir=&lt;output directory&gt; \
+   --user_fullname=&lt;user fullname&gt; --user_email=&lt;user email&gt; \
+   --user_affiliation=&lt;user affiliation&gt; --format=&lt;ascii,hdf5&gt; [options]</pre>
+<pre> where:</pre>
+<pre> --url=&lt;Madrigal url&gt; - url to homepage of site to be searched
+   (ie, http://madrigal.haystack.mit.edu/madrigal/)
+   This is required.</pre>
+<pre> --outputDir=&lt;output directory&gt; - the output directory to store all files in.  Default is to store
+   all files in the same directory, and a number is added to the filename if a file might be overwritten.  Set
+   --tree flag to store all files in the same directory structure they appear in Madrigal.  This
+   allows all files to keep their original names. </pre>
+<pre> --user_fullname=&lt;user fullname&gt; - the full user name (probably in quotes unless your name is
+   Sting or Madonna)</pre>
+<pre> --user_email=&lt;user email&gt;</pre>
+<pre> --user_affiliation=&lt;user affiliation&gt; - user affiliation.  Use quotes if it contains spaces.
+   
+   --format=&lt;ascii or hdf5&gt;</pre>
+<pre> and options are:</pre>
+<pre> --startDate=&lt;MM/DD/YYYY&gt; - start date to filter experiments before.  Defaults to allow all experiments.</pre>
+<pre> --endDate=&lt;MM/DD/YYYY&gt; - end date to filter experiments after.  Defaults to allow all experiments.</pre>
+<pre> --inst=&lt;instrument list&gt; - comma separated list of instrument codes or names.  See Madrigal documentation
+   for this list.  Defaults to allow all instruments. If names are given, the
+   argument must be enclosed in double quotes.  An asterick will perform matching as
+   in glob.  For example:
+   
+   --inst=10,30
+   
+   --inst=&quot;Jicamarca IS Radar,Arecibo*&quot;</pre>
+<pre> --expName  - filter experiments by the experiment name.  Give all or part of the experiment name. Matching
+   is case insensitive.  Default is no filtering by experiment name.
+   
+   --fileDesc - filter files using input file Description string and case-insensitive fnmatch</pre>
+<pre> --kindat=&lt;kind of data list&gt; - comma separated list of kind of data codes.  See Madrigal documentation
+   for this list.  Defaults to allow all kinds of data.  If names are given, the
+   argument must be enclosed in double quotes.  An asterick will perform matching as
+   in glob. For example:
+   
+   --kindat=3001,13201
+   
+   --kindat=&quot;INSCAL Basic Derived Parameters,*efwind*,2001&quot;
+</pre>
+<pre> --seasonalStartDate=&lt;MM/DD&gt; - seasonal start date to filter experiments before.  Use this to select only part of the
+   year to collect data.  Defaults to Jan 1.  Example: 
+   
+   --seasonalStartDate=07/01 would only allow experiments after July 1st from each year.</pre>
+<pre> 
+   --seasonalEndDate=&lt;MM/DD&gt; - seasonal end date to filter experiments after.  Use this to select only part of the
+   year to collect data.  Defaults to Dec 31.  Example: 
+   
+   --seasonalEndDate=10/31 would only allow experiments before Oct 31 of each year.
+   
+   --tree - add if you want to store the downloaded files in the same hierarchy as in Madrigal: 
+   &lt;YYYY/&lt;instCode&gt;/&lt;experimentDir&gt;.  Without --tree, stores all downloaded files in one directory.
+   
+   --includeNonDefault - if given, include realtime files when there are no default.  Default is to search only default files.</pre>
+<pre> --verbose - if given, print each file processed info to stdout.  Default is to run silently.
+   
+   Example:
+   
+   globalDownload.py --url=http://madrigal.haystack.mit.edu/madrigal --outputDir=/tmp --user_fullname=&quot;Bill Rideout&quot; 
+   --user_email=brideout@haystack.mit.edu --user_affiliation=MIT --startDate=01/01/1998 
+   --endDate=-01/30/1998 --inst=30</pre>
+<hr>
+<a name="globalIsprint"></a>
+<h2>globalIsprint.py</h2>
+<pre> Usage:</pre>
+<pre> globalIsprint.py --url=&lt;Madrigal url&gt; --parms=&lt;Madrigal parms&gt; --output=&lt;output file&gt; \
+   --user_fullname=&lt;user fullname&gt; --user_email=&lt;user email&gt; \
+   --user_affiliation=&lt;user affiliation&gt; [options]</pre>
+<pre> where:</pre>
+<pre> --url=&lt;Madrigal url&gt; - url to homepage of site to be searched
+   (ie, http://madrigal.haystack.mit.edu/madrigal/)
+   This is required.</pre>
+<pre> --parms=&lt;Madrigal parms&gt; - a comma delimited string listing the desired Madrigal parameters
+   in mnemonic form.  (Example: gdalt,dte,te).  Data will be returned
+   in the same order as given in this string. See
+   http://madrigal.haystack.mit.edu/cgi-bin/madrigal/getMetadata and
+   choose &quot;Parameter code table&quot; for all possible parameters</pre>
+<pre> --output=&lt;output file or directory name&gt; - the file or directory name to store the resulting data.
+   If you give a file, all output will be stored in a single
+   ascii file that you specify.
+   Use a directory name if you want data stored as individual
+   files, in either ascii, Hdf5, or netCDF4 formats.  To use
+   this option, you must set a format in the optional format
+   argument. File names will be based on file names in Madrigal.
+   Hdf5 or netCDF4 formats only available from Madrigal 3.0 or 
+   higher sites.</pre>
+<pre> --user_fullname=&lt;user fullname&gt; - the full user name (probably in quotes unless your name is
+   Sting or Madonna)</pre>
+<pre> --user_email=&lt;user email&gt;</pre>
+<pre> --user_affiliation=&lt;user affiliation&gt; - user affiliation.  Use quotes if it contains spaces.</pre>
+<pre> and options are:</pre>
+<pre> --startDate=&lt;MM/DD/YYY&gt; - start date to filter experiments before.  Defaults to allow all experiments.</pre>
+<pre> --endDate=&lt;MM/DD/YYY&gt; - end date to filter experiments after.  Defaults to allow all experiments.</pre>
+<pre> --inst=&lt;instrument list&gt; - comma separated list of instrument codes or names.  See Madrigal documentation
+   for this list.  Defaults to allow all instruments. If names are given, the
+   argument must be enclosed in double quotes.  An asterick will perform matching as
+   in glob.  Examples: (--inst=10,30 or --inst=&quot;Jicamarca IS Radar,Arecibo*&quot;)
+   
+   --format=&lt;Hdf5 or netCDF4 or ascii&gt; - format must be specified if output is a directory so that data is stored
+   in individual files, one for each Madrigal file. Hdf5 or netCDF4 formats only 
+   available from Madrigal 3.0 or higher sites.</pre>
+<pre> --expName  - filter experiments by the experiment name.  Give all or part of the experiment name. Matching
+   is case insensitive and fnmatch characters * and ? are allowed.  Default is no filtering by 
+   experiment name.
+   
+   --fileDesc - filter files by their file description string. Give all or part of the file description string. Matching
+   is case insensitive and fnmatch characters * and ? are allowed.  Default is no filtering by 
+   file description.</pre>
+<pre> --kindat=&lt;kind of data list&gt; - comma separated list of kind of data codes.  See Madrigal documentation
+   for this list.  Defaults to allow all kinds of data.  If names are given, the
+   argument must be enclosed in double quotes.  An asterick will perform matching as
+   in glob. Examples: (--kindat=3001,13201 or 
+   --kindat=&quot;INSCAL Basic Derived Parameters,*efwind*,2001&quot;)</pre>
+<pre> --filter=&lt;[mnemonic] or [mnemonic1,[+-*/]mnemonic2]&gt;,&lt;lower limit1&gt;,&lt;upper limit1&gt;[or&lt;lower limit2&gt;,&lt;upper limit2&gt;...]
+   a filter using any measured or derived Madrigal parameter, or two Madrigal parameters either added,
+   subtracted, multiplied or divided.  Each filter has one or more allowed ranges.  The filter accepts
+   data that is in any allowed range.  If the Madrigal parameter value is missing, the filter will always
+   reject that data.  Multiple filter arguments are allowed on the command line.  To skip either a lower
+   limit or an upper limit, leave it blank.  Examples: (--filter=ti,500,1000  (Accept when 500 &lt;= Ti &lt;= 1000)
+   or --filter=gdalt,-,sdwht,0,  (Accept when gdalt &gt; shadowheight - that is, point in direct sunlight)
+   or  --filter=gdalt,200,300or1000,1200 (Accept when 200 &lt;= gdalt &lt;= 300 OR 1000 &lt;= gdalt &lt;= 1200))</pre>
+<pre> --seasonalStartDate=&lt;MM/DD&gt; - seasonal start date to filter experiments before.  Use this to select only part of the
+   year to collect data.  Defaults to Jan 1.  Example:
+   (--seasonalStartDate=07/01) would only allow experiments after July 1st from each year.</pre>
+<pre> 
+   --seasonalEndDate=&lt;MM/DD&gt; - seasonal end date to filter experiments after.  Use this to select only part of the
+   year to collect data.  Defaults to Dec 31.  Example: 
+   (--seasonalEndDate=10/31) would only allow experiments before Oct 31 of each year.</pre>
+<pre> --showFiles - if given, show file names.  Default is to not show file names. Not used if format in &lt;Hdf5, netCDF4).</pre>
+<pre> --showSummary - if given, summarize all arguments at the beginning.  Not used if format in &lt;Hdf5, netCDF4).
+   Default is to not show summary.
+   
+   --includeNonDefault - if given, include realtime files when there are no default.  Not used if format in &lt;Hdf5, netCDF4).
+   Default is to search only default files.</pre>
+<pre> --missing=&lt;missing string&gt; (defaults to &quot;missing&quot;). Not used if format in &lt;Hdf5, netCDF4).</pre>
+<pre> --assumed=&lt;assumed string&gt; (defaults to &quot;assumed&quot;). Not used if format in &lt;Hdf5, netCDF4).</pre>
+<pre> --knownbad=&lt;knownbad string&gt; (defaults to &quot;knownbad&quot;). Not used if format in &lt;Hdf5, netCDF4).</pre>
+<pre> --verbose - if given, print each file processed info to stdout.  Default is to run silently.</pre>
+<hr />
+<h2><a name="madrigalPColor" id="madrigalPColor"></a>madrigalPColor.py</h2>
+<p>madrigalPColor.py is a remote command-line application that creates PColor plots from Madrigal data</p>
+<p>Usage:</p>
+<pre> python madrigalPColor.py  --url=madrigalUrl --file=filename --parm=parameter
+   --output=outputFile --name=userName --email=userEmail --affiliation=userAffilitation
+   [--filter=filterString --title=plotTitle --startHour=startHour --endHour=endHour
+   --minAlt=minimum_altitude --maxAlt=maximum_altitude --minParm=minimum_parm_value 
+   --maxParm=maximum_parameter_value]</pre>
+<p>See http://madrigal.haystack.mit.edu/madrigal/ug_commandLine.html#isprint for details of how filters work. Optional startHour and endHour are UT hours, with 0 being midnight UT on the day the experiment started. Default is entire experiment.</p>
+<p>Example:</p>
+<pre> python madrigalPColor.py  --url=http://madrigal.haystack.mit.edu/madrigal \
+   --file=/opt/madrigal/experiments/1998/mlh/20jan98/mlh980120g.002 --parm=nel \
+   --output=/tmp/mlh_20jan98.png --name=&quot;Bill Rideout&quot; --email=brideout@haystack.mit.edu \
+   --affiliation=MIT --filter=&quot;filter=elm,80,90 filter=gdalt,,500&quot;</pre>
+<p>This script requires Matplotlib be installed.</p>
+<hr>
+<h2><a name="madrigalScatter" id="madrigalPColor2"></a>madrigalScatter.py</h2>
+<p>madrigalScatter.py is a remote command-line application that creates scatter plots from Madrigal data</p>
+<p>Usage:</p>
+<pre> python madrigalScatter.py  --url=madrigalUrl --file=filename --parm=parameter
+   --output=outputFile --name=userName --email=userEmail --affiliation=userAffilitation
+   [--filter=filterString --title=plotTitle --startHour=startHour --endHour=endHour
+   --yMin=y_minimum --yMax=y_maximum]</pre>
+<p>For details of how filters work, go to any Madrigal 3 site and choose Documentation -&gt; Administrator's Guide -&gt; Using isprint for file quick looks. Optional startHour and endHour are UT hours, with 0 being midnight UT on the day the experiment started. Default is entire experiment.</p>
+<p>Example:</p>
+<pre> python madrigalScatter.py  --url=http://madrigal.haystack.mit.edu/madrigal \
+   --file=/opt/madrigal/experiments/1998/mlh/20jan98/mlh980120g.002 --parm=systmp \
+   --output=/tmp/mlh_20jan98.png --name=&quot;Bill Rideout&quot; --email=brideout@haystack.mit.edu \
+   --affiliation=MIT --filter=&quot;filter=elm,80,90&quot;</pre>
+<p>Requires Matplotlib be installed</p>
+<p>&nbsp;</p>
+</body>
+</html>
