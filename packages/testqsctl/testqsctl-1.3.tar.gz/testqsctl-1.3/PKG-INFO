@@ -1,0 +1,261 @@
+Metadata-Version: 1.0
+Name: testqsctl
+Version: 1.3
+Summary: Advanced command line tool for QingStor.
+Home-page: https://docs.qingcloud.com
+Author: Daniel Zheng
+Author-email: daniel@yunify.com
+License: UNKNOWN
+Description: ### Qingstor command line tool
+        ------------------------------
+        
+          Qsctl(QingStor command line tool) provides more powerful unix-like commands.
+          You can manage QingStor resources just like files on local machine. Unix-like
+          commands contains: cp, ls, mb, mv, rm, rb, and sync. All of the them support
+          batch processing.
+        
+        - Installation
+        
+          - virtualenv
+        
+            ```
+            $ pip install qsctl
+            ```
+        
+          - System-Wide
+        
+            ```
+            $ sudo pip install qsctl
+            ```
+        
+            On Windows systems, run it in a command-prompt window with administrator
+            privileges, and leave out sudo.
+        
+        - Getting Started
+        
+          To use qsctl, there must be a configuration file to configure your own
+          ``qy_access_key_id``, ``qy_secret_access_key``, and ``zone``, for example:
+        
+          ```
+          qy_access_key_id: 'QINGCLOUDACCESSKEYID'
+          qy_secret_access_key: 'QINGCLOUDSECRETACCESSKEYEXAMPLE'
+          zone: 'pek3a'
+          ```
+        
+          The configuration file is ``~/.qingcloud/config.yaml`` by default, it also
+          can be specified by the parameter ``-c /path/to/config``.
+        
+        - Usage
+        
+          - cp
+             - Description
+        
+                  Copy local file(s) to qingstor or qingstor key(s) to local.
+        
+             - Synopsis
+        
+                 cp `<local-path>` `<qs-path>` or `<qs-path>` `<local-path>`
+                 -r, --recursive
+                 --include `<value>`
+                 --exclude `<value>`
+        
+          - ls
+             - Description
+        
+                 List qingstor keys under a prefix or all qingstor buckets.
+        
+             - Synopsis
+        
+                 ls `<qs-path>` or NONE
+                 -r, --recursive
+                 --page-size `<value>`
+                 --zone `<value>`
+        
+          - mb
+             - Description
+        
+                 Create a qingstor bucket.
+        
+             - Synopsis
+        
+                 mb `<qs-path>`
+                 --zone `<value>`
+        
+          - mv
+             - Description
+        
+                 Move local file(s) to qingstor or qingstor keys(s) to local.
+        
+             - Synopsis
+        
+                 mv `<local-path>` `<qs-path>` or `<qs-path>` `<local-path>`
+                 -r, --recursive
+                 --include `<value>`
+                 --exclude `<value>`
+        
+          - rb
+        
+             - Description
+        
+                 Delete an empty qingstor bucket or forcely delete nonempty qingstor bucket.
+        
+             - Synopsis
+        
+                 rb `<qs-path>`
+                 --force
+        
+          - rm
+             - Description
+        
+                 Delete a qingstor key or keys under a prefix.
+        
+             - Synopsis
+        
+                 rm `<qs-path>`
+                 -r, --recursive
+                 --include `<value>`
+                 --exclude `<value>`
+        
+          - sync
+             - Description
+        
+                 sync between local directories and a prefix.
+        
+             - Synopsis
+        
+                 sync `<local-path>` `<qs-path>` or `<qs-path>` `<local-path>`
+                 --delete
+                 --include `<value>`
+                 --exclude `<value>`
+        
+        - Examples
+        
+          - ls
+        
+            ```
+            $ qsctl ls
+            mybucket1
+            mybucket2
+        
+            $ qsctl ls qs://mybucket1
+            Folder                             test/
+            2016-04-03 11:16:04     4 Bytes    test.txt
+            2016-04-03 11:16:04     4 Bytes    temp.txt
+            2016-04-03 11:16:04     4 Bytes    temp1.txt
+        
+            $ qsctl ls qs://mybucket1 -r
+            2016-04-03 17:51:18     1.4 KiB    test/test/standard
+            2016-04-03 11:16:04     4 Bytes    test.txt
+            2016-04-03 11:16:04     4 Bytes    temp.txt
+            2016-04-03 11:16:04     4 Bytes    temp1.txt
+            ```
+        
+          - cp
+        
+            ```
+            $ qsctl cp qs://mybucket1/test.txt test.txt
+            File 'test.txt' written
+        
+            $ qsctl cp qs://mybucket1 test/ -r
+            File 'test/test.txt' written
+            File 'test/temp.txt' written
+            File 'test/temp1.txt' written
+            File 'test/test/test/standard' written
+        
+            $ qsctl cp qs://mybucket1 test/ -r --exclude "*.txt"
+            File 'test/test/test/standard' written
+        
+            $ qsctl cp qs://mybucket1 test/ -r --exclude "*" --include "*.txt"
+            File 'test/t.txt' written
+            File 'test/temp.txt' written
+            File 'test/temp1.txt' written
+            ```
+        
+          - mv
+        
+            ```
+            $ qsctl mv qs://mybucket1/test.txt test.txt
+            File 'test.txt' written
+            Key <test.txt> deleted
+        
+            $ qsctl mv qs://mybucket1 test/ -r
+            File 'test/test.txt' written
+            File 'test/temp.txt' written
+            File 'test/temp1.txt' written
+            File 'test/test/test/standard' written
+            Key <test.txt> deleted
+            Key <temp.txt> deleted
+            Key <temp1.txt> deleted
+            Key <test/test/standard> deleted
+        
+            $ qsctl mv qs://mybucket1 test/ -r --exclude "*.txt"
+            File 'test/test/test/standard' written
+            Key <test/test/standard> deleted
+        
+            $ qsctl mv qs://mybucket1 test/ -r --exclude "*" --include "*.txt"
+            File 'test/t.txt' written
+            File 'test/temp.txt' written
+            File 'test/temp1.txt' written
+            Key <test.txt> deleted
+            Key <temp.txt> deleted
+            Key <temp1.txt> deleted
+            ```
+        
+          - mb
+        
+            ```
+            $ qsctl mb qs://mybucket2
+            Bucket <mybucket2> created
+            ```
+        
+          - rb
+        
+            ```
+            $ qsctl rb qs://mybucket2
+            Bucket <mybucket2> deleted
+        
+            $ qsctl rb qs://mybucket1 test/ --force
+            Key <test.txt> deleted
+            Key <temp.txt> deleted
+            Key <temp1.txt> deleted
+            Key <test/test/standard> deleted
+            Bucket <mybucket1> deleted
+            ```
+        
+          - rm
+        
+            ```
+            $ qsctl rm qs://mybucket1/test.txt
+            Key <test.txt> deleted
+        
+            $ qsctl rm qs://mybucket1 -r
+            Key <test.txt> deleted
+            Key <temp.txt> deleted
+            Key <temp1.txt> deleted
+            Key <test/test/standard> deleted
+            ```
+        
+          - sync
+        
+            ```
+            $ qsctl sync qs://mybucket3/test test/
+            File 'test/README.md' written
+            File 'test/commands.py' written
+            File 'test/commands.pyc' written
+            File 'test/issues.txt' written
+            File 'test/test.txt' written
+        
+            $ qsctl sync qs://mybucket3/test test/ --delete
+            File 'test/README.md' written
+            File 'test/commands.py' written
+            File 'test/commands.pyc' written
+            File 'test/issues.txt' written
+            File 'test/test.txt' written
+            File 'test/others1.txt' deleted
+            File 'test/others2.txt' deleted
+            File 'test/others3.txt' deleted
+            File 'test/others4.txt' deleted
+            ```
+        
+Keywords: qingcloud qingstor qsctl
+Platform: UNKNOWN
