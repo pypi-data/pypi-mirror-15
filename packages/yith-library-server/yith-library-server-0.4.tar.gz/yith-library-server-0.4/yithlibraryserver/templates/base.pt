@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+      i18n:domain="yithlibraryserver"
+      metal:define-macro="base">
+  <head>
+    <meta charset="UTF-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+
+    <title><tal:block metal:define-slot="header-title"></tal:block> - Yith Library</title>
+    <meta name="description" content=""/>
+    <meta name="author" content=""/>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+    <link rel="shortcut icon" href="${request.static_path('yithlibraryserver:static/favicon.ico')}" />
+
+    <link tal:repeat="url request.webassets_env['yithlibrary_css'].urls()"
+	  tal:attributes="href url"
+	  rel="stylesheet" />
+
+    <tal:block metal:define-slot="extra-styles"></tal:block>
+
+    <!--[if lt IE 9]>
+    <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <script src="https://login.persona.org/include.js"></script>
+
+  </head>
+  <body>
+
+    <tal:block metal:define-slot="navbar">
+      <nav class="navbar navbar-inverse navbar-static-top" role="navigation">
+        <div class="container">
+          <div class="navbar-header">
+            <a class="navbar-brand" href="${request.route_path('home')}">Yith Library</a>
+          </div>
+          <ul class="nav navbar-nav navbar-right">
+            <li tal:condition="not request.user">
+              <a href="${request.route_path('login')}" i18n:translate="">Log in</a>
+            </li>
+            <li tal:condition="request.user">
+              <a href="${request.route_path('user_information')}">
+                <img class="avatar" src="${request.gravatar.get_image_url(32)}" height="32" alt="" />
+                ${request.user}
+              </a>
+            </li>
+            <li tal:condition="request.user">
+              <a href="${request.route_path('oauth2_clients')}" i18n:translate="">My passwords</a>
+            </li>
+            <li tal:condition="request.user">
+              <a class="logout" href="${request.route_path('logout')}" i18n:translate="">Log out</a>
+            </li>
+          </ul>
+        </div>
+
+	    <div class="container" tal:condition="request.google_analytics.enabled and request.google_analytics.first_time">
+	      <div class="alert alert-info">
+            <p>
+              <strong tal:condition="not request.user" i18n:translate="">Welcome, new visitor!</strong>
+              <strong tal:condition="request.user" i18n:translate="">Welcome <span i18n:name="current-user">${request.user}</span></strong>.
+              <span i18n:translate="">We are using cookies to get statistics about the usage of Yith Library. This is completely optional and we want to ask you if this is ok with you.</span></p>
+            <form class="google-analytics-preference-form" action="${request.route_path('user_google_analytics_preference')}" method="POST">
+              <input type="submit" class="btn btn-default" name="yes" value="Ok, I can handle one more cookie" i18n:attributes="value" />
+              <input type="submit" class="btn btn-default" name="no" value="No, I don't want to be tracked" i18n:attributes="value" />
+            </form>
+	      </div>
+	    </div>
+
+        <div id="messages" class="container">
+          <div tal:repeat="queue (('info', 'info'), ('success', 'success'), ('error', 'danger'), ('warning', 'warning'), ('', ''))" tal:omit-tag="">
+            <div class="alert alert-${queue[1]} alert-dismissible"
+                 role="alert"
+                 tal:define="messages request.session.pop_flash(queue[0])"
+                 tal:condition="messages"
+                 tal:repeat="message messages">
+              <button type="button"
+                      class="close"
+                      data-dismiss="alert"
+                      aria-label="close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+              ${message}
+            </div>
+          </div>
+        </div>
+
+      </nav>
+    </tal:block>
+
+    <tal:block metal:define-slot="content"></tal:block>
+
+    <footer>
+      <div class="container">
+        <p class="pull-right hidden-xs">
+          <a href="https://twitter.com/YithLibrary" target="_blank" i18n:translate="">Follow us on Twitter!</a> &middot; <a href="https://github.com/lorenzogil/yith-library-server" target="_blank" i18n:translate="">Fork us on GitHub!</a>
+        </p>
+        <p>
+          <a href="${request.route_path('faq')}" i18n:translate="">FAQ</a> &middot;
+          <a href="${request.route_path('tos')}" id="tosButton" i18n:translate="">Terms of service</a> &middot;
+          <a href="${request.route_path('contact')}" i18n:translate="">Contact</a> &middot;
+          <a href="${request.route_path('credits')}" i18n:translate="">Credits</a>
+        </p>
+      </div>
+    </footer>
+
+    <script type="text/javascript"
+	    tal:define="next next_url|nothing;
+			current_user request.user.email if request.user else email|'';
+			current_provider request.session.get('current_provider', None) or provider|''">
+
+      var YITH = window.YITH || {};
+      YITH.ga = ${request.google_analytics.json};
+      YITH.persona = {
+          loginUrl: "${request.route_path('persona_login')}",
+          logoutUrl: "${request.route_path('logout')}",
+          currentUser: "${current_user}",
+          currentProvider: "${current_provider}",
+          loginSelector: "#persona a",
+          logoutSelector: ".logout",
+          nextUrl: "${next}"
+      };
+    </script>
+    <script tal:repeat="url request.webassets_env['yithlibrary_js'].urls()"
+	    tal:attributes="src url"></script>
+  </body>
+</html>
