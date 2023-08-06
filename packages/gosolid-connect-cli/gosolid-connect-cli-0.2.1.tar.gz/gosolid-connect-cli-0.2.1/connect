@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+from cli.framework.authenticate import Authenticate
+from cli.commands.vagrant import Vagrant
+import argparse
+import sys
+
+class ConnectParser(argparse.ArgumentParser):
+    def error(self, message):
+        sys.stderr.write('error: %s\n' % message)
+        self.print_help()
+        sys.exit(2)
+
+def execute(params, user_data):
+    property = params.property if params.property else None
+    directory = params.dir if params.dir else None
+    vagrant = Vagrant(property, user_data, directory)
+    try:
+        method = getattr(vagrant, params.action)
+        method()
+    except AttributeError:
+        print "Command not found"
+
+if __name__ == '__main__':
+    auth = Authenticate()
+
+    is_logged_in = auth.authenticate()
+
+    if is_logged_in:
+        parser = ConnectParser()
+        parser.add_argument('action', metavar='action', type=str, help='action to perform (start, stop, destroy, reset)')
+        parser.add_argument('--property', '-p', metavar='property', type=str, help='4-letter property key')
+        parser.add_argument('--dir', '-d', metavar='directory', type=str,
+                            help='Directory name. Property name will be used if not specified.')
+        args = parser.parse_args()
+        execute(args, auth.user_data)
+    else:
+        sys.exit()
