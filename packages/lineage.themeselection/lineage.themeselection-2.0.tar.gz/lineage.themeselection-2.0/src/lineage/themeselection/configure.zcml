@@ -1,0 +1,86 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:genericsetup="http://namespaces.zope.org/genericsetup"
+    xmlns:plone="http://namespaces.plone.org/plone"
+    xmlns:zcml="http://namespaces.zope.org/zcml"
+    i18n_domain="lineage.themeselection">
+
+  <include package="Products.CMFCore" file="permissions.zcml"/>
+  <include package="collective.lineage" />
+
+  <subscriber
+      for="collective.lineage.interfaces.IChildSite
+           zope.traversing.interfaces.IBeforeTraverseEvent"
+      handler=".subscriber.apply_skin" />
+
+  <configure zcml:condition="not-have plone-5">
+    <adapter
+        for="collective.lineage.interfaces.IChildSite"
+        factory="plone.app.controlpanel.skins.SkinsControlPanelAdapter"/>
+
+    <!-- hide other than "Theme base" from "Theme base" tab -->
+    <browser:viewlet
+        name="lineage.themeselection.controlpanelstyles"
+        for="collective.lineage.interfaces.IChildSite"
+        view=".themingcontrolpanel.LineageThemingControlpanel"
+        manager="plone.app.layout.viewlets.interfaces.IHtmlHead"
+        class=".themingcontrolpanel.ControlPanelStyleViewlet"
+        layer=".interfaces.ILineageThemingLayer"
+        permission="zope2.View"
+        />
+  </configure>
+
+  <configure package="plone.app.theming.browser">
+    <browser:page
+        name="theming-controlpanel"
+        for="collective.lineage.interfaces.IChildSite"
+        layer="lineage.themeselection.interfaces.ILineageThemingLayer"
+        class="lineage.themeselection.themingcontrolpanel.LineageThemingControlpanel"
+        template="controlpanel.pt"
+        permission="cmf.ManagePortal"
+        />
+
+    <browser:page
+        name="theming-controlpanel-help"
+        for="collective.lineage.interfaces.IChildSite"
+        layer="lineage.themeselection.interfaces.ILineageThemingLayer"
+        class="plone.app.theming.browser.help.Help"
+        permission="zope2.View"
+        />
+  </configure>
+
+  <browser:page
+      name="is_subsite_enabled"
+      for="*"
+      layer=".interfaces.ILineageThemingLayer"
+      class=".action.ActionAvailableView"
+      permission="zope2.View"
+      />
+
+
+  <genericsetup:registerProfile
+      name="default"
+      title="Lineage: Theme Selection Addon for Child Sites"
+      directory="profile"
+      description="Extension to allow theme selection for lineage child sites."
+      provides="Products.GenericSetup.interfaces.EXTENSION" />
+
+  <genericsetup:upgradeStep
+      title="Migrate to plone.registry"
+      source="1"
+      destination="2"
+      sortkey="1"
+      handler=".upgrades.migrate_to_registry"
+      profile="lineage.themeselection:default"
+      />
+  <genericsetup:upgradeStep
+      title="Remove Behavior"
+      source="1"
+      destination="2"
+      sortkey="2"
+      handler=".upgrades.remove_behavior"
+      profile="lineage.themeselection:default"
+      />
+
+</configure>
