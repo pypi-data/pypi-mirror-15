@@ -1,0 +1,5 @@
+REVOKE ALL ON SCHEMA pgtask FROM PUBLIC;
+
+GRANT USAGE ON SCHEMA pgtask TO pgtask_admins;
+GRANT ALL ON ALL TABLES IN SCHEMA pgtask TO pgtask_admins;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA pgtask TO pgtask_admins;
