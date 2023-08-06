@@ -1,0 +1,3 @@
+PowerGAMA is a Python-based lightweight simulation tool for high level analyses of renewable energy integration in large power systems. The simulation tool optimises the generation dispatch, i.e. the power output from all generators in the power system, based on marginal costs for each timestep over a given period, for example one year. It takes into account the variable power available for solar, hydro and wind power generators. It also takes into account the variability of demand. Moreover, it is flow-based meaning that the power flow in the AC grid is determined by physical power flow equations.
+
+
