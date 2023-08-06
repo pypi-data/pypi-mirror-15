@@ -1,0 +1,54 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import argparse
+import os.path
+
+from tabulate import tabulate
+
+from toggl import TogglAPI, DateRange
+from toggl.report import process_entries
+
+KEY_FILE = os.path.expanduser('~/.toggl/api_key')
+
+def main(argv=None):
+	with open(KEY_FILE) as fh:
+		api_key = fh.read().rstrip()
+
+	toggl = TogglAPI(api_key)
+
+	parser = argparse.ArgumentParser("Toggl time reporter")
+	parser.add_argument("start", nargs='?')
+	parser.add_argument("end", nargs='?')
+	parser.add_argument("-c", "--csv", action='store_true')
+	args = parser.parse_args(argv)
+
+	try:
+		dr = DateRange(args.start, args.end)
+	except ValueError as err:
+		print(err, file=sys.stderr)
+		exit(1)
+
+	output = []
+	first = True
+	while first or dr.week and not output:
+		first = False
+		print(dr.dates)
+		entries = toggl.get_time_entries(*dr.tuple())
+		output = process_entries(entries)
+		dr.decrement_week()
+	if dr.one_day:
+		output = output[2:]
+	if args.csv:
+		for row in output:
+			print(",".join(row))
+	elif output:
+		output = map(lambda x: min_list(x, 3, ''), output)
+		print(tabulate(output, tablefmt='plain'))
+
+def min_list(ls, min, default=None):
+	return ls + [default] * (min - len(ls))
+
+if __name__ == '__main__':
+	main()
