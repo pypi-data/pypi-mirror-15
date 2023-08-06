@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Echo</title>
+  <style>
+    .hide { display: none }
+  </style>
+</head>
+<body>
+
+  <h2>
+    Status: <span id="status">Connecting...</span>
+  </h2>
+
+  <form id="form" class="hide">
+    <p>Send a message to my WebSocket </p>
+    <input type="text" name="message" autocomplete="off">
+    <button type="submit">Send</button>
+
+    <p>
+      Server answers: <b id="response">...</b>
+    </p>
+  </form>
+
+  <script src="main.min.js"></script>
+  <script>
+    const $status = document.querySelector('#status');
+    const $response = document.querySelector('#response');
+    const $form = document.querySelector('#form');
+    const $message = $form.querySelector('input[type="text"]');
+
+    const ws = TornadoWebSocket('/echo', {
+      host: 'kocal.fr'
+    });
+
+    function setStatus(status) {
+      $status.textContent = status;
+    }
+
+    // reserved events
+
+    ws.on('open', (event) => {
+      setStatus('Open');
+
+      $form.classList.remove('hide');
+      $form.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        ws.emit('message', {
+          message: $message.value
+        });
+      });
+    });
+
+    ws.on('close', (event) => {
+      setStatus('Closed: ' + event.reason);
+    });
+
+    ws.on('error', (event) => {
+      setStatus('Error');
+    });
+
+    // user events
+    ws.on('message', (data) => {
+      $response.textContent = data.message;
+    });
+
+  </script>
+</body>
+</html>
