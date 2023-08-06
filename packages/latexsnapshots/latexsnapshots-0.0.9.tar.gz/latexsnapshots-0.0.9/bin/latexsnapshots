@@ -1,0 +1,54 @@
+#!/usr/bin/env python2.7
+
+import os
+import time
+import difflib
+from datetime import datetime
+
+import click
+import Levenshtein as lev
+from sqlalchemy import create_engine
+from git import Repo
+from wand.image import Image, FILTER_TYPES
+from wand.color import Color
+
+from latexsnapshots.server import run_server
+from latexsnapshots.util import proc_latex, all_screenshots, PDFROOT
+from latexsnapshots.export import export
+
+
+
+if __name__ == '__main__':
+  from config import *
+  @click.command()
+  @click.argument("cmd", nargs=1)
+  @click.option("-h", type=int, default=350, help="screenshot height")
+  @click.option("-o", help="output directory for exporting")
+  @click.option("--port", type=int, default=8000, help="webserver port")
+  def main(cmd, h, o, port):
+    """
+    Commands:
+
+      \b
+      screenshot -- regenerate screenshots
+      latex      -- run latex and generate pdfs
+      server     -- run webserver for nice UI
+      export     -- export into a folder for static deployment
+
+    Note: this executable loads config.py for the configuration parameters
+    """
+
+    if cmd == "screenshot":
+      all_screenshots(PDFROOT, h=h)
+    elif cmd == "latex":
+      proc_latex(h=h)
+    elif cmd == 'server':
+      run_server('localhost', port)
+    elif cmd == "export":
+      if o and o != "":
+        export(o)
+      else:
+        print "specify an output directory using -o"
+
+
+  main()
