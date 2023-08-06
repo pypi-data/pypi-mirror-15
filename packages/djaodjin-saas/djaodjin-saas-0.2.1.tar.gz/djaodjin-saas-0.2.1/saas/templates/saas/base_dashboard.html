@@ -1,0 +1,77 @@
+{% extends "saas/base.html" %}
+
+{% block saas_bodyscripts %}
+<script type="text/javascript" charset="utf-8" src="/static/vendor/js/angular.js"></script>
+<script type="text/javascript" charset="utf-8" src="/static/vendor/js/angular-touch.js"></script>
+<script type="text/javascript" charset="utf-8" src="/static/vendor/js/angular-animate.js"></script>
+<script type="text/javascript" charset="utf-8" src="/static/vendor/js/angular-resource.js"></script>
+<script type="text/javascript" charset="utf-8" src="/static/vendor/js/angular-route.js"></script>
+<script type="text/javascript" charset="utf-8" src="/static/vendor/js/angular-dragdrop.js"></script>
+<script type="text/javascript" charset="utf-8" src="/static/vendor/js/ui-bootstrap-tpls.js"></script>
+<script type="text/javascript" charset="utf-8" src="/static/js/djaodjin-saas-angular.js"></script>
+{% if organization %}
+{# XXX /users/:user/roles/ page does not define ``organization``. #}
+<script type="text/javascript">
+/* Implementation Note: Not including a list of dependent modules
+   (2nd parameter to `module`) "re-opens" the module for additional
+   configuration.
+   - We add the CSRF token for as an HTTP header on API calls.
+   - We make it easier to separate between django and angularjs templates
+     by changing Angular defaults to [[ and ]] characters. */
+var reopenSaasApp = angular.module('saasApp');
+reopenSaasApp.config(['$interpolateProvider', '$httpProvider',
+           function($interpolateProvider, $httpProvider) {
+    $httpProvider.defaults.headers.common['X-CSRFToken'] = '{{csrf_token}}';
+    $interpolateProvider.startSymbol('[[');
+    $interpolateProvider.endSymbol(']]');
+}]);
+reopenSaasApp.constant('settings', {
+urls: {
+    api_balance_lines: "{{urls.api_balance_lines}}",
+    api_broker_balances: "{{urls.api_broker_balances}}",
+    api_transactions: "{{saas_api_transactions}}",
+{% if urls.organization %}
+{% if urls.organization.api_roles %}
+    saas_api_user_relation_url: "{{ urls.organization.api_roles }}",
+{% endif %}
+    /* subscriptions */
+    api_organizations: "{{ urls.organization.api_profile_base }}",
+    saas_api_subscriptions: "{{ urls.organization.api_subscriptions }}",
+{% endif %}
+{% if urls.provider %}
+    saas_api_coupon_url: "{{ urls.provider.api_coupons }}",
+    saas_metrics_coupons_url: "{{ urls.provider.coupons }}",
+    /* subscribers */
+    saas_api_churned: "{{ urls.provider.api_subscribers_churned }}",
+    saas_api_active_subscribers: "{{ urls.provider.api_subscribers_active }}",
+    /* transactions */
+    api_receivables: "{{urls.provider.api_receivables}}",
+    saas_api_bank: "{{ urls.provider.api_bank }}",
+    {% if urls.provider.api_metrics_coupon_uses %}
+        api_metrics_coupon_uses: "{{urls.provider.api_metrics_coupon_uses}}",
+    {% endif %}
+{% endif %}
+    /* users */
+{% if urls.broker %}
+    api_registered: "{{ urls.broker.api_users_registered }}",
+    api_users: "{{ urls.broker.api_users }}",
+{% endif %}
+    /* accounts */
+{% if urls.accounts_base and urls.provider and urls.provider.api_accounts %}
+    accounts_base: "{{ urls.accounts_base }}",
+    api_accounts: "{{ urls.provider.api_accounts }}",
+{% endif %}
+{% if urls.user %}
+    api_accessibles: "{{urls.user.api_accessibles}}",
+{% endif %}
+},
+itemsPerPage: {% if items_per_page %}{{items_per_page}}{% else %}25{% endif %},
+tables: {% if tables %}{{tables|safe}}{% else %}{}{% endif %}, // XXX
+date_range: {
+    start_at: {% if start_at %}"{{start_at}}"{% else %}""{% endif %},
+    ends_at: {% if ends_at %}"{{ends_at}}"{% else %}""{% endif %}
+}});
+</script>
+{% endif %}
+{% block dashboard_bodyscripts %}{% endblock %}
+{% endblock %}
