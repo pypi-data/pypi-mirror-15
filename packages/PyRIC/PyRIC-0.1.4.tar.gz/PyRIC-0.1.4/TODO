@@ -1,0 +1,71 @@
+1) add a cli
+2) rfkill - unblocks/blocks all devices (as does the cli rfkill) Is this an
+  an ubuntu, kernel or overall issue
+3) parse NL80211_ATTR_WIPHY_BANDS (have workaround currently in place)
+ - after figuring out _CIPHER_SUITES, may be able to get a solution for the bands
+6) find a better way to get supported standards of a card
+8) Two commands that would add information of minor value
+ o ethtool. uses ioctl but does not follow same pattern as ifconfig seems
+    to use
+  - ethtool -i <dev> gives driver information including firmware-version
+  - ethtool -S <dev> gives some statistics on rx/tx
+ o iw dev wlan0 link returns information related to associated station. It sends
+   two commands the first is to initiate a scan, the second is @NL80211_CMD_GET_STATION.
+   The return from the kernel is a @NL80211_CMD_NEW_STATION, one of the attributes
+   is a @NL80211_ATTR_STA_INFO
+  - What is this? Looking at nl80211_h line 1648 we find the definition for
+    NL80211_STA_INFO - this has to be the corresponding data. Doesn't work, there
+    is something I'm missing but cannot figure out
+  - iw requests info on the BSSID, can we request the info on any STA?
+  - Line 1806 These attribute types are used with %NL80211_ATTR_STA_INFO
+    when getting information about a station.
+ 11) tried NL80211_CMD_GET_WIPHY, setting _WIPHY_TX_POWER_LEVEL but did
+  not return the current power level - currently cannot find anything in nl80211.h
+  that could be used to get tx power
+ 14) look at udevadm info --query=all --path /sys/class/net/<dev>
+  o has devie driver, name and some other details but appears to get these
+   the same way PyRIC does
+ 17) distro tests
+  o openSUSE
+  o RedHat/Fedora
+  o Debian (g2g)
+  o Arch
+  o CentOs (?)
+  o slackware
+  o dd-wrt/OpenWRT
+ 18) port structs from new nl80211.h
+ 19) iw is showing a command that doesn't exist
+ 21) look at NL80211_CMD_START_AP - no need to try and recreate the wheel by
+  replicate hostap but could be useful
+ 22) txset
+   o NOTE: the following is consistent with what iw gives us
+   o when using dBm
+    - get Operation not supported for setting tx power (see pyw.txset)
+    - have tried using the ifindex and phy. Both methods are accepted, returning
+     only Errno 95.
+   o when using mBm
+    - no errors reported but tx power is not changed
+   o Is the operation not supported by my cards? or is it not supported by the
+     kernel?
+ 23) Unknown Command 104. After updating to kernel 4, iw phy <phy> info returns
+  a Unknown command (104). pyw.phyinfo does not return this.
+   - iw 3.17 being used
+   - command 104 is NL80211_CMD_SET_QOS_MAP
+   - iw->util.c:
+   const char *command_name(enum nl80211_commands cmd)
+   {
+	if (cmd <= NL80211_CMD_MAX && commands[cmd])
+		return commands[cmd];
+	sprintf(cmdbuf, "Unknown command (%d)", cmd);
+	return cmdbuf;
+   }
+
+   iw's nl80211.h defines NL80211_CMD_SET_QOS_MAP but util.c does not specify
+   this command in commands which explains the unknown command.
+   - I've gone through the stream returned from the kernel for a wiphy request
+   and pyw is not getting this command
+   - It does not look like iw is hardcoding this but I cannot see any other way.
+   - If this command was being returned, pyw would correctly identify it as
+    NL80211_CMD_SET_QOS_MAP - need to identify a card that supports this command
+    and determine that pyw does correctly identify it
+  24) confirm download_url in setup.py is valid
