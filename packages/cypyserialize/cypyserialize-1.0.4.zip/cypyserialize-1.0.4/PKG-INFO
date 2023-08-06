@@ -1,0 +1,212 @@
+Metadata-Version: 1.1
+Name: cypyserialize
+Version: 1.0.4
+Summary: Really easy, really quick, binary parser framework for Python
+Home-page: https://github.com/wrenoud/cypyserialize
+Author: Weston Renoud
+Author-email: wrenoud@gmail.com
+License: Apache 2.0
+Download-URL: https://github.com/wrenoud/cypyserialize/tarball/1.0.4
+Description: SerializableObject
+        ==================
+        
+        A pythonic semantic for describing binary data structures and associated
+        python objects.
+        
+        Installation
+        ------------
+        
+        ::
+        
+            pip install cypyserialize
+        
+        Basic Usage
+        -----------
+        
+        For this first example we're going to define a simple 2D point with the
+        attributes ``x`` and ``y`` representing binary doubles.
+        
+        .. code:: python
+        
+            class Point(cypyserialize.SerializableObject):
+                "Basic point class"
+                x = cypyserialize.double()
+                y = cypyserialize.double()
+        
+        Object instances of the ``Point`` class, which extends the
+        ``SerializableObject``, can be initialized in several different ways.
+        First, omitting any parameters the instance will be populated with
+        default values (here we haven't specified defaults so 0.0 is assumed).
+        The attributes can be assigned values after initialization.
+        
+        .. code:: python
+        
+            >>> p = Point() # create default instance
+            >>> list(p.items())
+            [('x', None), ('y', None)]
+            >>> p.x = 5000.0 # set x
+            >>> p.y = 300.5 # set y
+            >>> list(p.items())
+            [('x', 5000.0), ('y', 300.5)]
+        
+        Alternately, the object can be initialized with our values. The
+        parameter order should match the order specified in the class attribute
+        ``_field_order``.
+        
+        .. code:: python
+        
+            >>> p = Point(5000.0, 300.5)
+            >>> list(p.items())
+            [('x', 5000.0), ('y', 300.5)]
+        
+        Or we can use the attribute names if we forgot the order.
+        
+        .. code:: python
+        
+            >>> p = Point(y=300.5, x=5000.0)
+            >>> list(p.items())
+            [('x', 5000.0), ('y', 300.5)]
+        
+        Or mix the two (just remeber that after the first named parameter
+        subsequent parameters will have to be named as well).
+        
+        .. code:: python
+        
+            >>> p = Point(5000.0, y=300.5)
+            >>> list(p.items())
+            [('x', 5000.0), ('y', 300.5)]
+        
+        To get the binary representation just call the class method ``pack``
+        
+        .. code:: python
+        
+            >>> p.pack()
+            bytearray(b'\x00\x00\x00\x00\x00\x88\xb3@\x00\x00\x00\x00\x00\xc8r@')
+        
+        Lastly, we can initialize with a binary string.
+        
+        .. code:: python
+        
+            >>> p = Point(b'\x00\x00\x00\x00\x00\x88\xb3@\x00\x00\x00\x00\x00\xc8r@')
+            >>> list(p.items())
+            [('x', 5000.0), ('y', 300.5)]
+        
+        Using Substructures
+        -------------------
+        
+        We're going to reuse the ``Point`` class to describe a rectangular
+        bounding box with two attributes, the northwest and southeast corners.
+        
+        .. code:: python
+        
+            class BoundingBox(cypyserialize.SerializableObject):
+                northwest = Point()
+                southeast = Point()
+        
+        Seriously, it's that easy. Let's initialize one of these.
+        
+        .. code:: python
+        
+            >>> bb = BoundingBox()
+            >>> list(bb.items())
+            [('northwest', <Point object>), ('southeast',  <Point object>)]
+        
+        Let's try that again but with some points
+        
+        .. code:: python
+        
+            >>> bb = BoundingBox(Point(0.0, 10.0), Point(15.0, 0.0))
+            >>> bb.northwest.y
+            10.0
+            >>> bb.southeast.x
+            15.0
+        
+        Overloading
+        -----------
+        
+        Subclasses of SerializableObject can be extended and overloaded. This
+        can be especially handy if you have a standard structure that you don't
+        want to redefine.
+        
+        Here we're going to make a simple datagram structure with a start and
+        end flag, a timestamp and some arbitrary body that we'll overload in a
+        second.
+        
+        .. code:: python
+        
+            class GenericDatagram(cypyserialize.SerializableObject):
+                STX = cypyserialize.uchar(value=0x02)
+                timestamp = cypyserialize.uint()
+                body = cypyserialize.none()
+                ETX = cypyserialize.uchar(value=0x03)
+        
+        Now that we have generic datagram lets make it a wrapper on the
+        BoundingBox structure we defined earlier as an extension of the
+        GenericDatagram structure.
+        
+        .. code:: python
+        
+            class BoundingBoxDatagram(GenericDatagram):
+                body = BoundingBox()
+        
+        That's it. Lets create one of this. We'll set the timestamp and get the
+        binary.
+        
+        .. code:: python
+        
+            >>> p = BoundingBoxDatagram()
+            >>> p.timestamp = time.time()
+            >>> p.body = BoundingBox(Point(0, 10), Point(10, 0))
+            >>> p.items()
+            [('STX', 2), ('timestamp', 1398373100.412985), ('body', <__main__.BoundingBox object at 0xb713f3c4>), ('ETX', 3)]
+            >>> p.pack()
+            '\x02...'
+        
+        Arrays of Substructures
+        -----------------------
+        
+        Now we're going to reuse the point structure to describe a path as a
+        series of points with a description.
+        
+        .. code:: python
+        
+            class Path(cypyserialize.SerializableObject):
+                # the points
+                points = cypyserialize.SerializableArray(
+                    Point(),
+                    count=cypyserialize.uint()
+                )
+        
+        ``count`` with be the field type that is used to read and write the
+        number of ``Point()`` objects in the structure.
+        
+        Byte Order
+        ----------
+        
+        ***Currently Unsupported***
+        
+        Byte order is always little endian at present.
+        
+        Custom Computed Attributes
+        --------------------------
+        
+        .. code:: python
+        
+            class BetterBoundingBox(BoundingBox):
+                def __init__(self):
+                    self.area = (self.southeast.x - self.northwest.x) * \
+                                (self.northwest.y - self.southeast.y)
+        
+        Note that we need to accept ``args`` and ``kargs``, we don't need to
+        call the superclass **init** though as it wasn't defined on BoundingBox.
+        
+        Lets try it out.
+        
+        .. code:: python
+        
+            >>> bb = BetterBoundingBox(Point(0,10),Point(10,0))
+            >>> print bb.area
+            100
+        
+Keywords: testing,logging,example
+Platform: UNKNOWN
