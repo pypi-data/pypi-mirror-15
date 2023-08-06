@@ -1,0 +1,538 @@
+<script id="span-row-template" type="template/underscore" charset="utf-8">
+
+  <div
+    id="<%= id %>"
+    class="span service-span depth-<%= depth %> highlight"
+    data-keys="id,spanName,serviceNames,serviceName,durationStr,duration"
+
+    data-id="<%= id %>"
+    data-parent-id="<%= parent_id %>"
+    data-span-name="<%= span_name %>"
+    data-service-name="<%= service_name %>"
+    data-service-names="<%= service_name %>"
+    data-duration-str="<%= totalDurationMilliSeconds %>ms"
+    data-duration="<%= totalDuration %>"
+    data-children="<%= childrenString %>">
+
+    <div class="handle">
+      <div class="service-name" style="margin-left: <%= marginLeft %>px">
+        <span class="expander">-</span>
+        <%= service_name %>
+      </div>
+    </div>
+
+    <div class="duration-container">
+      <div class="time-marker time-marker-0">.</div>
+      <div class="time-marker time-marker-1">.</div>
+      <div class="time-marker time-marker-2">.</div>
+      <div class="time-marker time-marker-3">.</div>
+      <div class="time-marker time-marker-4">.</div>
+      <div class="time-marker time-marker-5">.</div>
+
+      <div class="duration" style="left: <%= leftPosition %>%; width: <%= spanWidth %>%">
+        <%= totalDurationMilliSeconds %>ms : <%= span_name %>
+
+        <% _.each(services, function(service) { %>
+
+          <div class="<%= service.class %>"
+            style="left: <%= service.leftPosition %>%; width: 8px"
+            title="<%= service.value %>"
+            data-keys="endpoint,value,timestamp,human-timestamp,relativeTime,serviceName,duration"
+            data-endpoint="<%= service.ipv4 %>:<%= service.port %>"
+            data-value="<%= service.value %>"
+            data-timestamp="<%= service.a_timestamp %>"
+            data-human-timestamp="<%= service.timestampHuman %>"
+            data-relative-time="<%= service.relativeTimestamp %>"
+            data-service-name="<%= service.service_name %>"
+            data-duration=""></div>
+
+        <% }); %>
+
+      </div>
+    </div>
+  </div>
+
+</script>
+
+<script id="example-template" type="template/underscore" charset="utf-8">
+<div style="display: block;" id="2ca2dc87b9cea313" class="span service-span depth-0 highlight" data-keys="id,spanName,serviceNames,serviceName,durationStr,duration" data-id="2ca2dc87b9cea313" data-parent-id="" data-span-name="porta" data-service-name="parturient" data-service-names="parturient" data-duration-str="107.000ms" data-duration="107000" data-children="91988aae626f2e60,6d52a2c87029d509,efcc580ec1bc9311">
+    <div class="handle">
+      <div class="service-name" style="margin-left: 10px">
+        <span class="expander">-</span>
+        parturient
+      </div>
+    </div>
+
+    <div class="duration-container">
+      <div class="duration" style="left: 0.0%; width: 100.0%">
+        107.000ms : porta
+        <div class="annotation core" style="left: 0.0%; width: 8px" title="Server Receive" data-keys="endpoint,value,timestamp,relativeTime,serviceName,duration" data-endpoint="234.72.52.180:5411" data-value="Server Receive" data-timestamp="1439284406165000" data-relative-time="" data-service-name="parturient" data-duration=""></div>
+        <!--
+        <div data-original-title="libero" class="annotation" style="left: 0.0%; width: 8px" title="" data-keys="endpoint,value,timestamp,relativeTime,serviceName,duration" data-endpoint="234.72.52.180:5411" data-value="libero" data-timestamp="1439284406165000" data-relative-time="" data-service-name="parturient" data-duration=""></div>
+        <div data-original-title="rhoncus" class="annotation" style="left: 2.803738%; width: 8px" title="" data-keys="endpoint,value,timestamp,relativeTime,serviceName,duration" data-endpoint="234.72.52.180:5411" data-value="rhoncus" data-timestamp="1439284406168000" data-relative-time="3.000ms" data-service-name="parturient" data-duration=""></div>
+        <div data-original-title="montes" class="annotation" style="left: 6.542056%; width: 8px" title="" data-keys="endpoint,value,timestamp,relativeTime,serviceName,duration" data-endpoint="234.72.52.180:5411" data-value="montes" data-timestamp="1439284406172000" data-relative-time="7.000ms" data-service-name="parturient" data-duration=""></div> 
+        -->
+        <div class="annotation core" style="left: 100.0%; width: 8px" title="Server Send" data-keys="endpoint,value,timestamp,relativeTime,serviceName,duration" data-endpoint="234.72.52.180:5411" data-value="Server Send" data-timestamp="1439284406272000" data-relative-time="107.000ms" data-service-name="parturient" data-duration=""></div>
+      </div>
+    </div>
+
+    <div class="binary-annotation" data-keys="key,value,type" data-key="viverra" data-value="tincidunt" data-type="AnnotationType(6,String)"></div>
+    <div class="binary-annotation" data-keys="key,value,type" data-key="sagittis" data-value="magna" data-type="AnnotationType(6,String)"></div>
+    <div class="binary-annotation" data-keys="key,value,type" data-key="auctor" data-value="consequat" data-type="AnnotationType(6,String)"></div>
+  </div>
+
+</script>
+
+<script type="text/javascript">
+  // total trace duration
+  var totalDuration = {{ totalDuration }};
+
+  var spanParentObj = {};
+
+  /*
+     These spans represent span_id as key,
+     whose value equals parent_id of the span
+
+     In case parent_id is None, it indicates the
+     parent most span
+  */
+  {% for key, value in spanParentDict.iteritems() %}
+    spanParentObj['{{ key }}'] = '{{ value }}'
+  {% endfor %}
+
+  /*
+     Fill in annotations structure.
+
+     Annotation structure should contain all information we require
+     for building simple annotations inside trace view
+  */
+
+  var annotations = [];
+
+  {% for row in annotations %}
+    annotations.push({
+      'span_id': "{{ row['span_id'] }}",
+      'span_name': "{{ row['span_name'] }}",
+      'service_name': "{{ row['service_name'] }}",
+      'value': "{{ row['value'] }}",
+      'ipv4': "{{ row['ipv4'] }}",
+      'port': "{{ row['port'] }}",
+      'a_timestamp': "{{ row['a_timestamp'] }}"
+    });
+  {% endfor %}
+
+
+  // will be filled on page laod
+  var spanStructure;
+
+  // Custom sort annotations structure by timestamp value ASC
+  var sortedAnnotations;
+
+  // template for span row
+  var spanRowTemplate, traceStartTime;
+
+  window.addEventListener('load', traceLoaded);
+
+  function traceLoaded() {
+
+    // fill span structure with span information
+    fillSpanStructure();
+
+    // sorted annotations by timestamp ASC
+    sortedAnnotations = _.sortBy(annotations, 'a_timestamp');
+
+    // services used to display trace information
+    var services;
+
+    spans = createSpanTree();
+
+    // fetching and creating template for span row
+    spanRowTemplate = _.template($('#span-row-template').html());
+
+    // render output into DOM
+    console.log('render start');
+
+    // render span tree
+    var rootSpanId;
+
+    rootSpanId = getRootSpanId();
+
+    // calculate trace start time
+    traceStartTime = calculateSpanStartTime(spans[rootSpanId]['services']);
+
+    render(spans[rootSpanId]);
+
+    console.log('render finish');
+  }
+
+  // calculate trace start time
+  function calculateSpanStartTime(services) {
+    var minTimestamp;
+
+    minTimestamp = 0;
+
+    if (services) {
+      minTimestamp = 0x20000000000000;
+
+      for (var i = 0; i < services.length; i++) {
+        minTimestamp = Math.min(minTimestamp, services[i].a_timestamp);
+      }
+    }
+
+    return minTimestamp;
+  }
+
+  // render DOM structure
+  function render(span) {
+
+    // template for span row
+    var span;
+    var children, childrenStr;
+
+    // templated HTML
+    var templateHTML;
+
+    // #trace-container DOM node
+    var $traceContainer = $('#trace-container');
+
+    // children nodes to span
+    var i, childrenLen, childSpans;
+
+    children = [];
+    childrenStr = '';
+
+    childrenLen = span['children'] ? span['children'].length : 0;
+
+    // iterator over child spans
+    if (childrenLen > 0) {
+      for (i = 0; i < childrenLen; i++) {
+        children.push( span['children'][i]['id'] );
+      }
+
+      childrenStr = children.join(',');
+    }
+
+    var templateObj, totalServicesDuration, services, spanStartTimestamp;
+
+    totalServicesDuration = calculateTotalServicesDuration( span['services'] );
+    spanStartTimestamp = calculateSpanStartTime( span['services'] );
+
+    services = preProcessServices( spanStartTimestamp, totalServicesDuration / 1000, span['services'] );
+
+    templateObj = {
+      id: span['id'],
+      parent_id: span['parent_id'] == 'None' ? '' : span['parent_id'],
+
+      marginLeft: 10 + (span['depth'] * 10),
+      leftPosition: calculateServiceLeftPosition(span['services']),
+      spanWidth: calculateServiceWidth(totalServicesDuration),
+      totalDuration: totalServicesDuration,
+      totalDurationMilliSeconds: totalServicesDuration / 1000,
+
+      span_name: span['span_name'],
+      service_name: span['services'][0]['service_name'],
+      services: services,
+      depth: span['depth'],
+      childrenString: childrenStr
+    };
+
+    templateHTML = spanRowTemplate(templateObj);
+
+    $traceContainer.append(templateHTML);
+
+    // iterator over child spans
+    if (childrenLen > 0) {
+      for (i = 0; i < childrenLen; i++) {
+        render( span['children'][i] );
+      }
+    }
+
+  }
+
+  function calculateServiceLeftPosition(services) {
+    var servicesStartTimestamp, timestampDiff;
+
+    servicesStartTimestamp = calculateSpanStartTime(services);
+    return calculateLeftPosition(servicesStartTimestamp, traceStartTime, totalDuration);
+  }
+
+  function calculateLeftPosition(timestampA, timestampB, duration) {
+    return ((Math.abs(timestampA - timestampB)/1000) / duration) * 100;
+  }
+
+  function calculateServiceWidth(totalServicesDuration) {
+    return ((totalServicesDuration/1000) / totalDuration) * 100;
+  }
+
+  function calculateTotalServicesDuration(services) {
+    var minTimestamp, maxTimestamp;
+
+    maxTimestamp = 0;
+    minTimestamp = 0;
+
+    if (services) {
+      var len;
+
+      minTimestamp = 0x20000000000000;
+      maxTimestamp = -0x20000000000000;
+
+      len = services.length;
+
+      for (var i = 0; i < len; i++) {
+        minTimestamp = Math.min(minTimestamp, services[i]['a_timestamp']);
+        maxTimestamp = Math.max(maxTimestamp, services[i]['a_timestamp']);
+      }
+    }
+
+    return (maxTimestamp - minTimestamp);
+  }
+
+  var servicesValueTextDict = {
+    'sr': 'Server Recieve',
+    'ss': 'Server Sent',
+    'cr': 'Client Recieve',
+    'cs': 'Client Send'
+  };
+
+  function preProcessServices(spanStartTimestamp, totalServicesDuration, services) {
+    var processed, tmp;
+
+    processed = [];
+
+    if (services) {
+      for (var i = services.length - 1; i >= 0; i--) {
+        tmp = services[i];
+
+        if (servicesValueTextDict[ tmp['value'] ]) {
+          tmp['class'] = 'annotation core';
+          tmp['value'] = servicesValueTextDict[ tmp['value'] ];
+        } else {
+          tmp['class'] = 'annotation';
+        }
+
+        tmp['ipv4'] = convertInt2IP( tmp['ipv4'] );
+        tmp['relativeTimestamp'] = Math.abs(tmp['a_timestamp'] - spanStartTimestamp ) / 1000 + 'ms';
+        tmp['timestampHuman'] = timestampHumanReadable(tmp['a_timestamp']);
+        tmp['leftPosition'] = calculateLeftPosition( tmp['a_timestamp'], spanStartTimestamp, totalServicesDuration);
+
+        processed.push(tmp);
+      }
+    }
+
+    processed = processed.sort(sortServices);
+
+    return processed;
+  }
+
+  function sortServices(serviceA, serviceB) {
+    return serviceA.a_timestamp - serviceB.a_timestamp ;
+  }
+
+  function timestampHumanReadable(ts) {
+    var d = new Date();
+
+    d.setTime(ts);
+
+    return d.toUTCString();
+  }
+
+  function printSpanTree(spans) {
+
+    var i, j;
+    var obj, str, childrenLength;
+
+    str = '';
+
+    for (var key in spans) {
+
+      if (!spans.hasOwnProperty(key)) {
+        continue;
+      }
+
+      obj = spans[key];
+
+      for (i = 0; i < obj.depth; i++) {
+        str += ' ';
+      }
+
+      console.log(str, obj.span_name);
+
+      childrenLength = obj.children ? obj.children.length : 0;
+
+      for (j = 0; j < childrenLength; j++) {
+        printSpanTree( obj['children'] );
+      }
+    }
+  }
+
+  function fillSpanStructure() {
+    var spanObjects = {};
+
+    for (var key in spanParentObj) {
+
+      if (!spanParentObj.hasOwnProperty(key)) {
+        continue;
+      }
+
+      spanObjects[key] = getSpanInformation(key);
+    }
+
+    spanStructure = spanObjects;
+  }
+
+  function getSpanInformation(key)
+  {
+    var i, len, obj;
+
+    obj = {};
+    len = annotations.length;
+
+    for (i = 0; i < len; i++) {
+      if (annotations[i]['span_id'] == key) {
+        obj = {
+          'span_id': key,
+          'span_name': annotations[i]['span_name'],
+          'parent_id': spanParentObj[key]
+        };
+
+        break;
+      }
+    }
+
+    return obj;
+  }
+
+  function getRootSpanId() {
+
+    var rootSpanId;
+
+    rootSpanId = '';
+
+    for (var key in spanParentObj) {
+      if (!spanParentObj.hasOwnProperty(key)) {
+        continue;
+      }
+
+      if (spanParentObj[key] == 'None' || spanParentObj[key] == 0) {
+        rootSpanId = key;
+        break;
+      }
+    }
+
+    return rootSpanId;
+  }
+
+  function createSpanTree() {
+
+    var rootSpanId;
+
+    rootSpanId = '';
+
+    for (var key in spanParentObj) {
+      if (!spanParentObj.hasOwnProperty(key)) {
+        continue;
+      }
+
+      if (spanParentObj[key] == 'None' || spanParentObj[key] == 0) {
+        rootSpanId = key;
+        break;
+      }
+    }
+
+    var tree = {}, spanInfo;
+
+    spanInfo = spanStructure[rootSpanId];
+
+    // fill structure for root tree node
+    tree[rootSpanId] = {
+      'id': rootSpanId,
+      'parent_id': 'None',
+      'span_name': spanInfo['span_name'],
+      'services': getSpanServices(rootSpanId),
+      'depth': 0,
+      'children': getChildNodes(rootSpanId, 1)
+    };
+
+    return tree;
+  }
+
+  function getChildNodes(spanId, depth) {
+    var children;
+    var childSpanIds;
+
+    children = [];
+    childSpanIds = getChildSpanIds( spanId );
+
+    var i, len, childSpanId, spanInfo;
+
+    len = childSpanIds.length;
+
+    for (var i = 0; i < len; i++) {
+      childSpanId = childSpanIds[i];
+      spanInfo = spanStructure[childSpanId];
+
+      children.push({
+        'id': childSpanId,
+        'parent_id': spanId,
+        'span_name': spanInfo['span_name'],
+        'services': getSpanServices(childSpanId),
+        'depth': depth,
+        'children': getChildNodes(childSpanId, depth + 1)
+      });
+    }
+
+    return children;
+  }
+
+  function getSpanServices(spanId) {
+    var i, len, annotation, services;
+
+    len = annotations.length;
+    services = [];
+
+    for (i = 0; i < len; i++) {
+      annotation = annotations[i];
+
+      if (annotation['span_id'] == spanId) {
+        services.push({
+          'service_name': annotation['service_name'],
+          'value': annotation['value'],
+          'ipv4': annotation['ipv4'],
+          'port': annotation['port'],
+          'a_timestamp': annotation['a_timestamp']
+        });
+      }
+    }
+
+    return services;
+  }
+
+  function convertInt2IP(ipInt) {
+      var part1 = ipInt & 255;
+      var part2 = ((ipInt >> 8) & 255);
+      var part3 = ((ipInt >> 16) & 255);
+      var part4 = ((ipInt >> 24) & 255);
+
+      return part4 + "." + part3 + "." + part2 + "." + part1;
+  }
+
+
+  function getChildSpanIds(parentSpanId) {
+    var spanIds;
+
+    spanIds = [];
+
+    for (var key in spanParentObj) {
+      if (!spanParentObj.hasOwnProperty(key)) {
+        continue;
+      }
+
+      if (spanParentObj[key] == parentSpanId) {
+        spanIds.push( key );
+      }
+    }
+
+    return spanIds;
+  }
+
+</script>
