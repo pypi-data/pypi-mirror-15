@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+
+import websocket
+import argparse
+from json import dumps
+from base64 import b64decode
+from threading import Thread
+from time import sleep
+from binascii import Error
+import sys
+import os
+import signal
+from requests import get
+from tty import setraw
+from termios import tcsetattr, tcgetattr, TCSADRAIN
+
+
+class TTyHandler:
+    def __init__(self, url):
+        self.arg = self.parse_arg_from_url(url)
+        self.webs = websocket.WebSocketApp(
+            'wss://tty.online.net/ws', on_open=self.on_open, on_message=self.on_message)
+        self.run()
+
+    def run(self):
+        self.webs.run_forever(origin='https://tty.online.net/')
+
+        return
+
+    @staticmethod
+    def getch():
+
+        file_descriptor = sys.stdin.fileno()
+        try:
+            setraw(file_descriptor)
+            return sys.stdin.read(1)
+        finally:
+            tcsetattr(file_descriptor, TCSADRAIN, tcgetattr(file_descriptor))
+
+    @staticmethod
+    def on_message(ws, message):
+        try:
+            message = b64decode(message[1:]).decode(errors='ignore')
+            sys.stdout.write(message)
+            sys.stdout.flush()
+
+        except Error:
+            pass
+
+        return
+
+    def on_open(self, ws):
+        args = dict(Arguments='?arg=username&arg={}'.format(self.arg), AuthToken='')
+        ws.send(dumps(args))
+
+        def process_stdin():
+            while True:
+                user_input = self.getch()
+
+                try:
+                    if user_input == '\r':
+                        ws.send('0\n')
+                    else:
+                        ws.send('0' + user_input)
+
+                except websocket.WebSocketConnectionClosedException:
+                    self.quit()
+
+        def process_ping():
+            while True:
+                sleep(30)
+                try:
+                    ws.send('1\n')
+                except websocket.WebSocketConnectionClosedException:
+                    self.quit()
+
+        Thread(target=process_stdin).start()
+        Thread(target=process_ping).start()
+
+        return
+
+    @staticmethod
+    def quit():
+        os.kill(os.getpid(), signal.SIGINT)
+
+        return
+
+    @staticmethod
+    def parse_arg_from_url(url):
+        arg = url.split('=')[-1]
+
+        if get('https://tty.online.net/?arg=username&arg={}'.format(arg)).status_code == 403:
+            raise ValueError('invalid url')
+
+        return arg
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('url')
+    args = parser.parse_args()
+
+    try:
+        TTyHandler(args.url)
+    except ValueError as e:
+        print(e)
