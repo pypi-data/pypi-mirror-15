@@ -1,0 +1,46 @@
+{% extends page_template %}
+{% from 'type.jinja2' import render_key, render_properties %}
+{% set result_name = result_name or '%s (%s)' % (result_id, result_title) %}
+
+{% block page_title %}
+{% block body_subtitle %}{{ result_name }}{% endblock %} &middot; Results &middot; {{ website_name -}}
+{% endblock %}
+
+{% block head_style_inline %}
+{{ super() -}}
+.download {margin-top: 2em}
+{% endblock %}
+
+{% block body_content %}
+{{ super() -}}
+<a id="properties"></a>
+{% if result_properties -%}
+
+{% if result_errors -%}
+<div class="error">
+{{ render_properties(result_errors, stamp='-error') -}}
+</div>
+{% endif -%}
+
+{% for x in result_template_parts %}
+{%- if x is string -%}
+{{ x | markdown }}
+{% set has_result_template = True %}
+
+{%- else -%}
+{% from x.data_type.template import render_property %}
+{% if not has_result_template %}
+{{- render_key(x, stamp='-result') }}
+{% endif %}
+{{- render_property(x, stamp='-result') -}}
+
+{%- endif -%}
+{% endfor -%}
+
+<div>
+<a href="{{ request.route_path('result.zip', id=result_id, name=result_name) }}" class="btn btn-success btn-lg download" role="button" download>Download</a>
+</div>
+
+{{- render_properties(result_properties, stamp='-meta') -}}
+{% endif %}
+{% endblock %}
