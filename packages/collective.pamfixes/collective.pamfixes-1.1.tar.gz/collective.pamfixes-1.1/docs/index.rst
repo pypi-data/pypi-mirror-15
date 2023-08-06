@@ -1,0 +1,5 @@
+====================
+collective.pamfixes
+====================
+
+User documentation
