@@ -1,0 +1,98 @@
+{% if debug %}<!-- django_turnit/snippets/turnit_modal.html -->{% endif %}
+{% load i18n static turnit_tags thumbnail %}
+{% if first_page %}
+    {% if debug %}
+        <script type="text/javascript" src="{% static 'js/turn.js/turn.js' %}"></script>
+        <script type="text/javascript" src="{% static 'js/zoomooz.js/jquery.zoomooz.js' %}"></script>
+    {% else %}
+        <script type="text/javascript" src="{% static 'js/turn.js/turn.min.js' %}"></script>
+        <script type="text/javascript" src="{% static 'js/zoomooz.js/jquery.zoomooz.min.js' %}"></script>
+    {% endif %}
+
+    {% thumbnail first_page.page_file '120x160' as img %}
+    <button data-toggle="modal" data-target="#id-modal-{{ guid }}">
+        <img src="{{ img.url }}" width="{{ img.width }}" height="{{ img.height }}"/>
+    </button>
+
+    <div class="modal fade" id="id-modal-{{ guid }}" role="dialog" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="row">
+                        <div class="col-md-10">
+                            <h4 class="modal-title">{{ title }}</h4>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="close" data-dismiss="modal"
+                                    aria-label="{% trans "Close" %}"><span
+                                    aria-hidden="true">&times;</span></button>
+                        </div>
+
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div id="id-zoom-viewport-{{ guid }}" class="magazine-viewport zoomViewport">
+                        <div class="magazine-container zoomContainer">
+                            <div id="id-flipbook-{{ guid }}" class="magazine">
+                                {% for page in page_list %}
+                                    <div id="{{ forloop.counter }}" class="page zoomTarget" data-closeclick="true"
+                                         data-targetsize="2.0"><img
+                                            src="{{ page.page_file.url }}"
+                                            {% if height and width %}style="width: {{ width|divide:2 }}px; height: {{ height }}px;"{% endif %}/>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    {#                <button type="button" class="btn btn-primary"#}
+                    {#                        id="id-reset-panzoom-{{ guid }}">{% trans "Reset" %}</button>#}
+                    <button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Close" %}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        $(document).ready(function () {
+            // Parses args
+            var height = '{{ height|escapejs }}';
+            var width = '{{ width|escapejs }}';
+            width = parseInt(width) || 800;
+            height = parseInt(height) || 533;
+
+            var height_vp = height + 128;
+            var width_vp = width + 64;
+
+            // Resizes the viewport
+            var $modal = $('#id-modal-{{ guid }} > .modal-dialog');
+            $modal.css('width', String(width_vp) + 'px');
+            $modal.css('height', String(height_vp) + 'px');
+
+            // Displays the flipbook
+            var $flipbook = $("#id-flipbook-{{ guid }}");
+            $flipbook.turn({
+                autoCenter: true,
+                acceleration: true,
+                width: width,
+                height: height
+            });
+
+            // panzoom initialization
+            $('.zoomTarget').panzoom({
+                cursor: 'zoom-in',
+                minScale: 0.5,
+                maxScale: 3.0,
+                disablePan: true,
+                contain: true,
+                $reset: $("a.id-reset-panzoom-{{ guid }}, button.id-reset-panzoom-{{ guid }}")
+            }).on('click', function (event) {
+                $(this).panzoom('zoom');
+                {##}
+                {#            event.stopPropagation();#}
+            });
+
+
+        });
+    </script>
+{% endif %}
