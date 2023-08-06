@@ -1,0 +1,321 @@
+#!/home/bourque/anaconda/bin/python
+
+"""Ingestion script to move files into hstlc filesystem and update the
+hstlc database.
+"""
+
+import argparse
+import datetime
+import glob
+import itertools
+import logging
+import multiprocessing
+import os
+import shutil
+import traceback
+
+from astropy.io import fits
+import lightcurve
+
+from lightcurve_pipeline.utils.utils import make_directory
+from lightcurve_pipeline.utils.utils import SETTINGS
+from lightcurve_pipeline.utils.utils import set_permissions
+from lightcurve_pipeline.utils.utils import setup_logging
+from lightcurve_pipeline.ingest.make_lightcurves import make_composite_lightcurves
+from lightcurve_pipeline.ingest.make_lightcurves import make_individual_lightcurve
+from lightcurve_pipeline.ingest.resolve_target import get_targname
+from lightcurve_pipeline.database.update_database import update_bad_data_table
+from lightcurve_pipeline.database.update_database import update_metadata_table
+from lightcurve_pipeline.database.update_database import update_outputs_table
+
+# Use matplotlib backend for quicklook images
+import matplotlib as mpl
+mpl.use('Agg')
+import matplotlib.pyplot as plt
+
+os.environ['lref'] = '/grp/hst/cdbs/lref/'
+os.environ['oref'] = '/grp/hst/cdbs/oref/'
+
+# -----------------------------------------------------------------------------
+
+def get_files_to_ingest():
+    """
+    Return a list of files to ingest.  Since corrtag_a and corrtab_b
+    files are extracted together, the returned list must be void of
+    duplicate corrtag files in order to avoid double extraction.
+
+    Returns
+    -------
+    files_to_ingest : list
+        A list of full paths to files to ingest.
+    """
+
+    logging.info('')
+    logging.info('Gathering files to ingest')
+
+    # Determine which files are corrtag_a or corrtag_b files
+    files_to_ingest = glob.glob(os.path.join(SETTINGS['ingest_dir'], '*tag*.fits'))
+    corrtag_ab_files = [item for item in files_to_ingest if 'corrtag_' in os.path.basename(item)]
+    files_to_remove = []
+
+    # Check to see if both a corrtag_a and corrtag_b file exists for a given rootname
+    for corrtag_file in corrtag_ab_files:
+        corrtag_dirname = os.path.dirname(corrtag_file)
+        corrtag_rootname = os.path.basename(corrtag_file).split('_')[0]
+        corrtag_a_file = '{}/{}_corrtag_a.fits'.format(corrtag_dirname, corrtag_rootname)
+        corrtag_b_file = '{}/{}_corrtag_b.fits'.format(corrtag_dirname, corrtag_rootname)
+        if os.path.exists(corrtag_a_file) and os.path.exists(corrtag_b_file):
+            files_to_remove.append(corrtag_b_file)
+
+    # If both a corrtag_a and a corrtag_b file exists, remove the corrtag_b
+    for file_to_remove in set(files_to_remove):
+        files_to_ingest.remove(file_to_remove)
+
+    return files_to_ingest
+
+# -----------------------------------------------------------------------------
+
+def ingest(mp_args):
+    """Ingests the file into the hstlc filesystem and database. Also
+    produces output lightcurves.
+
+    Parameters
+    ----------
+    mp_args : tuple
+        The multiprocessing arguments.  The zeroth value is the
+        filename (i.e. the file to ingest), and the first value is the
+        corrtag_extract switch (i.e. turn on/off stis corrtag
+        re-extraction).
+    """
+
+    # Parse args
+    filename = mp_args[0]
+    corrtag_extract = mp_args[1]
+
+    try:
+
+        logging.info('Ingesting {}'.format(filename))
+
+        # Open file
+        with fits.open(filename, 'readonly') as hdulist:
+            header = hdulist[0].header
+
+            # Check that file has events and has NORMAL expflag
+            if len(hdulist[1].data) == 0:
+                update_bad_data_table(os.path.basename(filename),'No events')
+                logging.info('\tNo events, removing file {}'.format(filename))
+                os.remove(filename)
+
+            elif hdulist[1].header['EXPFLAG'] != 'NORMAL':
+                update_bad_data_table(os.path.basename(filename),'Bad EXPFLAG')
+                logging.info('\tBad EXPFLAG, removing file {}'.format(filename))
+                os.remove(filename)
+
+            # Ingest the data if it is normal
+            else:
+                metadata_dict, outputs_dict = make_file_dicts(filename, header)
+
+                # If the file is a _tag STIS file, then make a corrtag
+                if metadata_dict['instrume'] == 'STIS' and '_tag.fits' in filename:
+                    lightcurve.stis.stis_corrtag(filename)
+                    new_filename = filename.replace('_tag.fits', '_corrtag.fits')
+                    metadata_dict['filename'] = os.path.basename(new_filename)
+
+                # If the file is a corrtag STIS file, then re-extract if stis_extract is on
+                elif metadata_dict['instrume'] == 'STIS' and '_corrtag.fits' in filename and corrtag_extract:
+                    lightcurve.stis.stis_corrtag(filename)
+
+                update_metadata_table(metadata_dict)
+
+                success = make_individual_lightcurve(metadata_dict, outputs_dict)
+                if success:
+                    update_outputs_table(metadata_dict, outputs_dict)
+                    #make_quicklook(outputs_dict)
+
+                move_file(metadata_dict)
+
+    # Track any errors that happen during processing
+    except Exception as error:
+        trace = 'Failed to ingest {}\n{}'.format(filename, traceback.format_exc())
+        logging.critical(trace)
+
+# -----------------------------------------------------------------------------
+
+def make_file_dicts(filename, header):
+    """Return a dictionary containing file metadata and a dictionary
+    containing output product information
+
+    Parameters
+    ----------
+    filename : string
+        The absolute path to the file.
+    header : astropy.io.fits.header.Header
+        The primary header of the file.
+
+    Returns
+    -------
+    metadata_dict : dict
+        A dictionary containing metadata of the file.
+    outputs_dict : dict
+        A dictionary containing output product information.
+    """
+
+    metadata_dict = {}
+    outputs_dict = {}
+
+    # Set header keys
+    metadata_dict['telescop'] = header['TELESCOP']
+    metadata_dict['instrume'] = header['INSTRUME']
+    metadata_dict['targname'] = get_targname(header['TARGNAME'])
+    metadata_dict['cal_ver'] = header['CAL_VER']
+    metadata_dict['obstype'] = header['OBSTYPE']
+    metadata_dict['aperture'] = header['APERTURE']
+    metadata_dict['detector'] = header['DETECTOR']
+    metadata_dict['opt_elem'] = header['OPT_ELEM']
+
+    if header['OBSTYPE'] == 'SPECTROSCOPIC':
+        metadata_dict['cenwave'] = header['CENWAVE']
+    elif header['OBSTYPE'] == 'IMAGING':
+        metadata_dict['cenwave'] = 0
+
+    if header['INSTRUME'] == 'COS':
+        metadata_dict['fppos'] = header['FPPOS']
+    elif header['INSTRUME'] == 'STIS':
+        metadata_dict['fppos'] = 0
+
+    # Set image metadata keys
+    metadata_dict['filename'] = os.path.basename(filename)
+    metadata_dict['path'] = os.path.join(SETTINGS['filesystem_dir'],
+        metadata_dict['targname'])
+    metadata_dict['ingest_date'] = datetime.datetime.strftime(
+        datetime.datetime.today(), '%Y-%m-%d')
+
+    # Set outputs keys
+    outputs_dict['individual_path'] = \
+        metadata_dict['path'].replace('filesystem', 'outputs')
+    outputs_dict['individual_filename'] = \
+        '{}_curve.fits'.format(metadata_dict['filename'].split('_')[0])
+
+    return metadata_dict, outputs_dict
+
+# -----------------------------------------------------------------------------
+
+def make_quicklook(outputs_dict):
+    """Make a quicklook PNG of the lightcurve.
+
+    Parameters
+    ----------
+    outputs_dict : dict
+        A dictionary containing output product information.
+    """
+
+    lc_name = os.path.join(outputs_dict['individual_path'],
+        outputs_dict['individual_filename'])
+    lightcurve.io.quicklook(lc_name)
+    set_permissions(lc_name.replace('.fits', '.png'))
+
+# -----------------------------------------------------------------------------
+
+def move_file(metadata_dict):
+    """Move the file (and it's accompanying x1d file) from the ingest
+    directory into the filesystem.
+
+    Parameters
+    ----------
+    metadata_dict : dict
+        A dictionary containing metadata of the file.
+
+    Notes
+    -----
+    The parent directory to the file is named afer the file's TARGNAME.
+    """
+
+    # Create parent directory if necessary
+    make_directory(metadata_dict['path'])
+
+    # Move the file from ingest directory into filesystem
+    src = os.path.join(SETTINGS['ingest_dir'], metadata_dict['filename'])
+
+    # If the file is a corrtag_a/b file, then move any accompanying corrtag
+    # file.  If not, move the file nominally
+    src_list = []
+    dst_list = []
+    if 'corrtag_' in src:
+        filelist = lightcurve.cos.get_both_filenames(src)
+        for filename in filelist:
+            src_list.append(filename)
+            dst_list.append(os.path.join(metadata_dict['path'], os.path.basename(filename)))
+    else:
+        src_list.append(src)
+        dst_list.append(os.path.join(metadata_dict['path'], metadata_dict['filename']))
+    for src, dst in zip(src_list, dst_list):
+        if os.path.exists(dst):
+            os.remove(dst)
+        if os.path.exists(src):
+            shutil.move(src, dst)
+
+    # Move the accompanying x1d file from ingest directory to filesystem
+    x1d_file = '{}_x1d.fits'.format(metadata_dict['filename'].split('_')[0])
+    src = os.path.join(SETTINGS['ingest_dir'], x1d_file)
+    dst = os.path.join(metadata_dict['path'], x1d_file)
+    if os.path.exists(src):
+        if os.path.exists(dst):
+            os.remove(dst)
+        shutil.move(src, dst)
+
+# ----------------------------------------------------------------------------
+
+def parse_args():
+    """Parse command line arguments. Returns args object.
+
+    Returns
+    -------
+    args : argparse.Namespace object
+        An argparse object containing all of the added arguments.
+    """
+
+    # Create help strings
+    corrtag_extract_help = 'If provided, STIS corrtag re-extraction is performed.'
+
+    # Add arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-corrtag_extract',
+        dest='corrtag_extract',
+        action='store_true',
+        help=corrtag_extract_help)
+
+    # Set the defaults
+    parser.set_defaults(corrtag_extract=False)
+
+    # Parse args
+    args = parser.parse_args()
+
+    return args
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+if __name__ == '__main__':
+
+    module = os.path.basename(__file__).strip('.py')
+    setup_logging(module)
+
+    args = parse_args()
+
+    # Get list of files to ingest
+    files_to_ingest = get_files_to_ingest()
+
+    # Ingest the files using multiprocessing
+    logging.info('')
+    logging.info('Ingesting {} files using {} core(s)'.format(len(files_to_ingest), SETTINGS['num_cores']))
+    logging.info('')
+    pool = multiprocessing.Pool(processes=SETTINGS['num_cores'])
+    mp_args = itertools.izip(files_to_ingest, itertools.repeat(args.corrtag_extract))
+    pool.map(ingest, mp_args)
+    pool.close()
+    pool.join()
+
+    # Make composite lightcurves
+    make_composite_lightcurves()
+
+    logging.info('Processing complete.')
