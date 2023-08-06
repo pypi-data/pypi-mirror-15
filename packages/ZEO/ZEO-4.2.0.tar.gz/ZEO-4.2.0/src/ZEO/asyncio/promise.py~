@@ -1,0 +1,75 @@
+import asyncio
+
+class Promise:
+
+    def __init__(self, future, loop=None):
+        if not isinstance(future, asyncio.Future):
+            future = asyncio.async(future, loop=loop)
+        self.future = future
+        self.loop = loop
+
+    def then(self, success, failed=None):
+        next = asyncio.Future(loop=self.loop)
+
+        @self.future.add_done_callback
+        def then_done(future):
+            e = future.exception()
+            if e is not None:
+                next.set_exception(e)
+                if failed is not None:
+                    failed(e)
+            else:
+                try:
+                    result = func(future.result())
+                except Exception as e:
+                    next.set_exception(e)
+                    if failed is not None:
+                        failed(e)
+                else:
+                    if isinstance(result, asyncio.Future):
+                        @result.add_done_callback
+                        def result_done(result):
+                            e = result.exception()
+                            if e is not None:
+                                next.set_exception(e)
+                                if failed is not None:
+                                    failed(e)
+                            else:
+                                next.set_result(result.result())
+                    else:
+                        next.set_result(result)
+
+        return self.__class__(next)
+
+class Promise(asyncio.Future):
+
+    def __init__(self, loop=None):
+        super().__init__(loop)
+        self.__loop = loop
+
+    def then(self, success):
+        promise = self.__class__(self.__loop)
+
+        @self.add_done_callback
+        def then_done(future):
+            e = future.exception()
+            if e is not None:
+                promise.set_exception(e)
+            else:
+                try:
+                    result = func(future.result())
+                except Exception as e:
+                    promise.set_exception(e)
+                else:
+                    if isinstance(result, asyncio.Future):
+                        @result.add_done_callback
+                        def result_done(result):
+                            e = result.exception()
+                            if e is not None:
+                                promise.set_exception(e)
+                            else:
+                                promise.set_result(result.result())
+                    else:
+                        promise.set_result(result)
+
+        return promise
