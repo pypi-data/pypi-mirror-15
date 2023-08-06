@@ -1,0 +1,64 @@
+import glob
+
+__sequana__fastqc = [":options"]
+import sequana.snaketools as sm
+cfg = sm.SequanaConfig.from_dict(config)
+
+
+# should be called after bwa_mem and bwa_bam
+
+
+def fastqc_dynamic(name, inputs, outputs=[]):
+
+    metadata = {'inputs':inputs, 'name':name, 'project':cfg.PROJECT}
+
+    fastqc_code = '''
+
+rule fastqc__%(name)s:
+    """Calls FastQC on input data sets """
+    # we could have a dynamic search or based on config file
+    input:
+        %(inputs)s
+    output:
+        touch('%(project)s/fastqc_%(name)s/fastqc.done')
+    params:
+        wkdir="%(project)s/fastqc_%(name)s",
+        kargs = cfg.config.fastqc.options
+    threads: 4
+    log:
+        "%(project)s/logs/fastqc_%(name)s.log"
+    run:
+        # if the content of the file is empty, this will fail. We need to
+        # touch  a file in such case.
+        #
+        from sequana import snaketools as sm
+        from sequana import FastQ
+        newinput = []
+        for i, this in enumerate(input):
+            fastq = FastQ(this)
+            # TODO: could just try to iterate once instead of computing the length
+            if len(fastq) != 0:
+                newinput.append(this)
+            else:
+                with open(output[i], "w") as fh:
+                    fh.write("No data in {0}".format(output[i]))
+        if len(newinput):
+            shell(
+            " fastqc -t {threads} --outdir {params.wkdir} -f fastq "
+            " {newinput} {params.kargs} > {log}")
+        else:
+            pass
+    '''
+
+    from easydev import TempFile
+    tt = TempFile()
+    fh = open(tt.name, "w")
+    fh.write(fastqc_code % metadata)
+    fh.close()
+    return fh.name
+
+
+
+
+
+

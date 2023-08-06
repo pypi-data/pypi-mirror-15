@@ -1,0 +1,61 @@
+
+
+
+
+def fastq_stats_dynamic(name, inputs, outputs=[]):
+
+    metadata = {'inputs':inputs, 'name':name, 'project':cfg.PROJECT}
+
+
+    fastq_stats_code = '''
+ff = sm.FileFactory(%(inputs)s)
+__fastq_stats__output = [cfg.PROJECT + "/fastq_stats_%(name)s/" + x for x in ff.basenames]
+__fastq_stats__output_json = [x.replace(".fastq.gz", "_fastq_stats.json") for x in __fastq_stats__output]
+__fastq_stats__output_bx = [x.replace(".fastq.gz", "_boxplot.png") for x in __fastq_stats__output]
+__fastq_stats__output_gc = [x.replace(".fastq.gz", "_gc.png") for x in __fastq_stats__output]
+
+
+rule fastq_stats__%(name)s:
+    """Calls FastQC on each input datasets + those in bwa_phix directory"""
+    input:
+        %(inputs)s
+    output:
+        json= __fastq_stats__output_json,
+        boxplot=__fastq_stats__output_bx,
+        gc=__fastq_stats__output_gc,
+        done= touch("%(project)s/fastq_stats_%(name)s/fastq_stats.done")
+    threads: 4
+    run:
+        from sequana import FastQC
+        import json
+        import pylab
+        pylab.ioff()
+
+        for i in range(len(input)):
+            fastq = FastQC(input[i], sample=100000)
+            if len(fastq.fastq) != 0:
+                pylab.clf()
+                fastq.boxplot_quality()
+                pylab.savefig(output.boxplot[i])
+                pylab.clf()
+                fastq.histogram_gc_content()
+                pylab.savefig(output.gc[i])
+                stats = fastq.get_stats()
+                json.dump(stats, open(output.json[i], "w"))
+            else:
+                pass
+
+    '''
+    from easydev import TempFile
+    tt = TempFile()
+    fh = open(tt.name, "w")
+    fh.write(fastq_stats_code % metadata)
+    fh.close()
+    return fh.name
+
+
+
+
+
+
+

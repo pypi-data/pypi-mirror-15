@@ -1,0 +1,27 @@
+__indel_realigner__output = cfg.PROJECT  + \
+    "/indel_realigner/%s.bam" % cfg.PROJECT
+
+rule indel_realigner:
+    input:
+        bam = __indel_realigner__input,
+        ref = __bwa_mem_ref__reference ,
+        ref_dict = __create_sequence_dictionary__output
+    output:
+        bam = __indel_realigner__output,
+        intervals = cfg.PROJECT + "/indel_realigner/%s.intervals" % cfg.PROJECT
+    log:
+        out = cfg.PROJECT + "/logs/gatk/IndelRealigner/stdout.logs",
+        err = cfg.PROJECT + "/logs/gatk/IndelRealigner/stderr.logs"
+    params:
+        gatk = config["gatk_bin"]
+    shell:
+        """
+        samtools index {input.bam}
+
+        {params.gatk} -T RealignerTargetCreator -R {input.ref} \
+        -I {input.bam} -o {output.intervals} > {log.out} 2> {log.err}
+
+        {params.gatk} -T IndelRealigner -R {input.ref} -I {input.bam} \
+        -targetIntervals {output.intervals} -o {output.bam} >> {log.out} \
+        2>> {log.err}
+        """

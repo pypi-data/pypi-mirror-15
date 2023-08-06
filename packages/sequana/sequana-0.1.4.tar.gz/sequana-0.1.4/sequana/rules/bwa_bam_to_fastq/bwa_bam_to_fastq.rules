@@ -1,0 +1,50 @@
+
+
+
+cfg = SequanaConfig(config)
+
+__format = "%(proj)s/bwa_bam_to_fastq/%(proj)s_{read}.{tag}.fastq.gz" 
+
+if cfg.paired is True:
+
+    # !! here we use the project name not the samples' names
+    __bwa_bam_to_fastq__output = expand(
+        __format % {'proj':cfg.PROJECT},
+        read=["R1", "R2"], tag=["mapped", "unmapped"])
+else:
+    __bwa_bam_to_fastq__output = expand(
+        __format % {'proj':cfg.PROJECT},
+        readt=["R1"], tag=["mapped", "unmapped"])
+
+
+__input_dir = 'bwa_mem_phix'
+
+rule bwa_bam_to_fastq:
+    message: """
+    -- Extracting the fastq from the BAM/SAM files
+    -- information saved in {log}
+    """
+    input:
+        bam = "%s/%s/%s.bam" % (cfg.PROJECT, __input_dir, cfg.PROJECT),
+    params:
+        wkdir = "%s/bwa_bam_to_fastq" % cfg.PROJECT,
+    output:
+        __bwa_bam_to_fastq__output,
+        stats = "%s/bwa_bam_to_fastq/bwa_mem_stats.json" % cfg.PROJECT,
+        done = touch("%s/bwa_bam_to_fastq/bwa_bam_to_fastq.done" % cfg.PROJECT)
+    threads: 2
+    message: "Calling bam2fastq and zipping data"
+    run:
+        import json
+        from sequana.tools import bam_to_mapped_unmapped_fastq as bam2fastq
+        stats = bam2fastq(input["bam"], output_directory=params.wkdir)
+        json.dump(stats, open(output["stats"], "w"))
+
+        # zip the fastq files
+        import glob
+        tozip = glob.glob("%s/*.fastq" % params.wkdir)
+        for filename in tozip:
+            shell("pigz -f %s " % filename)
+
+
+
