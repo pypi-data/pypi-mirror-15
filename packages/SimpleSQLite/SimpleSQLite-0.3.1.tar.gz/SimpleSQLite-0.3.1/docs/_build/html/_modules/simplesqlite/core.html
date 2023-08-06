@@ -1,0 +1,1421 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>simplesqlite.core &mdash; SimpleSQLite 0.3.0 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="SimpleSQLite 0.3.0 documentation" href="../../index.html"/>
+        <link rel="up" title="simplesqlite" href="../simplesqlite.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> SimpleSQLite
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <p class="caption"><span class="caption-text">Table of Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/introduction/index.html">1. SimpleSQLite</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/installation.html">2. Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/installation.html#dependencies">3. Dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/examples/index.html">4. Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/reference/index.html">5. Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/genindex.html">6. Indices and tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/links.html">7. Links</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">SimpleSQLite</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../simplesqlite.html">simplesqlite</a> &raquo;</li>
+      
+    <li>simplesqlite.core</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for simplesqlite.core</h1><div class="highlight"><pre>
+<span></span><span class="c1"># encoding: utf-8</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. codeauthor:: Tsuyoshi Hombashi &lt;gogogo.vm@gmail.com&gt;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">absolute_import</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sqlite3</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="kn">import</span> <span class="nn">dataproperty</span>
+<span class="kn">import</span> <span class="nn">pathvalidate</span>
+<span class="kn">import</span> <span class="nn">six</span>
+<span class="kn">from</span> <span class="nn">six.moves</span> <span class="kn">import</span> <span class="nb">range</span>
+
+<span class="kn">import</span> <span class="nn">simplesqlite</span>
+<span class="kn">from</span> <span class="nn">.sqlquery</span> <span class="kn">import</span> <span class="n">SqlQuery</span>
+<span class="kn">from</span> <span class="nn">.converter</span> <span class="kn">import</span> <span class="n">RecordConvertor</span>
+
+
+<div class="viewcode-block" id="SimpleSQLite"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite">[docs]</a><span class="k">class</span> <span class="nc">SimpleSQLite</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Wrapper class of |sqlite3| module.</span>
+
+<span class="sd">    :param str database_path: File path of the database to be connected.</span>
+<span class="sd">    :param str mode: Open mode.</span>
+<span class="sd">    :param bool profile:</span>
+<span class="sd">        Recording SQL query execution time profile, if the value is |True|.</span>
+
+<span class="sd">    .. seealso::</span>
+
+<span class="sd">        :py:meth:`.connect`</span>
+<span class="sd">        :py:meth:`.get_profile`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">database_path</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :return: File path of the connected database.</span>
+<span class="sd">        :rtype: str</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite import SimpleSQLite</span>
+<span class="sd">            &gt;&gt;&gt; con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">            &gt;&gt;&gt; con.database_path</span>
+<span class="sd">            &#39;/tmp/sample.sqlite&#39;</span>
+<span class="sd">            &gt;&gt;&gt; con.close()</span>
+<span class="sd">            &gt;&gt;&gt; print(con.database_path)</span>
+<span class="sd">            None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__database_path</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">connection</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :return: |Connection| instance of the connected database.</span>
+<span class="sd">        :rtype: sqlite3.Connection</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__connection</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :return: Connection mode: ``&quot;r&quot;``/``&quot;w&quot;``/``&quot;a&quot;``.</span>
+<span class="sd">        :rtype: str</span>
+
+<span class="sd">        .. seealso:: :py:meth:`.connect`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__mode</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">database_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;a&quot;</span><span class="p">,</span>
+            <span class="n">is_create_table_config</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">profile</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__initialize_connection</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__is_profile</span> <span class="o">=</span> <span class="n">profile</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__is_create_table_config</span> <span class="o">=</span> <span class="n">is_create_table_config</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">database_path</span><span class="p">,</span> <span class="n">mode</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">traceback</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+<div class="viewcode-block" id="SimpleSQLite.is_connected"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.is_connected">[docs]</a>    <span class="k">def</span> <span class="nf">is_connected</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :return: |True| if the connection to a database is valid.</span>
+<span class="sd">        :rtype: bool</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite import SimpleSQLite</span>
+<span class="sd">            &gt;&gt;&gt; con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">            &gt;&gt;&gt; con.is_connected()</span>
+<span class="sd">            True</span>
+<span class="sd">            &gt;&gt;&gt; con.close()</span>
+<span class="sd">            &gt;&gt;&gt; con.is_connected()</span>
+<span class="sd">            False</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">NullDatabaseConnectionError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.check_connection"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.check_connection">[docs]</a>    <span class="k">def</span> <span class="nf">check_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                from simplesqlite import SimpleSQLite, NullDatabaseConnectionError</span>
+<span class="sd">                import six</span>
+
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                six.print_(&quot;---- connected to a database ----&quot;)</span>
+<span class="sd">                con.check_connection()</span>
+<span class="sd">                six.print_(&quot;---- disconnected from a database ----&quot;)</span>
+<span class="sd">                con.close()</span>
+<span class="sd">                try:</span>
+<span class="sd">                    con.check_connection()</span>
+<span class="sd">                except NullDatabaseConnectionError as e:</span>
+<span class="sd">                    six.print_(e)</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                ---- connected to a database ----</span>
+<span class="sd">                ---- disconnected from a database ----</span>
+<span class="sd">                null database connection</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">NullDatabaseConnectionError</span><span class="p">(</span>
+                <span class="s2">&quot;null database connection&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">database_path</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">NullDatabaseConnectionError</span><span class="p">(</span>
+                <span class="s2">&quot;null database file path&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.connect"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.connect">[docs]</a>    <span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">database_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;a&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str database_path:</span>
+<span class="sd">            Path to the SQLite database file to be connected.</span>
+<span class="sd">        :param str mode:</span>
+<span class="sd">            ``&quot;r&quot;``: Open for read only.</span>
+<span class="sd">            ``&quot;w&quot;``: Open for read/write.</span>
+<span class="sd">            Delete existing tables when connecting.</span>
+<span class="sd">            ``&quot;a&quot;``: Open for read/write. Append to the existing tables.</span>
+<span class="sd">        :raises ValueError:</span>
+<span class="sd">            If ``database_path`` is invalid or |attr_mode| is invalid.</span>
+<span class="sd">        :raises sqlite3.OperationalError: If unable to open the database file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;r&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__verify_sqlite_db_file</span><span class="p">(</span><span class="n">database_path</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">mode</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__validate_db_path</span><span class="p">(</span><span class="n">database_path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;unknown connection mode: &quot;</span> <span class="o">+</span> <span class="n">mode</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">database_path</span> <span class="o">==</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">MEMORY_DB_NAME</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__database_path</span> <span class="o">=</span> <span class="n">database_path</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__database_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="n">database_path</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__connection</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">database_path</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__mode</span> <span class="o">=</span> <span class="n">mode</span>
+
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">!=</span> <span class="s2">&quot;w&quot;</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="k">for</span> <span class="n">table</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_table_name_list</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">drop_table</span><span class="p">(</span><span class="n">table</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.execute_query"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.execute_query">[docs]</a>    <span class="k">def</span> <span class="nf">execute_query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">caller</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute arbitrary SQLite query.</span>
+
+<span class="sd">        :param str query: Query to be executed.</span>
+<span class="sd">        :param tuple caller:</span>
+<span class="sd">            Caller information.</span>
+<span class="sd">            Expects the return value of :py:meth:`logging.Logger.findCaller`.</span>
+<span class="sd">        :return: Result of the query execution.</span>
+<span class="sd">        :rtype: sqlite3.Cursor</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+
+<span class="sd">        .. warning::</span>
+
+<span class="sd">            This method can execute an arbitrary query.</span>
+<span class="sd">            i.e. No access permissions check by |attr_mode|.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="kn">import</span> <span class="nn">time</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="n">query</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__is_profile</span><span class="p">:</span>
+            <span class="n">exec_start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">OperationalError</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>  <span class="c1"># for python 2.5 compatibility</span>
+            <span class="k">if</span> <span class="n">caller</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">caller</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">()</span>
+            <span class="n">file_path</span><span class="p">,</span> <span class="n">line_no</span><span class="p">,</span> <span class="n">func_name</span> <span class="o">=</span> <span class="n">caller</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span>
+            <span class="n">message_list</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;failed to execute query at </span><span class="si">%s</span><span class="s2">(</span><span class="si">%d</span><span class="s2">) </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">file_path</span><span class="p">,</span> <span class="n">line_no</span><span class="p">,</span> <span class="n">func_name</span><span class="p">),</span>
+                <span class="s2">&quot;  - query: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">query</span><span class="p">),</span>
+                <span class="s2">&quot;  - msg:   </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">e</span><span class="p">),</span>
+                <span class="s2">&quot;  - db:    </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">database_path</span><span class="p">),</span>
+            <span class="p">]</span>
+            <span class="k">raise</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">OperationalError</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">linesep</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">message_list</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__is_profile</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__dict_query_count</span><span class="p">[</span><span class="n">query</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__dict_query_count</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">elapse_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">exec_start_time</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__dict_query_totalexectime</span><span class="p">[</span><span class="n">query</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__dict_query_totalexectime</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">elapse_time</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">result</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.select"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.select">[docs]</a>    <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">select</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">where</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute SELECT query.</span>
+
+<span class="sd">        :param str select: Attribute for the SELECT query.</span>
+<span class="sd">        :param str table_name: Table name of executing the query.</span>
+<span class="sd">        :return: Result of the query execution.</span>
+<span class="sd">        :rtype: sqlite3.Cursor</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.sqlquery.SqlQuery.make_select`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="n">SqlQuery</span><span class="o">.</span><span class="n">make_select</span><span class="p">(</span><span class="n">select</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">where</span><span class="p">,</span> <span class="n">extra</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.insert"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.insert">[docs]</a>    <span class="k">def</span> <span class="nf">insert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">insert_record</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute INSERT query.</span>
+
+<span class="sd">        :param str table_name: Table name of executing the query.</span>
+<span class="sd">        :param insert_record: Record to be inserted.</span>
+<span class="sd">        :type insert_record: |dict|/|namedtuple|/|list|/|tuple|</span>
+<span class="sd">        :raises IOError: |raises_write_permission|</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+
+<span class="sd">        .. seealso:: :py:meth:`.sqlquery.SqlQuery.make_insert`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate_access_permission</span><span class="p">([</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="n">SqlQuery</span><span class="o">.</span><span class="n">make_insert</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">RecordConvertor</span><span class="o">.</span><span class="n">to_record</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_attribute_name_list</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span> <span class="n">insert_record</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.insert_many"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.insert_many">[docs]</a>    <span class="k">def</span> <span class="nf">insert_many</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">insert_record_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute INSERT query for multiple records.</span>
+
+<span class="sd">        :param str table: Table name of executing the query.</span>
+<span class="sd">        :param insert_record: Records to be inserted.</span>
+<span class="sd">        :type insert_record: |dict|/|namedtuple|/|list|/|tuple|</span>
+<span class="sd">        :raises IOError: |raises_write_permission|</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+
+<span class="sd">        .. seealso:: :py:meth:`.sqlquery.SqlQuery.make_insert`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate_access_permission</span><span class="p">([</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_list_or_tuple</span><span class="p">(</span><span class="n">insert_record_list</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="n">record_list</span> <span class="o">=</span> <span class="n">RecordConvertor</span><span class="o">.</span><span class="n">to_record_list</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_attribute_name_list</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span> <span class="n">insert_record_list</span><span class="p">)</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="n">SqlQuery</span><span class="o">.</span><span class="n">make_insert</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span> <span class="n">record_list</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">is_insert_many</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">record_list</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">OperationalError</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>  <span class="c1"># for python 2.5 compatibility</span>
+            <span class="n">caller</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">()</span>
+            <span class="n">file_path</span><span class="p">,</span> <span class="n">line_no</span><span class="p">,</span> <span class="n">func_name</span> <span class="o">=</span> <span class="n">caller</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span>
+            <span class="k">raise</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">OperationalError</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">(</span><span class="si">%d</span><span class="s2">) </span><span class="si">%s</span><span class="s2">: failed to execute query:</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">file_path</span><span class="p">,</span> <span class="n">line_no</span><span class="p">,</span> <span class="n">func_name</span><span class="p">)</span> <span class="o">+</span>
+                <span class="s2">&quot;  query=</span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">query</span><span class="p">)</span> <span class="o">+</span>
+                <span class="s2">&quot;  msg=&#39;</span><span class="si">%s</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="o">+</span>
+                <span class="s2">&quot;  db=</span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">database_path</span><span class="p">)</span> <span class="o">+</span>
+                <span class="s2">&quot;  records=</span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">record_list</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.update"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.update">[docs]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">set_query</span><span class="p">,</span> <span class="n">where</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute UPDATE query.</span>
+
+<span class="sd">        :param str table_name: Table name of executing the query.</span>
+<span class="sd">        :param str set_query:</span>
+<span class="sd">        :raises IOError: |raises_write_permission|</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.sqlquery.SqlQuery.make_update`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate_access_permission</span><span class="p">([</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="n">SqlQuery</span><span class="o">.</span><span class="n">make_update</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">set_query</span><span class="p">,</span> <span class="n">where</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.get_total_changes"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.get_total_changes">[docs]</a>    <span class="k">def</span> <span class="nf">get_total_changes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:attr:`sqlite3.Connection.total_changes`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">total_changes</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.get_value"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.get_value">[docs]</a>    <span class="k">def</span> <span class="nf">get_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">select</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">where</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get a value from the table.</span>
+
+<span class="sd">        :param str select: Attribute for SELECT query</span>
+<span class="sd">        :param str table_name: Table name of executing the query.</span>
+<span class="sd">        :return: Result of execution of the query.</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.sqlquery.SqlQuery.make_select`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="n">SqlQuery</span><span class="o">.</span><span class="n">make_select</span><span class="p">(</span><span class="n">select</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">where</span><span class="p">,</span> <span class="n">extra</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+        <span class="n">fetch</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">fetch</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+        <span class="k">return</span> <span class="n">fetch</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.get_table_name_list"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.get_table_name_list">[docs]</a>    <span class="k">def</span> <span class="nf">get_table_name_list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :return: List of table names in the database.</span>
+<span class="sd">        :rtype: list</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                from simplesqlite import SimpleSQLite</span>
+<span class="sd">                import six</span>
+
+<span class="sd">                table_name = &quot;sample_table&quot;</span>
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                con.create_table_with_data(</span>
+<span class="sd">                    table_name=&quot;hoge&quot;,</span>
+<span class="sd">                    attribute_name_list=[&quot;attr_a&quot;, &quot;attr_b&quot;],</span>
+<span class="sd">                    data_matrix=[[1, &quot;a&quot;], [2, &quot;b&quot;]])</span>
+<span class="sd">                six.print_(con.get_table_name_list())</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                [u&#39;hoge&#39;]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;SELECT name FROM sqlite_master WHERE TYPE=&#39;table&#39;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__get_list_from_fetch</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.get_attribute_name_list"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.get_attribute_name_list">[docs]</a>    <span class="k">def</span> <span class="nf">get_attribute_name_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :return: List of attribute names in the table.</span>
+<span class="sd">        :rtype: list</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                from simplesqlite import SimpleSQLite, TableNotFoundError</span>
+<span class="sd">                import six</span>
+
+<span class="sd">                table_name = &quot;sample_table&quot;</span>
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                con.create_table_with_data(</span>
+<span class="sd">                    table_name=table_name,</span>
+<span class="sd">                    attribute_name_list=[&quot;attr_a&quot;, &quot;attr_b&quot;],</span>
+<span class="sd">                    data_matrix=[[1, &quot;a&quot;], [2, &quot;b&quot;]])</span>
+
+<span class="sd">                six.print_(con.get_attribute_name_list(table_name))</span>
+<span class="sd">                try:</span>
+<span class="sd">                    six.print_(con.get_attribute_name_list(&quot;not_existing&quot;))</span>
+<span class="sd">                except TableNotFoundError as e:</span>
+<span class="sd">                    six.print_(e)</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                [&#39;attr_a&#39;, &#39;attr_b&#39;]</span>
+<span class="sd">                &#39;not_existing&#39; table not found in /tmp/sample.sqlite</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;SELECT * FROM &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__get_list_from_fetch</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">description</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.get_attribute_type_list"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.get_attribute_type_list">[docs]</a>    <span class="k">def</span> <span class="nf">get_attribute_type_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :return: List of attribute names in the table.</span>
+<span class="sd">        :rtype: list</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="n">attribute_name_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_attribute_name_list</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;SELECT DISTINCT </span><span class="si">%s</span><span class="s2"> FROM &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span>
+                <span class="s2">&quot;TYPEOF(</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">SqlQuery</span><span class="o">.</span><span class="n">to_attr_str</span><span class="p">(</span><span class="n">attribute</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">attribute</span> <span class="ow">in</span> <span class="n">attribute_name_list</span><span class="p">]),</span>
+            <span class="n">table_name</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span>
+
+        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.get_profile"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.get_profile">[docs]</a>    <span class="k">def</span> <span class="nf">get_profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">profile_count</span><span class="o">=</span><span class="mi">50</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get profile of query execution time.</span>
+
+<span class="sd">        :param int profile_count:</span>
+<span class="sd">            Number of profiles to retrieve,</span>
+<span class="sd">            counted from the top query in descending order by</span>
+<span class="sd">            the cumulative execution time.</span>
+<span class="sd">        :return: Profile information for each query.</span>
+<span class="sd">        :rtype: list of |namedtuple|</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises sqlite3.OperationalError: |raises_operational_error|</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">namedtuple</span>
+
+        <span class="n">profile_table_name</span> <span class="o">=</span> <span class="s2">&quot;sql_profile&quot;</span>
+
+        <span class="n">value_matrix</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">[</span><span class="n">query</span><span class="p">,</span> <span class="n">execute_time</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">__dict_query_count</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+            <span class="k">for</span> <span class="n">query</span><span class="p">,</span> <span class="n">execute_time</span>
+            <span class="ow">in</span> <span class="n">six</span><span class="o">.</span><span class="n">iteritems</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict_query_totalexectime</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="n">attribute_name_list</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;query&quot;</span><span class="p">,</span> <span class="s2">&quot;cumulative_time&quot;</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">)</span>
+        <span class="n">con_tmp</span> <span class="o">=</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">connect_sqlite_db_mem</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">con_tmp</span><span class="o">.</span><span class="n">create_table_with_data</span><span class="p">(</span>
+                <span class="n">profile_table_name</span><span class="p">,</span>
+                <span class="n">attribute_name_list</span><span class="p">,</span>
+                <span class="n">data_matrix</span><span class="o">=</span><span class="n">value_matrix</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">con_tmp</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+                <span class="n">select</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">,SUM(</span><span class="si">%s</span><span class="s2">),SUM(</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="n">attribute_name_list</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="o">=</span><span class="n">profile_table_name</span><span class="p">,</span>
+                <span class="n">extra</span><span class="o">=</span><span class="s2">&quot;GROUP BY </span><span class="si">%s</span><span class="s2"> ORDER BY </span><span class="si">%s</span><span class="s2"> DESC LIMIT </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="s2">&quot;query&quot;</span><span class="p">,</span> <span class="s2">&quot;cumulative_time&quot;</span><span class="p">,</span> <span class="n">profile_count</span><span class="p">))</span>
+        <span class="k">except</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">OperationalError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">SqliteProfile</span> <span class="o">=</span> <span class="n">namedtuple</span><span class="p">(</span>
+            <span class="s2">&quot;SqliteProfile&quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attribute_name_list</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">SqliteProfile</span><span class="p">(</span><span class="o">*</span><span class="n">profile</span><span class="p">)</span> <span class="k">for</span> <span class="n">profile</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()]</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.get_sqlite_master"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.get_sqlite_master">[docs]</a>    <span class="k">def</span> <span class="nf">get_sqlite_master</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get sqlite_master table information as a list of dictionaries.</span>
+
+<span class="sd">        :return: sqlite_master table information.</span>
+<span class="sd">        :rtype: list</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                import json</span>
+<span class="sd">                from simplesqlite import SimpleSQLite</span>
+
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                data_matrix = [</span>
+<span class="sd">                    [1, 1.1, &quot;aaa&quot;, 1,   1],</span>
+<span class="sd">                    [2, 2.2, &quot;bbb&quot;, 2.2, 2.2],</span>
+<span class="sd">                    [3, 3.3, &quot;ccc&quot;, 3,   &quot;ccc&quot;],</span>
+<span class="sd">                ]</span>
+<span class="sd">                con.create_table_with_data(</span>
+<span class="sd">                    table_name=&quot;sample_table&quot;,</span>
+<span class="sd">                    attribute_name_list=[&quot;a&quot;, &quot;b&quot;, &quot;c&quot;, &quot;d&quot;, &quot;e&quot;],</span>
+<span class="sd">                    data_matrix=data_matrix,</span>
+<span class="sd">                    index_attribute_list=[&quot;a&quot;])</span>
+<span class="sd">                print(json.dumps(con.get_sqlite_master(), indent=4))</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                [</span>
+<span class="sd">                    {</span>
+<span class="sd">                        &quot;tbl_name&quot;: &quot;sample_table&quot;,</span>
+<span class="sd">                        &quot;sql&quot;: &quot;CREATE TABLE &#39;sample_table&#39; (&#39;a&#39; INTEGER, &#39;b&#39; REAL, &#39;c&#39; TEXT, &#39;d&#39; REAL, &#39;e&#39; TEXT)&quot;,</span>
+<span class="sd">                        &quot;type&quot;: &quot;table&quot;,</span>
+<span class="sd">                        &quot;name&quot;: &quot;sample_table&quot;,</span>
+<span class="sd">                        &quot;rootpage&quot;: 2</span>
+<span class="sd">                    },</span>
+<span class="sd">                    {</span>
+<span class="sd">                        &quot;tbl_name&quot;: &quot;sample_table&quot;,</span>
+<span class="sd">                        &quot;sql&quot;: &quot;CREATE INDEX sample_table_a_index ON sample_table(&#39;a&#39;)&quot;,</span>
+<span class="sd">                        &quot;type&quot;: &quot;index&quot;,</span>
+<span class="sd">                        &quot;name&quot;: &quot;sample_table_a_index&quot;,</span>
+<span class="sd">                        &quot;rootpage&quot;: 3</span>
+<span class="sd">                    }</span>
+<span class="sd">                ]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+
+        <span class="n">old_row_factory</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">row_factory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">row_factory</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Row</span>
+
+        <span class="n">sqlite_master_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="s2">&quot;select * from sqlite_master&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+            <span class="n">sqlite_master_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="nb">dict</span><span class="p">([[</span><span class="n">key</span><span class="p">,</span> <span class="n">item</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">keys</span><span class="p">()]))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">row_factory</span> <span class="o">=</span> <span class="n">old_row_factory</span>
+
+        <span class="k">return</span> <span class="n">sqlite_master_list</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.has_table"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.has_table">[docs]</a>    <span class="k">def</span> <span class="nf">has_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name: Table name to be tested.</span>
+<span class="sd">        :return: |True| if the database has the table.</span>
+<span class="sd">        :rtype: bool</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                from simplesqlite import SimpleSQLite</span>
+<span class="sd">                import six</span>
+
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                con.create_table_with_data(</span>
+<span class="sd">                    table_name=&quot;hoge&quot;,</span>
+<span class="sd">                    attribute_name_list=[&quot;attr_a&quot;, &quot;attr_b&quot;],</span>
+<span class="sd">                    data_matrix=[[1, &quot;a&quot;], [2, &quot;b&quot;]])</span>
+<span class="sd">                six.print_(con.has_table(&quot;hoge&quot;))</span>
+<span class="sd">                six.print_(con.has_table(&quot;not_existing&quot;))</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                True</span>
+<span class="sd">                False</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">simplesqlite</span><span class="o">.</span><span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">return</span> <span class="n">table_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_table_name_list</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.has_attribute"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.has_attribute">[docs]</a>    <span class="k">def</span> <span class="nf">has_attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name: Table name that exists attribute.</span>
+<span class="sd">        :param str attribute_name: Attribute name to be tested.</span>
+<span class="sd">        :return: |True| if the table has the attribute.</span>
+<span class="sd">        :rtype: bool</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                from simplesqlite import SimpleSQLite, TableNotFoundError</span>
+<span class="sd">                import six</span>
+
+<span class="sd">                table_name = &quot;sample_table&quot;</span>
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                con.create_table_with_data(</span>
+<span class="sd">                    table_name=table_name,</span>
+<span class="sd">                    attribute_name_list=[&quot;attr_a&quot;, &quot;attr_b&quot;],</span>
+<span class="sd">                    data_matrix=[[1, &quot;a&quot;], [2, &quot;b&quot;]])</span>
+
+<span class="sd">                six.print_(con.has_attribute(table_name, &quot;attr_a&quot;))</span>
+<span class="sd">                six.print_(con.has_attribute(table_name, &quot;not_existing&quot;))</span>
+<span class="sd">                try:</span>
+<span class="sd">                    six.print_(con.has_attribute(&quot;not_existing&quot;, &quot;attr_a&quot;))</span>
+<span class="sd">                except TableNotFoundError as e:</span>
+<span class="sd">                    six.print_(e)</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                True</span>
+<span class="sd">                False</span>
+<span class="sd">                &#39;not_existing&#39; table not found in /tmp/sample.sqlite</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="n">attribute_name</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">return</span> <span class="n">attribute_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_attribute_name_list</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.has_attribute_list"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.has_attribute_list">[docs]</a>    <span class="k">def</span> <span class="nf">has_attribute_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_name_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name: Table name that exists attribute.</span>
+<span class="sd">        :param str attribute_name_list: Attribute names to be tested.</span>
+<span class="sd">        :return: |True| if the table has all of the attribute.</span>
+<span class="sd">        :rtype: bool</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                from simplesqlite import SimpleSQLite, TableNotFoundError</span>
+<span class="sd">                import six</span>
+
+<span class="sd">                table_name = &quot;sample_table&quot;</span>
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                con.create_table_with_data(</span>
+<span class="sd">                    table_name=table_name,</span>
+<span class="sd">                    attribute_name_list=[&quot;attr_a&quot;, &quot;attr_b&quot;],</span>
+<span class="sd">                    data_matrix=[[1, &quot;a&quot;], [2, &quot;b&quot;]])</span>
+
+<span class="sd">                six.print_(con.has_attribute_list(table_name, [&quot;attr_a&quot;]))</span>
+<span class="sd">                six.print_(con.has_attribute_list(</span>
+<span class="sd">                    table_name, [&quot;attr_a&quot;, &quot;attr_b&quot;]))</span>
+<span class="sd">                six.print_(con.has_attribute_list(</span>
+<span class="sd">                    table_name, [&quot;attr_a&quot;, &quot;attr_b&quot;, &quot;not_existing&quot;]))</span>
+<span class="sd">                try:</span>
+<span class="sd">                    six.print_(con.has_attribute(&quot;not_existing&quot;, [&quot;attr_a&quot;]))</span>
+<span class="sd">                except TableNotFoundError as e:</span>
+<span class="sd">                    six.print_(e)</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                True</span>
+<span class="sd">                True</span>
+<span class="sd">                False</span>
+<span class="sd">                &#39;not_existing&#39; table not found in /tmp/sample.sqlite</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_list_or_tuple</span><span class="p">(</span><span class="n">attribute_name_list</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="n">not_exist_field_list</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">attribute_name</span>
+            <span class="k">for</span> <span class="n">attribute_name</span> <span class="ow">in</span> <span class="n">attribute_name_list</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_attribute</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">)</span>
+        <span class="p">]</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">not_exist_field_list</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.verify_table_existence"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.verify_table_existence">[docs]</a>    <span class="k">def</span> <span class="nf">verify_table_existence</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name: Table name to be tested.</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+<span class="sd">        :raises ValueError: |raises_validate_table_name|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                from simplesqlite import SimpleSQLite, TableNotFoundError</span>
+<span class="sd">                import six</span>
+
+<span class="sd">                table_name = &quot;sample_table&quot;</span>
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                con.create_table_with_data(</span>
+<span class="sd">                    table_name=table_name,</span>
+<span class="sd">                    attribute_name_list=[&quot;attr_a&quot;, &quot;attr_b&quot;],</span>
+<span class="sd">                    data_matrix=[[1, &quot;a&quot;], [2, &quot;b&quot;]])</span>
+
+<span class="sd">                con.verify_table_existence(table_name)</span>
+<span class="sd">                try:</span>
+<span class="sd">                    con.verify_table_existence(&quot;not_existing&quot;)</span>
+<span class="sd">                except TableNotFoundError as e:</span>
+<span class="sd">                    six.print_(e)</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                &#39;not_existing&#39; table not found in /tmp/sample.sqlite</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">simplesqlite</span><span class="o">.</span><span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="k">raise</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">TableNotFoundError</span><span class="p">(</span>
+            <span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39; table not found in </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">database_path</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.verify_attribute_existence"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.verify_attribute_existence">[docs]</a>    <span class="k">def</span> <span class="nf">verify_attribute_existence</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name: Table name that exists attribute.</span>
+<span class="sd">        :param str attribute_name: Attribute name to be tested.</span>
+<span class="sd">        :raises simplesqlite.AttributeNotFoundError:</span>
+<span class="sd">            If attribute not found in the table</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            .. code:: python</span>
+
+<span class="sd">                from simplesqlite import SimpleSQLite, TableNotFoundError, AttributeNotFoundError</span>
+<span class="sd">                import six</span>
+
+<span class="sd">                table_name = &quot;sample_table&quot;</span>
+<span class="sd">                con = SimpleSQLite(&quot;sample.sqlite&quot;, &quot;w&quot;)</span>
+<span class="sd">                con.create_table_with_data(</span>
+<span class="sd">                    table_name=table_name,</span>
+<span class="sd">                    attribute_name_list=[&quot;attr_a&quot;, &quot;attr_b&quot;],</span>
+<span class="sd">                    data_matrix=[[1, &quot;a&quot;], [2, &quot;b&quot;]])</span>
+
+<span class="sd">                con.verify_attribute_existence(table_name, &quot;attr_a&quot;)</span>
+<span class="sd">                try:</span>
+<span class="sd">                    con.verify_attribute_existence(table_name, &quot;not_existing&quot;)</span>
+<span class="sd">                except AttributeNotFoundError as e:</span>
+<span class="sd">                    six.print_(e)</span>
+<span class="sd">                try:</span>
+<span class="sd">                    con.verify_attribute_existence(&quot;not_existing&quot;, &quot;attr_a&quot;)</span>
+<span class="sd">                except TableNotFoundError as e:</span>
+<span class="sd">                    six.print_(e)</span>
+
+<span class="sd">            .. parsed-literal::</span>
+
+<span class="sd">                &#39;not_existing&#39; attribute not found in &#39;sample_table&#39; table</span>
+<span class="sd">                &#39;not_existing&#39; table not found in /tmp/sample.sqlite</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_attribute</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="k">raise</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">AttributeNotFoundError</span><span class="p">(</span>
+            <span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39; attribute not found in &#39;</span><span class="si">%s</span><span class="s2">&#39; table&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">attribute_name</span><span class="p">,</span> <span class="n">table_name</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.drop_table"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.drop_table">[docs]</a>    <span class="k">def</span> <span class="nf">drop_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name: Table name to drop.</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises IOError: |raises_write_permission|</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate_access_permission</span><span class="p">([</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;DROP TABLE IF EXISTS &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.create_table"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.create_table">[docs]</a>    <span class="k">def</span> <span class="nf">create_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_description_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name: Table name to create.</span>
+<span class="sd">        :param list attribute_description_list: List of table description.</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises IOError: |raises_write_permission|</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate_access_permission</span><span class="p">([</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">])</span>
+
+        <span class="n">table_name</span> <span class="o">=</span> <span class="n">table_name</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;CREATE TABLE IF NOT EXISTS &#39;</span><span class="si">%s</span><span class="s2">&#39; (</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attribute_description_list</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.create_index"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.create_index">[docs]</a>    <span class="k">def</span> <span class="nf">create_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name:</span>
+<span class="sd">            Table name that contains the attribute to be indexed.</span>
+<span class="sd">        :param str attribute_name: Attribute name to create index.</span>
+<span class="sd">        :raises IOError: |raises_write_permission|</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        :raises simplesqlite.TableNotFoundError:</span>
+<span class="sd">            |raises_verify_table_existence|</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_table_existence</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate_access_permission</span><span class="p">([</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">])</span>
+
+        <span class="n">index_name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">_</span><span class="si">%s</span><span class="s2">_index&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">SqlQuery</span><span class="o">.</span><span class="n">sanitize</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span> <span class="n">SqlQuery</span><span class="o">.</span><span class="n">sanitize</span><span class="p">(</span><span class="n">attribute_name</span><span class="p">))</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;CREATE INDEX IF NOT EXISTS </span><span class="si">%s</span><span class="s2"> ON </span><span class="si">%s</span><span class="s2">(&#39;</span><span class="si">%s</span><span class="s2">&#39;)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">index_name</span><span class="p">,</span> <span class="n">SqlQuery</span><span class="o">.</span><span class="n">to_table_str</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span> <span class="n">attribute_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">findCaller</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.create_index_list"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.create_index_list">[docs]</a>    <span class="k">def</span> <span class="nf">create_index_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_name_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str table_name: Table name that exists attribute.</span>
+<span class="sd">        :param list attribute_name_list:</span>
+<span class="sd">            List of attribute names to create indices.</span>
+
+<span class="sd">        .. seealso:: :py:meth:`.create_index`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate_access_permission</span><span class="p">([</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_list_or_tuple</span><span class="p">(</span><span class="n">attribute_name_list</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="k">for</span> <span class="n">attribute</span> <span class="ow">in</span> <span class="n">attribute_name_list</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">create_index</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">attribute</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.create_table_with_data"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.create_table_with_data">[docs]</a>    <span class="k">def</span> <span class="nf">create_table_with_data</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">attribute_name_list</span><span class="p">,</span> <span class="n">data_matrix</span><span class="p">,</span>
+            <span class="n">index_attribute_list</span><span class="o">=</span><span class="p">()):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a table if not exists. And insert data into the created table.</span>
+
+<span class="sd">        :param str table_name: Table name to create.</span>
+<span class="sd">        :param list attribute_name_list: List of attribute names of the table.</span>
+<span class="sd">        :param data_matrix: Data to be inserted into the table.</span>
+<span class="sd">        :type data_matrix: List of |dict|/|namedtuple|/|list|/|tuple|</span>
+<span class="sd">        :param tuple index_attribute_list:</span>
+<span class="sd">            List of attribute names of create indices.</span>
+<span class="sd">        :raises ValueError: If the ``data_matrix`` is empty.</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.create_table`</span>
+<span class="sd">            :py:meth:`.insert_many`</span>
+<span class="sd">            :py:meth:`.create_index_list`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">simplesqlite</span><span class="o">.</span><span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate_access_permission</span><span class="p">([</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_list_or_tuple</span><span class="p">(</span><span class="n">data_matrix</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;input data is null: &#39;</span><span class="si">%s</span><span class="s2"> (</span><span class="si">%s</span><span class="s2">)&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">table_name</span><span class="p">,</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attribute_name_list</span><span class="p">)))</span>
+
+        <span class="n">data_matrix</span> <span class="o">=</span> <span class="n">RecordConvertor</span><span class="o">.</span><span class="n">to_record_list</span><span class="p">(</span>
+            <span class="n">attribute_name_list</span><span class="p">,</span> <span class="n">data_matrix</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__verify_value_matrix</span><span class="p">(</span><span class="n">attribute_name_list</span><span class="p">,</span> <span class="n">data_matrix</span><span class="p">)</span>
+
+        <span class="n">strip_index_attribute_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="nb">set</span><span class="p">(</span><span class="n">attribute_name_list</span><span class="p">)</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">index_attribute_list</span><span class="p">)))</span>
+        <span class="n">attr_description_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">value_type</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span>
+                <span class="n">six</span><span class="o">.</span><span class="n">iteritems</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__get_column_valuetype</span><span class="p">(</span><span class="n">data_matrix</span><span class="p">))):</span>
+            <span class="n">attr_name</span> <span class="o">=</span> <span class="n">attribute_name_list</span><span class="p">[</span><span class="n">col</span><span class="p">]</span>
+            <span class="n">attr_description_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39; </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="n">value_type</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">attr_description_list</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">insert_many</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">data_matrix</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_index_list</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">strip_index_attribute_list</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.create_table_from_tabledata"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.create_table_from_tabledata">[docs]</a>    <span class="k">def</span> <span class="nf">create_table_from_tabledata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tabledata</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a table from :py:class:`.loader.data.TableData`.</span>
+
+<span class="sd">        :param TableData tabledata: Table data to create.</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.create_table_with_data`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_table_with_data</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="o">=</span><span class="n">tabledata</span><span class="o">.</span><span class="n">table_name</span><span class="p">,</span>
+            <span class="n">attribute_name_list</span><span class="o">=</span><span class="n">tabledata</span><span class="o">.</span><span class="n">header_list</span><span class="p">,</span>
+            <span class="n">data_matrix</span><span class="o">=</span><span class="n">tabledata</span><span class="o">.</span><span class="n">record_list</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.create_table_from_csv"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.create_table_from_csv">[docs]</a>    <span class="k">def</span> <span class="nf">create_table_from_csv</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">csv_source</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="n">attribute_name_list</span><span class="o">=</span><span class="p">(),</span>
+            <span class="n">delimiter</span><span class="o">=</span><span class="s2">&quot;,&quot;</span><span class="p">,</span> <span class="n">quotechar</span><span class="o">=</span><span class="s1">&#39;&quot;&#39;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a table from a CSV file/text.</span>
+
+<span class="sd">        :param str csv_source: Path to the CSV file or CSV text.</span>
+<span class="sd">        :param str table_name:</span>
+<span class="sd">            Table name to create.</span>
+<span class="sd">            Use csv file basename as the table name if the value is empty.</span>
+<span class="sd">        :param list attribute_name_list:</span>
+<span class="sd">            Attribute names of the table.</span>
+<span class="sd">            Use the first line of the csv file as attribute list</span>
+<span class="sd">            if attribute_name_list is empty.</span>
+<span class="sd">        :param str delimiter:</span>
+<span class="sd">            A one-character string used to separate fields.</span>
+<span class="sd">        :param str quotechar:</span>
+<span class="sd">            A one-character string used to quote fields</span>
+<span class="sd">            containing special characters, such as the delimiter or quotechar,</span>
+<span class="sd">            or which contain new-line characters.</span>
+<span class="sd">        :param str encoding: csv file encoding.</span>
+<span class="sd">        :raises ValueError: If the csv data is invalid.</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.create_table_with_data`</span>
+<span class="sd">            :py:func:`csv.reader`</span>
+<span class="sd">            :py:meth:`.loader.CsvTableFileLoader.load`</span>
+<span class="sd">            :py:meth:`.loader.CsvTableTextLoader.load`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="kn">from</span> <span class="nn">.loader</span> <span class="kn">import</span> <span class="n">CsvTableFileLoader</span>
+        <span class="kn">from</span> <span class="nn">.loader</span> <span class="kn">import</span> <span class="n">CsvTableTextLoader</span>
+
+        <span class="n">loader</span> <span class="o">=</span> <span class="n">CsvTableFileLoader</span><span class="p">(</span><span class="n">csv_source</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+            <span class="n">loader</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="n">table_name</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">header_list</span> <span class="o">=</span> <span class="n">attribute_name_list</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">delimiter</span> <span class="o">=</span> <span class="n">delimiter</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">quotechar</span> <span class="o">=</span> <span class="n">quotechar</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">encoding</span> <span class="o">=</span> <span class="n">encoding</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">tabledata</span> <span class="ow">in</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">create_table_from_tabledata</span><span class="p">(</span><span class="n">tabledata</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">except</span> <span class="ne">IOError</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="n">loader</span> <span class="o">=</span> <span class="n">CsvTableTextLoader</span><span class="p">(</span><span class="n">csv_source</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+            <span class="n">loader</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="n">table_name</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">header_list</span> <span class="o">=</span> <span class="n">attribute_name_list</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">delimiter</span> <span class="o">=</span> <span class="n">delimiter</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">quotechar</span> <span class="o">=</span> <span class="n">quotechar</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">encoding</span> <span class="o">=</span> <span class="n">encoding</span>
+        <span class="k">for</span> <span class="n">tabledata</span> <span class="ow">in</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">create_table_from_tabledata</span><span class="p">(</span><span class="n">tabledata</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.create_table_from_json"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.create_table_from_json">[docs]</a>    <span class="k">def</span> <span class="nf">create_table_from_json</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">json_source</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a table from a JSON file/text.</span>
+
+<span class="sd">        :param str json_source: Path to the JSON file or JSON text.</span>
+<span class="sd">        :param str table_name: Table name to create.</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.loader.JsonTableFileLoader.load`</span>
+<span class="sd">            :py:meth:`.loader.JsonTableTextLoader.load`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="kn">from</span> <span class="nn">.loader</span> <span class="kn">import</span> <span class="n">JsonTableFileLoader</span>
+        <span class="kn">from</span> <span class="nn">.loader</span> <span class="kn">import</span> <span class="n">JsonTableTextLoader</span>
+
+        <span class="n">loader</span> <span class="o">=</span> <span class="n">JsonTableFileLoader</span><span class="p">(</span><span class="n">json_source</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+            <span class="n">loader</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="n">table_name</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">tabledata</span> <span class="ow">in</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">create_table_from_tabledata</span><span class="p">(</span><span class="n">tabledata</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">except</span> <span class="ne">IOError</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="n">loader</span> <span class="o">=</span> <span class="n">JsonTableTextLoader</span><span class="p">(</span><span class="n">json_source</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+            <span class="n">loader</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="n">table_name</span>
+        <span class="k">for</span> <span class="n">tabledata</span> <span class="ow">in</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">create_table_from_tabledata</span><span class="p">(</span><span class="n">tabledata</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.rollback"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.rollback">[docs]</a>    <span class="k">def</span> <span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        .. seealso:: :py:meth:`sqlite3.Connection.rollback`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">NullDatabaseConnectionError</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.commit"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.commit">[docs]</a>    <span class="k">def</span> <span class="nf">commit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        .. seealso:: :py:meth:`sqlite3.Connection.commit`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">NullDatabaseConnectionError</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="SimpleSQLite.close"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Commit and close the connection.</span>
+
+<span class="sd">        .. seealso:: :py:meth:`sqlite3.Connection.close`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">NullDatabaseConnectionError</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__initialize_connection</span><span class="p">()</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">__validate_db_path</span><span class="p">(</span><span class="n">database_path</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="n">database_path</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;null path&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">database_path</span> <span class="o">==</span> <span class="n">simplesqlite</span><span class="o">.</span><span class="n">MEMORY_DB_NAME</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">pathvalidate</span><span class="o">.</span><span class="n">validate_filename</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">database_path</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__verify_sqlite_db_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">database_path</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :raises sqlite3.OperationalError: If unable to open database file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__validate_db_path</span><span class="p">(</span><span class="n">database_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="n">database_path</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="s2">&quot;file not found: &quot;</span> <span class="o">+</span> <span class="n">database_path</span><span class="p">)</span>
+
+        <span class="n">connection</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">database_path</span><span class="p">)</span>
+        <span class="n">connection</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">__verify_value_matrix</span><span class="p">(</span><span class="n">field_list</span><span class="p">,</span> <span class="n">value_matrix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param list/tuple field_list:</span>
+<span class="sd">        :param list/tuple value_matrix: the list to test.</span>
+<span class="sd">        :raises ValueError:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">miss_match_idx_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">list_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">value_matrix</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">value_matrix</span><span class="p">[</span><span class="n">list_idx</span><span class="p">]):</span>
+                <span class="k">continue</span>
+
+            <span class="n">miss_match_idx_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">list_idx</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">miss_match_idx_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">sample_miss_match_list</span> <span class="o">=</span> <span class="n">value_matrix</span><span class="p">[</span><span class="n">miss_match_idx_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;miss match header length and value length:&quot;</span> <span class="o">+</span>
+            <span class="s2">&quot;  header: </span><span class="si">%d</span><span class="s2"> </span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">field_list</span><span class="p">))</span> <span class="o">+</span>
+            <span class="s2">&quot;  # of miss match line: </span><span class="si">%d</span><span class="s2"> ouf of </span><span class="si">%d</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">miss_match_idx_list</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">value_matrix</span><span class="p">))</span> <span class="o">+</span>
+            <span class="s2">&quot;  e.g. value at line=</span><span class="si">%d</span><span class="s2">, len=</span><span class="si">%d</span><span class="s2">: </span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">miss_match_idx_list</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">sample_miss_match_list</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">sample_miss_match_list</span><span class="p">))</span>
+        <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">__get_list_from_fetch</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :params tuple result: Return value from a Cursor.fetchall()</span>
+<span class="sd">        :rtype: list</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">record</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">result</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__initialize_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__database_path</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__connection</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__cursur</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__mode</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__dict_query_count</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__dict_query_totalexectime</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="SimpleSQLite.validate_access_permission"><a class="viewcode-back" href="../../pages/reference/simplesqlite.html#simplesqlite.SimpleSQLite.validate_access_permission">[docs]</a>    <span class="k">def</span> <span class="nf">validate_access_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">valid_permission_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param valid_permission_list:</span>
+<span class="sd">            List of permissions that access is allowed.</span>
+<span class="sd">        :type valid_permission_list: |list|/|tuple|</span>
+<span class="sd">        :raises ValueError: If the |attr_mode| is invalid.</span>
+<span class="sd">        :raises IOError:</span>
+<span class="sd">            If the |attr_mode| not in the ``valid_permission_list``.</span>
+<span class="sd">        :raises simplesqlite.NullDatabaseConnectionError:</span>
+<span class="sd">            |raises_check_connection|</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_connection</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mode is not set&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_permission_list</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">valid_permission_list</span><span class="p">))</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">__get_column_valuetype</span><span class="p">(</span><span class="n">data_matrix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get value type for each column.</span>
+
+<span class="sd">        :param list/tuple data_matrix:</span>
+<span class="sd">        :return: { column_number : value_type }</span>
+<span class="sd">        :rtype: dictionary</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">typename_table</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">dataproperty</span><span class="o">.</span><span class="n">Typecode</span><span class="o">.</span><span class="n">INT</span><span class="p">:</span>    <span class="s2">&quot;INTEGER&quot;</span><span class="p">,</span>
+            <span class="n">dataproperty</span><span class="o">.</span><span class="n">Typecode</span><span class="o">.</span><span class="n">FLOAT</span><span class="p">:</span>  <span class="s2">&quot;REAL&quot;</span><span class="p">,</span>
+            <span class="n">dataproperty</span><span class="o">.</span><span class="n">Typecode</span><span class="o">.</span><span class="n">STRING</span><span class="p">:</span> <span class="s2">&quot;TEXT&quot;</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="n">prop_extractor</span> <span class="o">=</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">PropertyExtractor</span><span class="p">()</span>
+        <span class="n">prop_extractor</span><span class="o">.</span><span class="n">data_matrix</span> <span class="o">=</span> <span class="n">data_matrix</span>
+        <span class="n">col_prop_list</span> <span class="o">=</span> <span class="n">prop_extractor</span><span class="o">.</span><span class="n">extract_column_property_list</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">([</span>
+            <span class="p">[</span><span class="n">col</span><span class="p">,</span> <span class="n">typename_table</span><span class="p">[</span><span class="n">col_prop</span><span class="o">.</span><span class="n">typecode</span><span class="p">]]</span>
+            <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">col_prop</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">col_prop_list</span><span class="p">)</span>
+        <span class="p">])</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Tsuyoshi Hombashi.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.3.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

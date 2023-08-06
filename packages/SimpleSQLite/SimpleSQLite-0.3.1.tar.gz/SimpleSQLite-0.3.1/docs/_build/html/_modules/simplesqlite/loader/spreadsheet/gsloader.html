@@ -1,0 +1,339 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>simplesqlite.loader.spreadsheet.gsloader &mdash; SimpleSQLite 0.3.0 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="SimpleSQLite 0.3.0 documentation" href="../../../../index.html"/>
+        <link rel="up" title="simplesqlite" href="../../../simplesqlite.html"/> 
+
+  
+  <script src="../../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../../index.html" class="icon icon-home"> SimpleSQLite
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <p class="caption"><span class="caption-text">Table of Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../pages/introduction/index.html">1. SimpleSQLite</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../pages/installation.html">2. Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../pages/installation.html#dependencies">3. Dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../pages/examples/index.html">4. Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../pages/reference/index.html">5. Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../pages/genindex.html">6. Indices and tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../pages/links.html">7. Links</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../../index.html">SimpleSQLite</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../../../simplesqlite.html">simplesqlite</a> &raquo;</li>
+      
+    <li>simplesqlite.loader.spreadsheet.gsloader</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for simplesqlite.loader.spreadsheet.gsloader</h1><div class="highlight"><pre>
+<span></span><span class="c1"># encoding: utf-8</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. codeauthor:: Tsuyoshi Hombashi &lt;gogogo.vm@gmail.com&gt;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">absolute_import</span>
+
+<span class="kn">import</span> <span class="nn">dataproperty</span>
+
+<span class="kn">from</span> <span class="nn">..error</span> <span class="kn">import</span> <span class="n">InvalidDataError</span>
+<span class="kn">from</span> <span class="nn">..data</span> <span class="kn">import</span> <span class="n">TableData</span>
+<span class="kn">from</span> <span class="nn">.core</span> <span class="kn">import</span> <span class="n">SpreadSheetLoader</span>
+
+
+<div class="viewcode-block" id="GoogleSheetsTableLoader"><a class="viewcode-back" href="../../../../pages/reference/loader.html#simplesqlite.loader.GoogleSheetsTableLoader">[docs]</a><span class="k">class</span> <span class="nc">GoogleSheetsTableLoader</span><span class="p">(</span><span class="n">SpreadSheetLoader</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Concrete class of Google Spreadsheet loader.</span>
+
+<span class="sd">    Requirements:</span>
+
+<span class="sd">        - `gspread &lt;https://github.com/burnash/gspread&gt;`_</span>
+<span class="sd">        - `oauth2client &lt;https://pypi.python.org/pypi/oauth2client&gt;`_</span>
+<span class="sd">        - `pyOpenSSL &lt;https://pypi.python.org/pypi/pyOpenSSL&gt;`_</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">_sheet_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_worksheet</span><span class="o">.</span><span class="n">title</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">_row_count</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_worksheet</span><span class="o">.</span><span class="n">row_count</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">_col_count</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_worksheet</span><span class="o">.</span><span class="n">col_count</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">GoogleSheetsTableLoader</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">title</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_row</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__all_values</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="GoogleSheetsTableLoader.make_table_name"><a class="viewcode-back" href="../../../../pages/reference/loader.html#simplesqlite.loader.GoogleSheetsTableLoader.make_table_name">[docs]</a>    <span class="k">def</span> <span class="nf">make_table_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        |make_table_name|</span>
+
+<span class="sd">            ================  ===========================</span>
+<span class="sd">            format specifier  value after the replacement</span>
+<span class="sd">            ================  ===========================</span>
+<span class="sd">            ``%(filename)s``  Filename of the workbook</span>
+<span class="sd">            ``%(title)s``     Name of the spreadsheet</span>
+<span class="sd">            ================  ===========================</span>
+
+<span class="sd">        :return: Table name.</span>
+<span class="sd">        :rtype: str</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_title</span><span class="p">()</span>
+        <span class="n">table_name</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span>
+            <span class="n">GoogleSheetsTableLoader</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">make_table_name</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">table_name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%(title)s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GoogleSheetsTableLoader.load"><a class="viewcode-back" href="../../../../pages/reference/loader.html#simplesqlite.loader.GoogleSheetsTableLoader.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Load table data from a Google Spreadsheet.</span>
+<span class="sd">        |load_desc|</span>
+
+<span class="sd">        :return:</span>
+<span class="sd">            |load_return|</span>
+<span class="sd">            :py:meth:`~.GoogleSheetsTableLoader.make_table_name`.</span>
+<span class="sd">        :rtype: iterator of |TableData|</span>
+<span class="sd">        :raises InvalidDataError: If the header row is not found.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="kn">import</span> <span class="nn">gspread</span>
+        <span class="kn">from</span> <span class="nn">oauth2client.service_account</span> <span class="kn">import</span> <span class="n">ServiceAccountCredentials</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_table_name</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_title</span><span class="p">()</span>
+
+        <span class="n">scope</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;https://spreadsheets.google.com/feeds&#39;</span><span class="p">]</span>
+        <span class="n">credentials</span> <span class="o">=</span> <span class="n">ServiceAccountCredentials</span><span class="o">.</span><span class="n">from_json_keyfile_name</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>
+
+        <span class="n">gc</span> <span class="o">=</span> <span class="n">gspread</span><span class="o">.</span><span class="n">authorize</span><span class="p">(</span><span class="n">credentials</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">worksheet</span> <span class="ow">in</span> <span class="n">gc</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">)</span><span class="o">.</span><span class="n">worksheets</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_worksheet</span> <span class="o">=</span> <span class="n">worksheet</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__all_values</span> <span class="o">=</span> <span class="n">worksheet</span><span class="o">.</span><span class="n">get_all_values</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_empty_sheet</span><span class="p">():</span>
+                <span class="k">continue</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">__strip_empty_col</span><span class="p">()</span>
+
+            <span class="n">value_matrix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__all_values</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_start_row_idx</span><span class="p">():]</span>
+            <span class="n">header_list</span> <span class="o">=</span> <span class="n">value_matrix</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">record_list</span> <span class="o">=</span> <span class="n">value_matrix</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+
+            <span class="k">yield</span> <span class="n">TableData</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_table_name</span><span class="p">(),</span> <span class="n">header_list</span><span class="p">,</span> <span class="n">record_list</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_is_empty_sheet</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__all_values</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span>
+
+    <span class="k">def</span> <span class="nf">_get_start_row_idx</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">row_idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">row_value_list</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__all_values</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">all</span><span class="p">([</span>
+                <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">row_value_list</span>
+            <span class="p">]):</span>
+                <span class="k">break</span>
+
+            <span class="n">row_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_row</span> <span class="o">+</span> <span class="n">row_idx</span>
+
+    <span class="k">def</span> <span class="nf">_validate_title</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;spreadsheet title is empty&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__strip_empty_col</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">col_idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">t_value_matrix</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">__all_values</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">col_value_list</span> <span class="ow">in</span> <span class="n">t_value_matrix</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">([</span>
+                <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">col_value_list</span>
+            <span class="p">]):</span>
+                <span class="k">break</span>
+
+            <span class="n">col_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__all_values</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">t_value_matrix</span><span class="p">[</span><span class="n">col_idx</span><span class="p">:])</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Tsuyoshi Hombashi.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../../',
+            VERSION:'0.3.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

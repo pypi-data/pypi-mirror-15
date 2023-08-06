@@ -1,0 +1,574 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>simplesqlite.sqlquery &mdash; SimpleSQLite 0.3.0 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="SimpleSQLite 0.3.0 documentation" href="../../index.html"/>
+        <link rel="up" title="simplesqlite" href="../simplesqlite.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> SimpleSQLite
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <p class="caption"><span class="caption-text">Table of Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/introduction/index.html">1. SimpleSQLite</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/installation.html">2. Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/installation.html#dependencies">3. Dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/examples/index.html">4. Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/reference/index.html">5. Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/genindex.html">6. Indices and tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pages/links.html">7. Links</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">SimpleSQLite</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../simplesqlite.html">simplesqlite</a> &raquo;</li>
+      
+    <li>simplesqlite.sqlquery</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for simplesqlite.sqlquery</h1><div class="highlight"><pre>
+<span></span><span class="c1"># encoding: utf-8</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. codeauthor:: Tsuyoshi Hombashi &lt;gogogo.vm@gmail.com&gt;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">absolute_import</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">import</span> <span class="nn">dataproperty</span>
+<span class="kn">import</span> <span class="nn">six</span>
+<span class="kn">from</span> <span class="nn">six.moves</span> <span class="kn">import</span> <span class="nb">map</span>
+
+<span class="kn">import</span> <span class="nn">simplesqlite</span> <span class="kn">as</span> <span class="nn">sql</span>
+
+
+<div class="viewcode-block" id="SqlQuery"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery">[docs]</a><span class="k">class</span> <span class="nc">SqlQuery</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Support class for making SQLite query.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">__RE_SANITIZE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="s2">&quot;%/()[]&lt;&gt;.:;&#39;!\# -+=</span><span class="se">\n\r</span><span class="s2">&quot;</span><span class="p">)))</span>
+    <span class="n">__RE_TABLE_STR</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="s2">&quot;%()-+/.&quot;</span><span class="p">)))</span>
+    <span class="n">__RE_TO_ATTR_STR</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">0-9\s#]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="s2">&quot;[%()-+/.]&quot;</span><span class="p">)))</span>
+    <span class="n">__RE_SPACE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">&quot;[\s]+&quot;</span><span class="p">)</span>
+
+    <span class="n">__VALID_WHERE_OPERATION_LIST</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;=&quot;</span><span class="p">,</span> <span class="s2">&quot;==&quot;</span><span class="p">,</span> <span class="s2">&quot;!=&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&gt;=&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;=&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.sanitize"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.sanitize">[docs]</a>    <span class="k">def</span> <span class="nf">sanitize</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">query_item</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Sanitize SQLite query with an empty char.</span>
+
+<span class="sd">        :param str query_item: String to be sanitized.</span>
+<span class="sd">        :return:</span>
+<span class="sd">            String that exclude invalid chars.</span>
+<span class="sd">            Invalid operators are as follows:</span>
+<span class="sd">            ``&quot;%&quot;``, ``&quot;/&quot;``, ``&quot;(&quot;``, ``&quot;)&quot;``, ``&quot;[&quot;``, ``&quot;]&quot;``,</span>
+<span class="sd">            ``&quot;&lt;&quot;``, ``&quot;&gt;&quot;``, ``&quot;.&quot;``, ``&quot;:&quot;``, ``&quot;;&quot;``, ``&quot;&#39;&quot;``,</span>
+<span class="sd">            ``&quot;!&quot;``, ``&quot;\&quot;``, ``&quot;#&quot;``, ``&quot;-&quot;``, ``&quot;+&quot;``, ``&quot;=&quot;``,</span>
+<span class="sd">            ``&quot;\\n&quot;``, ``&quot;\\r&quot;``</span>
+<span class="sd">        :rtype: str</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.sanitize(&quot;k&lt;e:y&quot;)</span>
+<span class="sd">            &#39;key&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="n">cls</span><span class="o">.</span><span class="n">__RE_SANITIZE</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">query_item</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.to_table_str"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.to_table_str">[docs]</a>    <span class="k">def</span> <span class="nf">to_table_str</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str name: Table name.</span>
+<span class="sd">        :return: String that suitable for table name of a SQLite query.</span>
+<span class="sd">        :rtype: str</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_table_str(&quot;length&quot;)</span>
+<span class="sd">            &#39;length&#39;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_table_str(&quot;length(cm)&quot;)</span>
+<span class="sd">            &#39;[length(cm)]&#39;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_table_str(&quot;string length&quot;)</span>
+<span class="sd">            &quot;&#39;string length&#39;&quot;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">cls</span><span class="o">.</span><span class="n">__RE_TABLE_STR</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="k">return</span> <span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">cls</span><span class="o">.</span><span class="n">__RE_SPACE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="k">return</span> <span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">name</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.to_attr_str"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.to_attr_str">[docs]</a>    <span class="k">def</span> <span class="nf">to_attr_str</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">operation_query</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str name: Attribute name.</span>
+<span class="sd">        :param str operation_query:</span>
+<span class="sd">            Used as a SQLite function if the value is not empty.</span>
+<span class="sd">        :return: String that suitable for attribute name of a SQLite query.</span>
+<span class="sd">        :rtype: str</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_attr_str(&quot;key&quot;)</span>
+<span class="sd">            &#39;key&#39;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_attr_str(&quot;a+b&quot;)</span>
+<span class="sd">            &#39;[a+b]&#39;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_attr_str(&quot;key&quot;, operation_query=&quot;SUM&quot;)</span>
+<span class="sd">            &#39;SUM(key)&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">cls</span><span class="o">.</span><span class="n">__RE_TO_ATTR_STR</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="n">sql_name</span> <span class="o">=</span> <span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;join&quot;</span><span class="p">:</span>
+            <span class="n">sql_name</span> <span class="o">=</span> <span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sql_name</span> <span class="o">=</span> <span class="n">name</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">operation_query</span><span class="p">):</span>
+            <span class="n">sql_name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">(</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">operation_query</span><span class="p">,</span> <span class="n">sql_name</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">sql_name</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.to_attr_str_list"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.to_attr_str_list">[docs]</a>    <span class="k">def</span> <span class="nf">to_attr_str_list</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name_list</span><span class="p">,</span> <span class="n">operation_query</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param list/tuple name_list: List of attribute names.</span>
+<span class="sd">        :param str operation_query:</span>
+<span class="sd">            Used as a SQLite function if the value is not empty.</span>
+<span class="sd">        :return:</span>
+<span class="sd">            List of strings that suitable for</span>
+<span class="sd">            attribute names of a SQLite query.</span>
+<span class="sd">        :rtype: list/itertools.imap</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; list(SqlQuery.to_attr_str_list([&quot;key&quot;, &quot;a+b&quot;]))</span>
+<span class="sd">            [&#39;key&#39;, &#39;[a+b]&#39;]</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_attr_str_list([&quot;key&quot;, &quot;a+b&quot;], operation_query=&quot;AVG&quot;)</span>
+<span class="sd">            [&#39;AVG(key)&#39;, &#39;AVG([a+b])&#39;]</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.to_attr_str`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="n">operation_query</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">to_attr_str</span><span class="p">,</span> <span class="n">name_list</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">(</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">operation_query</span><span class="p">,</span> <span class="n">cls</span><span class="o">.</span><span class="n">to_attr_str</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">name_list</span>
+        <span class="p">]</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.to_value_str"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.to_value_str">[docs]</a>    <span class="k">def</span> <span class="nf">to_value_str</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param str value: Value associated with a key.</span>
+<span class="sd">        :return:</span>
+<span class="sd">            String that suitable for a value of a key.</span>
+<span class="sd">            Return ``&quot;NULL&quot;`` if the value is |None|.</span>
+<span class="sd">        :rtype: str</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_value_str(1.2)</span>
+<span class="sd">            &#39;1.2&#39;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_value_str(&quot;value&quot;)</span>
+<span class="sd">            &quot;&#39;value&#39;&quot;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.to_value_str(None)</span>
+<span class="sd">            &#39;NULL&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;NULL&quot;</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_integer</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">or</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_float</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">value</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.to_value_str_list"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.to_value_str_list">[docs]</a>    <span class="k">def</span> <span class="nf">to_value_str_list</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">value_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param list value_list: List of values associated with a key.</span>
+<span class="sd">        :return:</span>
+<span class="sd">            List of values that executed ``to_value_str`` method for each item.</span>
+<span class="sd">        :rtype: itertools.imap</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; list(SqlQuery.to_value_str_list([1, &quot;a&quot;, None]))</span>
+<span class="sd">            [&#39;1&#39;, &quot;&#39;a&#39;&quot;, &#39;NULL&#39;]</span>
+
+<span class="sd">        .. seealso::</span>
+
+<span class="sd">            :py:meth:`.to_value_str`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">to_value_str</span><span class="p">,</span> <span class="n">value_list</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.make_select"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.make_select">[docs]</a>    <span class="k">def</span> <span class="nf">make_select</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">select</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">where</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Make SELECT query.</span>
+
+<span class="sd">        :param str select: Attribute for SELECT query.</span>
+<span class="sd">        :param str table: Table name of executing the query.</span>
+<span class="sd">        :param str where:</span>
+<span class="sd">            Add a WHERE clause to execute query,</span>
+<span class="sd">            if the value is not |None|.</span>
+<span class="sd">        :param extra extra:</span>
+<span class="sd">            Add additional clause to execute query,</span>
+<span class="sd">            if the value is not |None|.</span>
+<span class="sd">        :return: Query of SQLite.</span>
+<span class="sd">        :rtype: str</span>
+<span class="sd">        :raises ValueError: ``select`` is empty string.</span>
+<span class="sd">        :raises ValueError: |raises_validate_table_name|</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.make_select(select=&quot;value&quot;, table=&quot;example&quot;)</span>
+<span class="sd">            &#39;SELECT value FROM example&#39;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.make_select(select=&quot;value&quot;, table=&quot;example&quot;, where=SqlQuery.make_where(&quot;key&quot;, 1))</span>
+<span class="sd">            &#39;SELECT value FROM example WHERE key = 1&#39;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.make_select(select=&quot;value&quot;, table=&quot;example&quot;, where=SqlQuery.make_where(&quot;key&quot;, 1), extra=&quot;ORDER BY value&quot;)</span>
+<span class="sd">            &#39;SELECT value FROM example WHERE key = 1 ORDER BY value&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">sql</span><span class="o">.</span><span class="n">validate_table_name</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="n">select</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;SELECT query is null&quot;</span><span class="p">)</span>
+
+        <span class="n">query_list</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="s2">&quot;SELECT &quot;</span> <span class="o">+</span> <span class="n">select</span><span class="p">,</span>
+            <span class="s2">&quot;FROM &quot;</span> <span class="o">+</span> <span class="n">cls</span><span class="o">.</span><span class="n">to_table_str</span><span class="p">(</span><span class="n">table</span><span class="p">),</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">where</span><span class="p">):</span>
+            <span class="n">query_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;WHERE &quot;</span> <span class="o">+</span> <span class="n">where</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">extra</span><span class="p">):</span>
+            <span class="n">query_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">extra</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">query_list</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.make_insert"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.make_insert">[docs]</a>    <span class="k">def</span> <span class="nf">make_insert</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">insert_tuple</span><span class="p">,</span> <span class="n">is_insert_many</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Make INSERT query.</span>
+
+<span class="sd">        :param str table: Table name of executing the query.</span>
+<span class="sd">        :param list/tuple insert_tuple: Insertion data.</span>
+<span class="sd">        :param bool is_insert_many:</span>
+<span class="sd">            Make query that insert multiple data at once,</span>
+<span class="sd">            if the value is |True|.</span>
+<span class="sd">        :return: Query of SQLite.</span>
+<span class="sd">        :rtype: str</span>
+<span class="sd">        :raises ValueError: If ``insert_tuple`` is empty |list|/|tuple|.</span>
+<span class="sd">        :raises ValueError: |raises_validate_table_name|</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">sql</span><span class="o">.</span><span class="n">validate_table_name</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+
+        <span class="n">table</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">to_table_str</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_list_or_tuple</span><span class="p">(</span><span class="n">insert_tuple</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;empty insert list/tuple&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">is_insert_many</span><span class="p">:</span>
+            <span class="n">value_list</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;?&#39;</span> <span class="k">for</span> <span class="n">_i</span> <span class="ow">in</span> <span class="n">insert_tuple</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">value_list</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">!=</span> <span class="s2">&quot;NULL&quot;</span>
+                <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">insert_tuple</span>
+            <span class="p">]</span>
+
+        <span class="k">return</span> <span class="s2">&quot;INSERT INTO </span><span class="si">%s</span><span class="s2"> VALUES (</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">table</span><span class="p">,</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">value_list</span><span class="p">))</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.make_update"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.make_update">[docs]</a>    <span class="k">def</span> <span class="nf">make_update</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">set_query</span><span class="p">,</span> <span class="n">where</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Make UPDATE query.</span>
+
+<span class="sd">        :param str table: Table name of executing the query.</span>
+<span class="sd">        :param str set_query: SET part of the UPDATE query.</span>
+<span class="sd">        :param str where:</span>
+<span class="sd">            Add a WHERE clause to execute query,</span>
+<span class="sd">            if the value is not |None|.</span>
+<span class="sd">        :return: Query of SQLite.</span>
+<span class="sd">        :rtype: str</span>
+<span class="sd">        :raises ValueError: If ``set_query`` is empty string.</span>
+<span class="sd">        :raises ValueError: |raises_validate_table_name|</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">sql</span><span class="o">.</span><span class="n">validate_table_name</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="n">set_query</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;SET query is null&quot;</span><span class="p">)</span>
+
+        <span class="n">query_list</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="s2">&quot;UPDATE &quot;</span> <span class="o">+</span> <span class="n">cls</span><span class="o">.</span><span class="n">to_table_str</span><span class="p">(</span><span class="n">table</span><span class="p">),</span>
+            <span class="s2">&quot;SET &quot;</span> <span class="o">+</span> <span class="n">set_query</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_not_empty_string</span><span class="p">(</span><span class="n">where</span><span class="p">):</span>
+            <span class="n">query_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;WHERE &quot;</span> <span class="o">+</span> <span class="n">where</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">query_list</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.make_where"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.make_where">[docs]</a>    <span class="k">def</span> <span class="nf">make_where</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">operation</span><span class="o">=</span><span class="s2">&quot;=&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Make part of WHERE query.</span>
+
+<span class="sd">        :param str key: Attribute name of the key.</span>
+<span class="sd">        :param str value: Value of the right hand side associated with the key.</span>
+<span class="sd">        :param str operation: Operator of WHERE query.</span>
+<span class="sd">        :return: Part of WHERE query of SQLite.</span>
+<span class="sd">        :rtype: str</span>
+<span class="sd">        :raises ValueError:</span>
+<span class="sd">            If ``operation`` is invalid operator.</span>
+<span class="sd">            Valid operators are as follows:</span>
+<span class="sd">            ``&quot;=&quot;``, ``&quot;==&quot;``, ``&quot;!=&quot;``, ``&quot;&lt;&gt;&quot;``,</span>
+<span class="sd">            ``&quot;&gt;&quot;``, ``&quot;&gt;=&quot;``, ``&quot;&lt;&quot;``, ``&quot;&lt;=&quot;``</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.make_where(&quot;key&quot;, &quot;hoge&quot;)</span>
+<span class="sd">            &quot;key = &#39;hoge&#39;&quot;</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.make_where(&quot;value&quot;, 1, operation=&quot;&gt;&quot;)</span>
+<span class="sd">            &#39;value &gt; 1&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">operation</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">__VALID_WHERE_OPERATION_LIST</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;operation not supported: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">operation</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">cls</span><span class="o">.</span><span class="n">to_attr_str</span><span class="p">(</span><span class="n">key</span><span class="p">),</span> <span class="n">operation</span><span class="p">,</span> <span class="n">cls</span><span class="o">.</span><span class="n">to_value_str</span><span class="p">(</span><span class="n">value</span><span class="p">))</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.make_where_in"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.make_where_in">[docs]</a>    <span class="k">def</span> <span class="nf">make_where_in</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Make part of WHERE IN query.</span>
+
+<span class="sd">        :param str key: Attribute name of the key.</span>
+<span class="sd">        :param str value_list:</span>
+<span class="sd">            List of values that the right hand side associated with the key.</span>
+<span class="sd">        :return: Part of WHERE query of SQLite.</span>
+<span class="sd">        :rtype: str</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.make_where_in(&quot;key&quot;, [&quot;hoge&quot;, &quot;foo&quot;, &quot;bar&quot;])</span>
+<span class="sd">            &quot;key IN (&#39;hoge&#39;, &#39;foo&#39;, &#39;bar&#39;)&quot;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> IN (</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">cls</span><span class="o">.</span><span class="n">to_attr_str</span><span class="p">(</span><span class="n">key</span><span class="p">),</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">to_value_str_list</span><span class="p">(</span><span class="n">value_list</span><span class="p">)))</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SqlQuery.make_where_not_in"><a class="viewcode-back" href="../../pages/reference/sqlquery.html#simplesqlite.sqlquery.SqlQuery.make_where_not_in">[docs]</a>    <span class="k">def</span> <span class="nf">make_where_not_in</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Make part of WHERE NOT IN query.</span>
+
+<span class="sd">        :param str key: Attribute name of the key.</span>
+<span class="sd">        :param str value_list:</span>
+<span class="sd">            List of values that the right hand side associated with the key.</span>
+<span class="sd">        :return: Part of WHERE query of SQLite.</span>
+<span class="sd">        :rtype: str</span>
+
+<span class="sd">        :Examples:</span>
+
+<span class="sd">            &gt;&gt;&gt; from simplesqlite.sqlquery import SqlQuery</span>
+<span class="sd">            &gt;&gt;&gt; SqlQuery.make_where_not_in(&quot;key&quot;, [&quot;hoge&quot;, &quot;foo&quot;, &quot;bar&quot;])</span>
+<span class="sd">            &quot;key NOT IN (&#39;hoge&#39;, &#39;foo&#39;, &#39;bar&#39;)&quot;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> NOT IN (</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">cls</span><span class="o">.</span><span class="n">to_attr_str</span><span class="p">(</span><span class="n">key</span><span class="p">),</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">to_value_str_list</span><span class="p">(</span><span class="n">value_list</span><span class="p">)))</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Tsuyoshi Hombashi.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.3.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
