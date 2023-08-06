@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xml:lang="en"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+      metal:use-macro="api.macro('kotti:templates/view/master.pt')"
+      tal:define="questions context.children_with_permission(request)"
+      i18n:domain="kotti_quiz">
+
+  <div metal:fill-slot="content" class="content">
+
+    <h1>
+      ${context.title}
+      <a tal:condition="api.has_permission('add')" class="btn btn-primary btn-sm pull-right" href="${request.resource_url(api.root, 'add_survey')}">
+        New Survey
+      </a>
+    </h1>
+    <p class="description">
+      ${context.description}
+    </p>
+
+    <form id="survey-form" name="survey-form" action="${request.resource_url(context)}" method="POST" tal:condition="questions">
+      <ol>
+        <li tal:repeat="question questions" style="margin-bottom: 10px">
+          ${question.title}
+          <div tal:condition="not: question.children">
+            <input class="form-control" type="text" name="${question.name}"/>
+          </div>
+          <div tal:repeat="answer question.children">
+            <input tal:attributes="type question.question_type" name="${question.name}" value="${answer.title}"/>
+            ${answer.title}
+          </div>
+        </li>
+      </ol>
+    </form>
+    <div >
+      <h4 tal:condition="not questions" class="no-questions">
+        No question was added. Please add your set of survey questions now.
+      </h4>
+      <input form="survey-form" tal:condition="questions" class="btn btn-success" type="submit" value="Submit" i18n:attributes="value"/>
+      <a href="${request.resource_url(context, 'add_question')}" class="btn btn-primary" tal:condition="api.has_permission('add')">
+        Add Question
+      </a>
+      <a href="${request.resource_url(context, 'user-results')}" class="btn btn-info pull-right">
+        View Your Answers
+      </a>
+      <a href="${request.resource_url(context, 'respondents')}" class="btn btn-default pull-right" tal:condition="api.has_permission('add')">
+        List Respondents
+      </a>
+    </div>
+
+  </div>
+</html>
