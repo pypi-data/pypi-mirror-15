@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li>{{ macros.make_link('playbook', 'Playbook', playbook=playbook.id) }}</li>
+  {% if status %}
+  <li>{{ macros.make_link('host', host.name, host=host.name) }}</li>
+  <li class="active"><strong>Status</strong>: {{ status }}</li>
+  {% else %}
+  <li class="active"><strong>Host</strong>: {{ host.name }}</li>
+  {% endif %}
+</ol>
+
+<h2>Playbook {% if playbook.path %}"{{
+  playbook.path|pathtruncate }}"
+  {% else %}{{playbook.id}}{% endif %}</h2>
+<table class="summary table table-striped table-bordered table-hover table-condensed">
+  <thead>
+    <tr>
+      <th>Start</th>
+      <th>End</th>
+      <th>Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>{{ playbook.time_start |datefmt }}</td>
+      <td>{{ playbook.time_end |datefmt }}</td>
+      <td>{{ playbook.duration |timefmt}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Tasks results in playbook {% if playbook.path %}"{{
+  playbook.path|pathtruncate }}"
+  {% else %}{{playbook.id}}{% endif %} for {{ host.name }}</h2>
+
+  <h3>Results</h3>
+  <table class="results table table-striped table-bordered table-hover table-condensed">
+    <thead>
+      <tr>
+        <th>Offset from playbook</th>
+        <th>Duration</th>
+        <th>Host</th>
+        <th>Task</th>
+        <th>Action</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for result in task_results %}
+      {% set status = result.derived_status %}
+      <tr>
+        <td>{{ result.task.offset_from_playbook|timefmt }}</td>
+        <td>{{ result.duration |timefmt }}</td>
+        <td>{{ macros.make_link('host', result.host.name, host=result.host.name) }}</td>
+        <td>{{ result.task.name }}</td>
+        <td>{{ result.task.action }}</td>
+        <td><span class="{{ status }} label status-label">{{ status |upper }}</span></td>
+        <td>{{ macros.make_link('task_result', 'details', task_result=result.id) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
