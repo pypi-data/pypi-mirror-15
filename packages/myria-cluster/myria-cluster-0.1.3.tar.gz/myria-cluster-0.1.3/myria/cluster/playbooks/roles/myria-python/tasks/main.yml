@@ -1,0 +1,34 @@
+---
+##
+## tasks for installing  myria python
+##
+
+- name: Installing packages
+  apt: name="{{item}}" update_cache=yes
+  with_items:
+  - git
+  - python-setuptools
+  - python-pip
+  - build-essential
+  - libffi-dev
+  - libssl-dev
+  - python-lxml
+
+- name: Create worker directory
+  file: path={{myria_python_path}} state=directory owner={{myria_user}} group={{myria_group}} mode=0775
+
+- name: Clone Myria python repository
+  git: repo="{{myria_python_repository_url}}" dest="{{myria_python_path}}" version="{{myria_python_branch}}"
+  become: yes
+  become_user: "{{myria_user}}"
+
+- name: Install myria-python dependencies
+  pip: name={{ item }}
+  with_items:
+  - numpy
+  - pandas
+
+- name: Setup myria-python
+  shell: "python setup.py install"
+  args:
+    chdir: "{{myria_python_path}}"
