@@ -1,0 +1,267 @@
+#!/usr/bin/python
+#coding: utf-8
+
+### import module
+import sys
+import os
+import argparse
+import ConfigParser
+import shutil
+from jinja2 import Environment, FileSystemLoader
+import subprocess
+import re
+import ansibleart
+
+### constant
+VERSION = "0.3.1"
+HOME_DIR = os.environ['HOME']
+CONFIG_PATH = HOME_DIR + "/.ansible-art.cfg"
+WORK_DIR = HOME_DIR + "/.ansible-art"
+CURRENT_DIR = os.getcwd()
+PLAYBOOK_FILE = "ansible-art_playbook.yml"
+
+# help message
+HELP_ROOT = 'A simple tool to apply role of ansible'
+HELP_VERSION = 'show version and exit'
+HELP_ROLE = 'operate with roles used by ansible-art'
+HELP_ROLE_LIST = 'show roles in the dir specified in config file'
+HELP_ROLE_PARAMS = 'show parameters defined in defaults/main.yml of specified role'
+HELP_ROLE_PARAMS_ROLE = 'the role whose parameters are wanted to show'
+HELP_CONFIG = 'edit config file'
+HELP_APPLY = 'apply a role to machines'
+HELP_APPLY_ROLE = 'the role wanted to apply'
+HELP_APPLY_INVENTORY = 'an inventory file path'
+HELP_APPLY_PARAMS = 'specify the directory including host_vars files. if this parameter is not specified, ansible-art search "host_vars" dir as the directory including host_vars files. If "host_vars" dir is not found, no host_vars files are used'
+HELP_APPLY_GROUP_PARAMS = 'specify the directory including group_vars files. if this parameter is not specified, ansible-art search "group_vars" dir as the directory including group_vars files. If "group_vars" dir is not found, no group_vars files are used'
+HELP_APPLY_ARGS = 'specify some arguments. ansible-art delivers the arguments specified here to "ansible-playbook" command. since ansible-art apply role to \"all\" group by default, if necessary, specify target group, ip or hostname by using \"-l\" option of the command \"ansible-playbook\"'
+
+### utility function
+def check_config():
+    return os.path.exists(CONFIG_PATH)
+
+def create_config():
+    config_path = os.path.dirname(sys.modules["ansibleart"].__file__) + "/data/ansible.cfg"
+    shutil.copy(config_path, CONFIG_PATH)
+
+def check_defaults_section(config):
+    return config.has_section("defaults")
+
+def check_abs_path(str):
+    return re.match('^/.*',str)
+
+def check_option_exist(config):
+    return config.has_option("defaults", "roles_path")
+
+def check_roles_option(config):
+    return check_abs_path(config.get("defaults", "roles_path"))
+
+def get_roles_dir():
+    config = ConfigParser.SafeConfigParser()
+    try:
+        config.read(CONFIG_PATH)
+    except ConfigParser.MissingSectionHeaderError as e:
+        print "ERROR: " + e.message
+        sys.exit(1)
+    except ConfigParser.ParsingError as e:
+        print "ERROR: " + e.message
+        sys.exit(1)
+    if check_defaults_section(config):
+        if check_option_exist(config):
+            if check_roles_option(config):
+                return config.get("defaults", "roles_path")
+            else:
+                print "ERROR: roles_path option dosen't have absolute path!"
+                sys.exit(1)
+        else:
+            print "ERROR: \"roles_path\" option is not found in config file!"
+            sys.exit(1)
+    else:
+        print "ERROR: config file dosen't have [defaults] section!"
+        sys.exit(1)
+    os.remove(CONFIG_PATH + ".bk")
+
+def check_role(role):
+    roles_dir = get_roles_dir()
+    return os.path.exists(roles_dir + "/" + role + "/tasks/main.yml")
+
+def get_roles():
+    roles_dir = get_roles_dir()
+    if os.path.isdir(roles_dir):
+      pre_roles = os.listdir(roles_dir)
+      roles = []
+      for pre_role in pre_roles:
+          if check_role(pre_role):
+              roles.append(pre_role)
+      return roles
+    else:
+      print "ERROR: the directory of roles \"" + roles_dir + "\" is not found"
+      sys.exit(1)
+
+def check_role_exist(role):
+    roles = get_roles()
+    return role in roles
+
+def check_role_params(role,roles_dir):
+    return os.path.exists(roles_dir + "/" + role + "/defaults/main.yml")
+
+def create_work_dir():
+    if os.path.exists(WORK_DIR):
+        print "ERROR: working directory \"" +  WORK_DIR + "\" already exists"
+        sys.exit(1)
+    os.mkdir(WORK_DIR)
+
+def copy_params(params):
+    if params is not None:
+        if os.path.isdir(params):
+            shutil.copytree(params, WORK_DIR + "/host_vars" )
+        else:
+            print "ERROR: params dir \"" + params + "\" is not found"
+            sys.exit(1)
+    else:
+         if os.path.isdir(CURRENT_DIR + "/host_vars"):
+             shutil.copytree(CURRENT_DIR + "/host_vars", WORK_DIR + "/host_vars")
+
+def copy_group_params(group_params):
+    if group_params is not None:
+        if os.path.isdir(group_params):
+            shutil.copytree(group_params, WORK_DIR + "/group_vars" )
+        else:
+            print "ERROR: group params dir \"" + group_params + "\" is not found" 
+            sys.exit(1)
+    else:
+        if os.path.isdir(CURRENT_DIR + "/group_vars"):
+            shutil.copytree(CURRENT_DIR + "/group_vars", WORK_DIR + "/group_vars")
+
+def create_playbook(role):
+     package_path = os.path.dirname(sys.modules["ansibleart"].__file__)
+     env = Environment(loader=FileSystemLoader(package_path + "/data", encoding='utf8'))
+     template = env.get_template("ansible-art_playbook.yml.j2")
+     ansible_playbook = template.render({'role': role})
+     ansible_playbook_file = open(WORK_DIR + "/" + PLAYBOOK_FILE,"w")
+     ansible_playbook_file.write(ansible_playbook.encode("utf-8"))
+     ansible_playbook_file.close()
+
+### core function
+def print_roles():
+    roles = get_roles()
+    for role in roles:
+        print role
+
+def print_role_params(role):
+    if check_role_exist(role):
+        roles_dir = get_roles_dir()
+        if check_role_params(role, roles_dir):
+            defaults = open(roles_dir + "/" + role + "/defaults/main.yml",'r')
+            print defaults.read()
+            defaults.close()
+    else:
+        print "ERROR: role \"" + role + "\" is not found"  
+        sys.exit(1)
+
+def edit_config():
+    shutil.copy(CONFIG_PATH, CONFIG_PATH + ".bk")
+    cmd = "vi " + CONFIG_PATH
+    subprocess.Popen([ cmd ], shell=True).wait()
+    config = ConfigParser.SafeConfigParser()
+    try:
+        config.read(CONFIG_PATH)
+    except ConfigParser.MissingSectionHeaderError as e:
+        print "ERROR: " + e.message
+        print "recover config file..."
+        shutil.move(CONFIG_PATH + ".bk", CONFIG_PATH)
+        sys.exit(1)
+    except ConfigParser.ParsingError as e:
+        print "ERROR: " + e.message
+        print "recover config file..."
+        shutil.move(CONFIG_PATH + ".bk", CONFIG_PATH)
+        sys.exit(1)
+    if check_defaults_section(config):
+        if check_option_exist(config):
+            if not check_roles_option(config):
+                print "ERROR: roles_path option dosen't have absolute path!" 
+                print "recover config file..."
+                shutil.move(CONFIG_PATH + ".bk", CONFIG_PATH)
+                sys.exit(1)
+        else:
+            print "ERROR: \"roles_path\" option is not found in config file!" 
+            print "recover config file..."
+            shutil.move(CONFIG_PATH + ".bk", CONFIG_PATH)
+            sys.exit(1)
+    else:
+        print "ERROR: config file dosen't have [defaults] section!"
+        print "recover config file..."
+        shutil.move(CONFIG_PATH + ".bk", CONFIG_PATH)
+        sys.exit(1)
+
+def apply_role(role, inventory, params, group_params, args):
+    create_work_dir()
+    try:
+        shutil.copy(CONFIG_PATH, WORK_DIR + "/ansible.cfg")
+        if check_role_exist(role):
+            if os.path.isfile(inventory):
+                shutil.copy(inventory, WORK_DIR)
+                copy_params(params)
+                copy_group_params(group_params)
+                create_playbook(role)
+                inventory = os.path.basename(inventory)
+                if args is None:
+                    cmd = "ansible-playbook" + " -i " + inventory + " " + PLAYBOOK_FILE
+                else:
+                    cmd = "ansible-playbook" + " -i " + inventory + " " + PLAYBOOK_FILE + " " + args
+                subprocess.Popen([ cmd ],cwd=(WORK_DIR), shell=True).wait()
+            else:
+                print "ERROR: inventory \"" + inventory + "\" is not found"
+                sys.exit(1)
+        else:
+            print "ERROR: role \"" + role + "\" is not found" 
+            sys.exit(1)
+    finally:
+        shutil.rmtree(WORK_DIR)
+
+### definition of parser
+parser = argparse.ArgumentParser(description=HELP_ROOT)
+parser.add_argument('-V','--version', action='version', version='%(prog)s.' + VERSION, help=HELP_VERSION)
+
+subparsers = parser.add_subparsers(title='subcommands',description='valid subcommands',dest='root')
+parser_role = subparsers.add_parser('role',description=HELP_ROLE, help=HELP_ROLE)
+parser_config = subparsers.add_parser('config',description=HELP_CONFIG, help=HELP_CONFIG)
+parser_apply = subparsers.add_parser('apply',description=HELP_APPLY, help=HELP_APPLY)
+parser_apply.add_argument('ROLE',help=HELP_APPLY_ROLE)
+parser_apply.add_argument('INVENTORY',help=HELP_APPLY_INVENTORY)
+parser_apply.add_argument('-p', '--params', metavar='DIR',help=HELP_APPLY_PARAMS)
+parser_apply.add_argument('-g', '--group-params', metavar='DIR',help=HELP_APPLY_GROUP_PARAMS)
+parser_apply.add_argument('-a', '--args',metavar='ARGS',help=HELP_APPLY_ARGS)
+
+subparsers_role = parser_role.add_subparsers(title='subcommands',description='valid subcommands', dest='role')
+parser_role_list = subparsers_role.add_parser('list',description=HELP_ROLE_LIST, help=HELP_ROLE_LIST)
+parser_role_params = subparsers_role.add_parser('params',description=HELP_ROLE_PARAMS, help=HELP_ROLE_PARAMS)
+parser_role_params.add_argument('ROLE', help=HELP_ROLE_PARAMS_ROLE)
+
+### main
+# check and create config file 
+if not check_config():
+    create_config()
+
+# add space to -a option argument,
+# this procedure is to prevent that arguments parser interpretate
+# -a option argument is for ansible-art command, not ansible-playbook one.
+for i in range(0,len(sys.argv)-1):
+  if sys.argv[i] == "-a":
+    if i != len(sys.argv) - 1:
+      sys.argv[i+1] = sys.argv[i+1] + " "
+
+args = parser.parse_args()
+
+if args.root == "role":
+    if args.role == "list":
+        print_roles()
+    if args.role == "params":
+        print_role_params(args.ROLE)
+elif args.root == "config":
+    edit_config()
+elif args.root == "apply":
+    apply_role(args.ROLE, args.INVENTORY, args.params, args.group_params, args.args)
+else:
+    print "ERROR: inner error"
+    sys.exit(1)
+
