@@ -1,0 +1,70 @@
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Description: =======
+        pychurn
+        =======
+        
+        .. image:: https://img.shields.io/travis/jmcarp/pychurn/master.svg
+            :target: https://travis-ci.org/jmcarp/pychurn
+            :alt: Travis-CI
+        
+        Installation
+        ------------
+        
+        ::
+        
+            pip install -U pychurn
+        
+        pychurn will use the `pygit2` bindings for `libgit2` if available, which significantly improves performance. To install, see the `libgit2 docs <http://www.pygit2.org/install.html>`_.
+        
+        Usage
+        -----
+        
+        Read the docs: ::
+        
+            pychurn --help
+        
+        Example usage: ::
+        
+            pychurn report
+            pychurn report --path /path/to/repo --since 2016-01-01 --exclude '**test**'
+        
+        Example output: ::
+        
+            $ pychurn --debug report --path . --sort churn --count 5
+        
+            code                                    churn    complexity
+            ------------------------------------  -------  ------------
+            pychurn/version.py:get_churn                4            11
+            pychurn/cli.py:churn                        3             2
+            pychurn/complexity.py:get_complexity        3             8
+            pychurn/cli.py:cli                          2             2
+            pychurn/cli.py:report                       1             4
+        
+Keywords: pychurn
+Platform: UNKNOWN
+Classifier: Development Status :: 2 - Pre-Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.3
+Classifier: Programming Language :: Python :: 3.4
