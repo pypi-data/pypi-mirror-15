@@ -1,0 +1,33 @@
+---
+  - name: Allow ssh in firewall
+    action: shell ufw allow ssh
+
+  - name: Allow http in firewall
+    action: shell ufw allow http
+
+  - name: Allow https in firewall
+    action: shell ufw allow https
+
+  - name: Enable UFW
+    action: shell echo 'y' | ufw enable
+
+  - name: Set timezone
+    template: src=timezone.conf dest=/etc/timezone
+    register: tzdata
+
+  - name: Update timezone
+    command: dpkg-reconfigure -f noninteractive tzdata
+    when: tzdata.changed
+
+  - name: Set hosts
+    template: src=hosts.conf dest=/etc/hosts
+
+  - name: Ensure we have a hostname configured
+    template: src=hostname.conf dest=/etc/hostname
+
+  - name: Ensure the configured hostname is acceptable
+    shell: hostname {{ app_name }}
+
+  - name: Ensure the common packages are all installed
+    apt: pkg={{item}} state=installed update-cache=yes
+    with_items: "{{common_packages}}"
