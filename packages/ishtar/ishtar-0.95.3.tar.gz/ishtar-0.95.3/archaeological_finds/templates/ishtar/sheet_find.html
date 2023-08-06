@@ -1,0 +1,162 @@
+{% extends "ishtar/sheet.html" %}
+{% load i18n window_field from_dict link_to_window %}
+
+{% block head_sheet %}
+{{block.super}}
+<h1>{% trans "Find"%}</h1>
+{% endblock %}
+
+{% block content %}
+
+{% if previous or next %}
+<div class='tool'>
+{% if previous %}
+<a href="#" onclick='load_window("{% url show-historized-find item.pk previous|date:"c"%}");$("#{{window_id}}").hide();return false;'>{%trans "Previous version"%} ({{previous}})</a>
+{% endif %}
+{% if previous and next %} - {% endif %}
+{%if next%}
+<a href="#" onclick='if(confirm("{%trans "Are you sure to rollback to this version?"%}")){load_url("{% url revert-find item.pk item.history_date|date:"c"%}");closeAllWindows();load_window("{% url show-find item.pk None %}");}'>Rollback</a> -
+<a href="#" onclick='load_window("{% url show-historized-find item.pk next|date:"c" %}");$("#{{window_id}}").hide();return false;'>{%trans "Next version"%} ({{next}})</a>
+{% endif %}
+</div>
+{% endif %}
+
+<div class='tool'>{%trans "Export as:"%} <a href='{% url show-find item.pk "odt" %}'>{%trans "OpenOffice.org file"%}</a>, <a href='{% url show-find item.pk "pdf" %}'>{%trans "PDF file"%}</a></div>
+<div class='tool modify'><a href='{% url find_modify item.pk %}'>{% trans "Modify" %}</a></div>
+
+{% if item.image %}
+<a href='{{item.image.url}}' rel="prettyPhoto" title="{{item.label}}" class='photo'><img src='{{item.thumbnail.url}}'/></a>
+{% endif%}
+
+<ul class='form-flex'>
+{% field_li "Free-ID" item.label %}
+{% field_li "Previous ID" item.previous_id %}
+{% field_li "Description" item.description %}
+{% field_li "Created by" item.history_creator.ishtaruser.full_label %}
+{% field_li "Administrative index" item.administrative_index %}
+{% field_li_multiple "Material types" item.material_types %}
+{% field_li "Dating" item.dating %}
+{% field_li "Length (cm)" item.length %}
+{% field_li "Width (cm)" item.width %}
+{% field_li "Height (cm)" item.height %}
+{% field_li "Diameter (cm)" item.diameter %}
+{% field_li "Volume (l)" item.volume %}
+
+{% if item.weight %}{% with item.weight|add:' '|add:item.weight_unit as weight %}
+{% field_li "Weight" weight %}
+{% endwith %}{% endif %}
+{% field_li "Weight" item.weight %}
+
+{% field_li "Find number" item.find_number %}
+{% field_li "Conservatory state" item.conservatory_state %}
+{% field_li_multiple "Type of preservation to consider" item.preservation_to_considers %}
+{% field_li_multiple "Object types" item.object_types %}
+{% field_li_multiple "Integrity" item.integrities %}
+{% if item.CHECK_DICT %}
+{% field_li "Checked" item.checked|from_dict:item.CHECK_DICT %}
+{% endif%}
+{% if item.history_object and item.history_object.CHECK_DICT %}
+{% field_li "Checked" item.checked|from_dict:item.history_object.CHECK_DICT %}
+{% endif%}
+{% field_li "Container" item.container %}
+</ul>
+
+{% if item.upstream_treatment %}
+<table class='simple' id='{{window_id}}-upstream'>
+  <caption>{% trans "Upstream treatment" %}</caption>
+  <tr>
+    <th>{% trans "Type" %}</th>
+    <th>{% trans "Related find" %}</th>
+    <th>{% trans "Person" %}</th>
+    <th>{% trans "Container" %}</th>
+    <th>{% trans "Start date" %}</th>
+    <th>{% trans "End date" %}</th>
+  </tr>
+  {% for items, treatment in item.upstream_treatments %}
+  <tr>
+    <td class='string'>{{ treatment.treatment_type }}</td>
+    <td class='item-list'>{% for item in items %}<span>{{item}} {{ item|link_to_window}}</span>{% endfor %}</td>
+    <td class='string'>{{ treatment.person|default_if_none:"-" }}</td>
+    <td class='string'>{{ treatment.container|default_if_none:"-" }}</td>
+    <td class='string'>{{ treatment.start_date|default_if_none:"-" }}</td>
+    <td class='string'>{{ treatment.end_date|default_if_none:"-" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if item.downstream_treatment %}
+<table class='simple' id='{{window_id}}-downstream'>
+  <caption>{% trans "Downstream treatment" %}</caption>
+  <tr>
+    <th>{% trans "Type" %}</th>
+    <th>{% trans "Related find" %}</th>
+    <th>{% trans "Person" %}</th>
+    <th>{% trans "Start date" %}</th>
+    <th>{% trans "End date" %}</th>
+  </tr>
+  {% for items, treatment in item.downstream_treatments %}
+  <tr>
+    <td class='string'>{{ treatment.treatment_type }}</td>
+    <td class='item-list'>{% for item in items %}<span>{{item}} {{ item|link_to_window}}</span>{% endfor %}</td>
+    <td class='string'>{{ treatment.person|default_if_none:"" }}</td>
+    <td class='string'>{{ treatment.start_date|default_if_none:"" }}</td>
+    <td class='string'>{{ treatment.end_date|default_if_none:"" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<h3>{% trans "Associated base finds"%}</h3>
+
+{% for base_find in item.base_finds.all %}
+<ul class='form-flex'>
+{% field_li "Complete ID" base_find.complete_id %}
+{% field_li "Short ID" base_find.short_id %}
+{% if base_find.IS_ISOLATED_DICT %}
+{% field_li "Batch/object" base_find.batch|from_dict:base_find.IS_ISOLATED_DICT %}
+{% endif %}
+{% if base_find.history_object and base_find.history_object.IS_ISOLATED_DICT %}
+{% field_li "Batch/object" base_find.batch|from_dict:base_find.history_object.IS_ISOLATED_DICT %}
+{% endif %}
+
+{% field_li "Discovery date" base_find.discovery_date %}
+{% field_li "Special interest" base_find.special_interest %}
+{% field_li_detail "Context record" base_find.context_record %}
+{% if base_find.context_record %}{% field_li "Parcel" base_find.context_record.parcel %}
+{% field_li_detail "Operation" base_find.context_record.operation %}{% endif %}
+</ul>
+
+{% field "Description" base_find.description "<pre>" "</pre>" %}
+{% field "Comment" base_find.comment "<pre>" "</pre>" %}
+{% if forloop.counter0 %}<hr/>{% endif %}
+{% endfor %}
+
+{% if item.source.count %}
+<h3>{% trans "Documents"%}</h3>
+<table id='{{window_id}}-docs'>
+  <caption>{%trans "Documents"%}</caption>
+  <tr>
+    <th>{% trans "Title" %}</th>
+    <th>{% trans "Type" %}</th>
+    <th>{% trans "Authors" %}</th>
+    <th>{% trans "Link" %}</th>
+  </tr>
+  {% for doc in item.source.all %}
+  <tr>
+    <td class='string'>{{ doc.title }}</td>
+    <td class='string'>{{doc.source_type}}</td>
+    <td class='string'>{{ doc.authors.all|join:", " }}</td>
+    <td class='string'>{% if doc.associated_url  %}<a href='{{doc.associated_url}}' target="_blank">{% trans "Link"%}</a>{% endif %}</td>
+  </tr>
+  {% empty %}
+  {% endfor %}
+</table>
+
+<script type='text/javascript'>
+tableToGrid('#{{window_id}}-docs', {
+    width: null, shrinkToFit: false});
+</script>
+{% endif %}
+
+{% endblock %}
