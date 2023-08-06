@@ -1,0 +1,58 @@
+clop: Command Line Option Processor
+===================================
+
+``$ pip install clop``
+
+and then
+
+``$ pydoc clop``
+
+clop provides minimal command line option specification and processing.
+
+When your command line processing requires the power of a king on a real horse,
+use argparse in the standard python library.
+
+When banging two coconut halves together on a stick pony is good enough,
+use clop.
+
+A single class to specify command line options,
+process a command line against those options,
+and make the processed results available as a dict.
+Also provides a simple help string for each option and the calling program.
+
+Run this module as a program for a short demo:
+
+``$ python /path/to/your/python/installation/site-packages/clop.py``
+
+Or read main() in clop.py.
+
+- Options are a dash and a single letter: -o
+- A dash can only appear in front of a single option letter, not in arguments.
+- An option can be followed by zero or more arguments.
+- An option can only be specified with its letter (-o). No --long options.
+- An option letter can be any "letter" where letter.isalpha() is True.
+- Options cannot be composed. Only one character per dash, not -olmp.
+- Options can appear in any order on the command line.
+- Options and arguments on the command line are strings.
+  The calling program does any type and value checking and conversion
+  of arguments after clop's command line processing.
+  Clop makes no judgments other than allowed options and arguments.
+
+Examples::
+
+    cmd.py -o
+    cmd.py -o arg
+    cmd.py -o one two
+    cmd.py -o -n one -m two three
+
+Errors::
+
+    cmd.py -o -arg              # Only single letter options.
+    cmd.py --o one --long two   # No leading double dashes.
+    cmd.py lost args            # Format is -o and zero or more args for the option.
+    cmd.py -o one - -n two -    # No lone dashes.
+
+More clop features are unlikely. If you need more, argparse is excellent,
+and comes with a real horse.
+
+
