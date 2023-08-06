@@ -1,0 +1,386 @@
+#!/usr/bin/env python
+###############################################################################
+#                                                                             #
+#    This program is free software: you can redistribute it and/or modify     #
+#    it under the terms of the GNU General Public License as published by     #
+#    the Free Software Foundation, either version 3 of the License, or        #
+#    (at your option) any later version.                                      #
+#                                                                             #
+#    This program is distributed in the hope that it will be useful,          #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of           #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            #
+#    GNU General Public License for more details.                             #
+#                                                                             #
+#    You should have received a copy of the GNU General Public License        #
+#    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
+#                                                                             #
+###############################################################################
+#                              
+# graftM - A pipeline for gene centric analyses of metagenome datasets       
+#
+###############################################################################
+
+__author__ = "Joel Boyd, Ben Woodcroft"
+__copyright__ = "Copyright 2014"
+__credits__ = ["Joel Boyd", "Ben Woodcroft"]
+__license__ = "GPL3"
+__maintainer__ = "Joel Boyd, Ben Woodcroft"
+__email__ = "joel.boyd near uq.net.au, b.woodcroft near uq.edu.au"
+__status__ = "Development"
+
+import argparse
+import sys
+import os
+import logging
+
+sys.path = [os.path.join(os.path.dirname(os.path.realpath(__file__)),'..')]+sys.path
+
+import graftm
+from graftm.run import Run
+from graftm.archive import ArchiveDefaultOptions
+
+class CustomHelpFormatter(argparse.HelpFormatter):
+    def _split_lines(self, text, width):
+        return text.splitlines()
+
+    def _get_help_string(self, action):
+        h = action.help
+        if '%(default)' not in action.help:
+            if action.default != '' and \
+               action.default != [] and \
+               action.default != None \
+               and action.default != False:
+                if action.default is not argparse.SUPPRESS:
+                    defaulting_nargs = [argparse.OPTIONAL,
+                                        argparse.ZERO_OR_MORE]
+
+                    if action.option_strings or action.nargs in defaulting_nargs:
+
+                        if '\n' in h:
+                            lines = h.splitlines()
+                            lines[0] += ' (default: %(default)s)'
+                            h = '\n'.join(lines)
+                        else:
+                            h += ' (default: %(default)s)'
+        return h
+
+    def _fill_text(self, text, width, indent):
+        return ''.join([indent + line for line in text.splitlines(True)])
+
+def phelp():
+    print """
+                                       GraftM  %s
+
+             A suite of tools for the rapid analysis of metagenome sequence datasets.
+
+                                Joel Boyd, Ben Woodcroft
+
+=====================================================================================================
+COMMUNITY PROFILING
+
+    graft       -       Search for and phylogenetically classify reads associated with a single
+                        marker gene, and construct a community profile
+                        See graftM graft -h
+
+
+=====================================================================================================
+UTILITIES
+
+    create      -       Create a graftM packages from sequence alignments and classifications. 
+                        See graftM create -h
+                        
+    bootstrap   -       Create new HMMs from a base HMM and an assembly or genome. 
+                        See graftM bootstrap -h
+    
+    tree        -       Decorate a tree with provided taxonomy, re-root a tree using a reference
+                        rooted tree, or inspect the clades in a GraftM package.
+                        See graftM tree -h
+
+    archive     -       Compress or uncompress a GraftM package.
+                        see graftM archive -h
+
+=====================================================================================================
+""" % (graftm.__version__)
+
+def print_header():
+    print """                         
+                             GraftM %s""" %(graftm.__version__)
+
+debug={1:logging.CRITICAL,
+       2:logging.ERROR,
+       3:logging.WARNING,
+       4:logging.INFO,
+       5:logging.DEBUG}
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--version', action='version', version='graftM v%s' % graftm.__version__)
+    subparsers = parser.add_subparsers(help="--", dest='subparser_name')
+    
+    
+    ########################################################################
+    # Graft pipeline - Create phylogeentically informed community profiles #
+    ########################################################################
+    graft_parser = subparsers.add_parser('graft',
+                                        description='Search and classify marker genes to construct community profiles',
+                                        formatter_class=CustomHelpFormatter,
+                                        epilog='''            
+ ##################################################################################################################################
+                                                       ~~ GraftM "graft" ~~
+ ##################################################################################################################################
+
+ Use GraftM "graft" to search, align and classify reads using the following pipeline:
+    
+    Detect reads with HMM/Diamond --> Align to HMM --> Place in pre-built phylogenetic tree using Maximum Likelihood
+    
+ Example usage:
+     For a single file of reads:
+        $ graftM graft --forward my_reads.fa --graftm_package my_graftm_package.gpkg
+     
+     For paired reads:
+        $ graftM graft --forward my_forward_reads.fa --reverse my_reverse_reads.fa --graftm_package my_graftm_package.gpkg
+        
+     Using an assembly to create a "bootstrap" database:
+        $ graftM graft --forward my_reads.fa --bootstrap_contigs my_assembly_of_my_reads.fa --graftm_package my_graftm_package.gpkg
+
+
+        
+''')
+    input_options = graft_parser.add_argument_group('input options')
+    input_options.add_argument('--forward', nargs='+', metavar='forward_read', help='Forward read (or single read file), space separated in .fa, or .fq.gz format.', required=True)
+    input_options.add_argument('--reverse', nargs='+',metavar='reverse read', help='Reverse sequence file(s) in .fa, or .fq.gz format', default=None)
+    input_options.add_argument('--graftm_package', metavar='reference_package', help='Reference package of gene family')
+
+    running_options = graft_parser.add_argument_group('running options')
+    running_options.add_argument('--threads', type=int, metavar='threads', help='Number of threads to use (default = 5)', default=5)
+    running_options.add_argument('--input_sequence_type', help='Specify whether the input sequence is "nucleotide" or "aminoacid" sequence data (default=will attempt to auto-detect)', choices = ['aminoacid', 'nucleotide'],  default=argparse.SUPPRESS)
+    running_options.add_argument('--filter_minimum', type=int, metavar='filter_minimum', help='Minimum number of positions that must be aligned for each sequence in order to by placed in the phylogenetic tree (default: %sbp for nucleotide packages, %s aa for protein packages)' %
+                                 (Run.MIN_ALIGNED_FILTER_FOR_NUCLEOTIDE_PACKAGES, Run.MIN_ALIGNED_FILTER_FOR_AMINO_ACID_PACKAGES))
+
+    searching_options = graft_parser.add_argument_group('searching options')
+    searching_options.add_argument('--evalue', metavar='evalue', help='evalue cutoff for the hmmsearch (default = 1e-5)', default= '1e-5')
+    searching_options.add_argument('--search_and_align_only', action="store_true", help='Stop after reads have been identified (default=False)', default=False)
+    searching_options.add_argument('--search_only', action="store_true", help='Stop after reads searched (default=False)', default=False)
+    searching_options.add_argument('--euk_check', action="store_true", help='Search whole sample for 18S (default=False)', default=False)
+    searching_options.add_argument('--search_method', choices=('hmmsearch','diamond'), help='Search method (default=hmmsearch)', default='hmmsearch')
+    searching_options.add_argument('--maximum_range', type=int, help='maximum range to use when searching for potentially linked reads (when searching contigs)', default=None)
+    searching_options.add_argument('--bootstrap_contigs', nargs='+', help='generate an HMM for searching --forward data by first searching these contigs')
+    
+    placement_options = graft_parser.add_argument_group('taxonomic assignment options')
+    placement_options.add_argument('--assignment_method', help='Taxonomic assignment method used (default=pplacer)', default=Run.PPLACER_TAXONOMIC_ASSIGNMENT, choices=(Run.PPLACER_TAXONOMIC_ASSIGNMENT,Run.DIAMOND_TAXONOMIC_ASSIGNMENT))
+    
+    pplacer_options = graft_parser.add_argument_group('pplacer assignment options')
+    pplacer_options.add_argument('--placements_cutoff', metavar='confidence', help='Cutoff of placement confidence level (0.5 - 1), default=0.75', default=0.75)
+    pplacer_options.add_argument('--resolve_placements', action="store_true", help='Force taxonomy down to the best placement (default=False)', default=False)
+    pplacer_options.add_argument('--merge_reads', action="store_true", help='Merge forward and reverse read alignments for placement (default=False)', default=False)
+    pplacer_options.add_argument('--no_clustering', action="store_true", help='Cluster reads at 100%% before placement to reduce tree insertion time -- ONLY use with unassembled data (i.e. equal read length). Default = False.', default=False)
+
+    nucleotide_options = graft_parser.add_argument_group('nucleotide search-specific options')
+    nucleotide_options.add_argument('--search_hmm_files', nargs='+', help='Specify .hmm files to use in search step', default=argparse.SUPPRESS)
+    nucleotide_options.add_argument('--search_hmm_list_file', metavar='newline-separated file with paths to each search HMM', default=argparse.SUPPRESS)
+    nucleotide_options.add_argument('--search_diamond_file', nargs=1, help='Specify .dmnd file to use in search step', default=None)
+    nucleotide_options.add_argument('--aln_hmm_file', help='Specify a single .hmm file to use in align step (default: the search_hmm_file if there is only 1)', default=argparse.SUPPRESS)
+    nucleotide_options.add_argument('--euk_hmm_file', help='Specify the .hmm file to use in the check for euk contamination', default=argparse.SUPPRESS)
+    
+    protein_options = graft_parser.add_argument_group('protein search-specific options')
+    min_orf_length_default = 96
+    protein_options.add_argument('--min_orf_length', metavar='length', help='Minimum number of nucleotides in an open reading frame (default: %s)' % min_orf_length_default, default=min_orf_length_default, type=int)
+    protein_options.add_argument('--restrict_read_length', metavar='length', help='Only use this many base pairs at the start of each sequence searched (default: no restriction)', type=int)
+    
+    logging_options = graft_parser.add_argument_group('logging options')
+    logging_options.add_argument('--verbosity', metavar='verbosity', help='1 - 5, 1 being silent, 5 being noisy indeed. Default = 4', type=int, default=4)
+    logging_options.add_argument('--log', metavar='logfile', help='Output logging information to file', default=False)
+    
+    output_options = graft_parser.add_argument_group('output options')
+    output_options.add_argument('--output_directory', metavar='reference_package', help='Output directory name (default=\"GraftM_output\")', default="GraftM_output")
+    output_options.add_argument('--force', action="store_true", help='Force overwrite the output directory, even if one already exists with the same name (default=False)', default=False)
+    output_options.add_argument('--max_samples_for_krona', type=int, help='If the number of samples is greater than this, do not output krona diagram', default=Run.DEFAULT_MAX_SAMPLES_FOR_KRONA)
+
+
+    #############################################################
+    # Create - Create a gpkg from a sequence database and a hmm #
+    #############################################################
+    create_parser = subparsers.add_parser('create',
+                                            description='Create a GraftM package from sequence alignments and classifications',
+                                            formatter_class=CustomHelpFormatter,
+                                            epilog='''
+ ##################################################################################################################################
+                                                       ~~ GraftM "create" ~~
+ ##################################################################################################################################
+ 
+ Example usage:
+
+ With an alignment of sequences, and a taxonomy file specifying the taxonomy of each:   
+    $ graftM create --alignment my_alignment.fasta --taxonomy my_taxonomy.tsv --sequences my_sequences.fasta
+  
+ To update a GraftM package with new sequences, you just need to provide the same arguments as above, but also pass a graftM 
+ package to the --graftm_package flag. Giving a package to graftM create will automatically execute the update pipeline. If no
+ output name is provided, a default suffix of "-updated.gpkg" will be appended to the current name. If no taxonomy for the 
+ new sequences is provided, GraftM will attempt to decorate using the surrounding sequences, but this is an imperfect method, 
+ so the --taxonomy flag should be used where possible. 
+    $ graftM create --graftm_package my_old_graftm_package.gpkg --sequences my_new_sequences.fasta --taxonomy my_new_taxonomy.tsv 
+      --output my_new_graftm_package.gpkg
+     
+ The taxonomy file is a 2 column tab separated file, where the first column is the sequence identifier and the second a taxonomy 
+ string describing that sequence e.g.
+ 
+    sequence1    k__kingdom1; p__phylum2
+
+ Internally, the taxonomic levels separated by '; ' are assumed to be kingdom, phylum, class, order, family, genus, species. 
+ However, this may not matter for the purposes of using graftM. The prefixes e.g. 'k__' are also not required.
+ 
+''')
+
+    create = create_parser.add_argument_group('Common options')
+    create.add_argument('--taxonomy', metavar='TAX', help='File containing two tab separated columns, the first with the ID of the sequences, the second with the taxonomy string (required unless --rerooted_annotated_tree or --taxtastic_taxonomy and --taxtastic_seqinfo are specified)')
+    create.add_argument('--alignment', metavar='ALN', help='An alignment with which to build a custom HMM and tree in aligned FASTA format (required unless --hmm is set)')
+    create.add_argument('--sequences', metavar='FASTA', help='Unaligned sequences (required)')
+    create.add_argument('--rerooted_tree', help='A tree with which to build the reference package, appropriately rooted. (default: generate tree with FastTree and attempt reroot with taxtastic)')
+    
+    create_lesser_options=create_parser.add_argument_group('Lesser used options')
+    create_lesser_options.add_argument('--rerooted_annotated_tree', metavar='newick_tree', help='Define taxonomy through this annotated newick file. (default: use taxonomy from --taxonomy)')
+    create_lesser_options.add_argument('--hmm', metavar='.hmm file', help='Use this HMM for alignment, and search unless --search_hmm_files is specified. (default: use HMM build automatically from alignment)')
+    create_lesser_options.add_argument('--dereplication_level', metavar='.hmm file', type = int, help='taxonomic rank at which \
+to dereplicate the sequences to create the HMM. Provide an integer that corresponds to the rank (from left to right) will be dereplicated. For example --dereplication_level 3 will omit all sequences \
+that are redundant at the 3rd rank (from left to right in the taxonomy file) from the search HMM.  (0 == No dereplication)', default = 6)
+    create_lesser_options.add_argument('--search_hmm_files', metavar='.hmm files', nargs='+', help='Use these HMM(s) for search. (default: use --hmm or build automatically from alignment)')
+    create_lesser_options.add_argument('--min_aligned_percent', type=int, metavar='percent', help='Remove sequences from the alignment which do not cover at least this percentage of the HMM', default=30)
+    create_lesser_options.add_argument('--output', metavar='PATH', help='Name of output GraftM package (default: use name derived from alignment)')
+    create_lesser_options.add_argument('--tree_log', help='A log file for the tree. (default: generate from tree and alignment)')
+    create_lesser_options.add_argument('--taxtastic_taxonomy', help='A taxtastic format taxonomy file. (default: use taxonomy from --taxonomy)')
+    create_lesser_options.add_argument('--taxtastic_seqinfo', help='A taxtastic format seqinfo file. (default: use taxonomy from --taxonomy)')
+    create_lesser_options.add_argument('--force', action="store_true", help='Overwrite output gpkg directory if it exists. (default: be cowardly and don\'t)', default=False)
+    create_lesser_options.add_argument('--threads', metavar='threads', help='Number of threads to use (default = 5)', default=5)
+
+    create_lesser_options.add_argument('--graftm_package', help='GraftM package to update')
+    
+    create_update_options=create_parser.add_argument_group('Update options')
+
+    create_logging_options=create_parser.add_argument_group('Logging options')
+    create_logging_options.add_argument('--verbosity', metavar='verbosity', help='1 - 5, 1 being silent, 5 being noisy indeed', type=int, default=4)
+    create_logging_options.add_argument('--log', metavar='logfile', help='output logging information to file', default=False)
+
+    #########################################################################
+    # Bootstrap                                                             #
+    #########################################################################    
+    bootstrap_parser = subparsers.add_parser('bootstrap',
+                                            description='Generate a new HMM/database from the given contigs',
+                                            epilog=__author__)
+    bootstrap_parser.add_argument('--contigs', nargs='+', help='contigs to search', required=True)
+    bootstrap_parser.add_argument('--output_hmm', help='output HMM file', required=True)
+    bootstrap_parser.add_argument('--graftm_package', help='find sequences with this graftm package')
+    bootstrap_parser.add_argument('--search_hmm_files', nargs='+', help='find sequences with this/these HMM(s)')
+    bootstrap_parser.add_argument('--maximum_range', type=int, help='maximum range to use when searching for potentially linked reads when searching contigs (default: from graftm_package or else 1000)', default=1000)
+    bootstrap_parser.add_argument('--evalue', help='evalue cutoff for the hmmsearch (default = 1e-5)', default= '1e-5')
+    bootstrap_parser.add_argument('--min_orf_length', help='Minimum number of nucleotides in an open reading frame (default: %s)' % min_orf_length_default, default=min_orf_length_default, type=int)
+    bootstrap_parser.add_argument('--threads', type=int, metavar='threads', help='Number of threads to use (default = 5)', default=5)
+    
+    logging_options = bootstrap_parser.add_argument_group('logging options')
+    logging_options.add_argument('--verbosity', metavar='verbosity', help='1 - 5, 1 being silent, 5 being noisy indeed. Default = 4', type=int, default=4)
+    logging_options.add_argument('--log', metavar='logfile', help='Output logging information to file', default=False)    
+    
+    #########################################################################
+    # argparser for "decorate" - Reroot, and decorate a gene tree                           
+  
+    tree_parser = subparsers.add_parser('tree',
+                                            description='Reroot and/or decorate a tree',
+                                            formatter_class=CustomHelpFormatter,
+                                            epilog='''
+ ##################################################################################################################################
+                                                       ~~ GraftM "tree" ~~
+ ##################################################################################################################################
+
+ Example usage:
+
+ Decorate input.tre with my.taxonomy, and output the decorated tree to output.tre and taxonomy to output.taxonomy:
+
+    $ graftM tree --decorate --rooted_tree input.tre --input_greengenes_taxonomy my.taxonomy --output_tree output.tre --output_taxonomy output.taxonomy
+    
+ Decorate the tree in a GraftM package and output the decorated tree to output.tre and taxonomy to output.taxonomy:
+
+    $ graftM tree --decorate --graftm_package my.gpkg --output_tree output.tre --output_taxonomy output.taxonomy
+     
+ Re-root a tree as best as possible using a reference tree, maintaining as best as possible:
+
+    $ graftM tree --unrooted_tree input.tre --reference_tree reference.tre --output_tree output.tre
+
+'''+__author__)
+    tree_parser.add_argument('--graftm_package', help='Path to a GraftM package to inspect. GraftM will decorate the rooted tree \
+within using the taxonomy within.')
+    
+    tree_options = tree_parser.add_argument_group('tree options')
+    tree_options.add_argument('--rooted_tree', help='Path to rooted tree in newick format. GraftM will decorate this tree under the \
+assumption it is correctly rooted.')
+    tree_options.add_argument('--unrooted_tree', help='Path to unrooted tree in newick format. GraftM decorate will first attempt to \
+reroot using the --reference_tree. Once rerooted, GraftM will decorate this tree.')
+    tree_options.add_argument('--reference_tree', help='Path to tree that is rooted correctly that will be used to reroot the \
+tree provided to the --unrooted_tree flag.')
+    tree_options.add_argument('--output_tree', help='Output decorated tree')
+    
+    decorate_options = tree_parser.add_argument_group('taxonomy options')
+    decorate_options.add_argument('--input_greengenes_taxonomy', help='Input taxonomy of sequences used to build tree. This taxonomy \
+must be in GreenGenes format (2 column tab separated, ID then taxonomy with taxonomy separated by \'; \'. Prefixes such as \'p__\' are not required')
+    decorate_options.add_argument('--input_taxtastic_taxonomy', help='Input taxonomy of sequences used to build tree. This taxonomy \
+must be in taxtastic format.')
+    decorate_options.add_argument('--input_taxtastic_seqinfo', help='Seqinfo file to accompany Taxtastic taxonomy file')
+    decorate_options.add_argument('--no_unique_tax', action = "store_true", help='Do not append unique numbers on the end of clades that appear twice', default = False)
+    decorate_options.add_argument('--decorate', action = "store_true", help='Decorate the tree conservatively', default = False)
+    decorate_options.add_argument('--output_taxonomy', help='File path to output decorated taxonomy strings in GreenGenes format \
+corresponding to each leaf in the tree (REQUIRED).')
+
+    # Logging options                                        
+    logging_options = tree_parser.add_argument_group('logging options')
+    logging_options.add_argument('--verbosity', metavar='verbosity', help='1 - 5, 1 being silent, 5 being noisy indeed. Default = 4', type=int, default=4)
+    logging_options.add_argument('--log', metavar='logfile', help='Output logging information to file', default=False)
+    #########################################################################
+
+
+    # argparser for "archive"
+    archive_parser = subparsers.add_parser('archive',
+                                           description='Compress or decompress GraftM packages.',
+                                           formatter_class=CustomHelpFormatter,
+                                           epilog='''
+ ##################################################################################################################################
+                                                       ~~ GraftM "archive" ~~
+ ##################################################################################################################################
+
+ Example usage:
+
+ Compress a GraftM package:
+
+    $ graftM archive --create --graftm_package my.gpkg --archive my.gpkg.tar.gz
+    
+ Decompress a GraftM package:
+
+    $ graftM archive --extract --archive my.gpkg.tar.gz --graftm_package my.gpkg
+
+''')
+    archive_parser.add_argument('--create', action="store_true", help='Create a new GraftM package archive')
+    archive_parser.add_argument('--extract', action="store_true", help='Extract a archived GraftM package into a regular one')
+    archive_parser.add_argument('--graftm_package', help='Path to a GraftM package to inspect. GraftM will decorate the rooted tree within using the taxonomy within.', required=True)
+    archive_parser.add_argument('--archive', help="Path to archived GraftM package, canonically ending in '.gpkg.tar.gz'", required=True)
+    archive_parser.add_argument('--force', action="store_true", help='Force overwrite the output archive/gpkg, even if one already exists with the same name', default=ArchiveDefaultOptions.force)
+    
+    # Logging options                                        
+    logging_options = archive_parser.add_argument_group('logging options')
+    logging_options.add_argument('--verbosity', metavar='verbosity', help='1 - 5, 1 being silent, 5 being noisy indeed. Default = 4', type=int, default=4)
+    logging_options.add_argument('--log', metavar='logfile', help='Output logging information to file', default=False)
+    #########################################################################
+
+    if(len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv[1] == '--help'):
+        phelp()
+    else:
+        args = parser.parse_args()
+        if args.verbosity >=3: print_header()
+        if args.log:
+            if os.path.isfile(args.log): raise Exception("File %s exists" % args.log)
+            logging.basicConfig(filename=args.log, level=debug[args.verbosity], format='%(asctime)s %(levelname)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+        else:
+            logging.basicConfig(level=debug[args.verbosity], format='%(asctime)s %(levelname)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+        
+        logging.debug("Ran command: %s" % ' '.join(sys.argv))
+        
+        Run(args).main()
+
+
+
