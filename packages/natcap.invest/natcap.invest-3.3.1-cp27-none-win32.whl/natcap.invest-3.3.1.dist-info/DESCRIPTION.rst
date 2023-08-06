@@ -1,0 +1,196 @@
+Stanford University, The Nature Conservancy, World Wildlife Fund Inc.,
+and University of Minnesota.
+
+This tool has an open license. All people are invited to use the tool
+under the following conditions and terms:
+
+Copyright (c) 2016, Natural Capital Project
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+ * Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+ * Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the
+   distribution.
+
+ * Neither the name of Natural Capital Project nor the names of
+   its contributors may be used to endorse or promote products derived
+   from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Description: ================================================================
+        InVEST: Integrated Valuation of Ecosystem Services and Tradeoffs 
+        ================================================================
+        
+        .. image:: http://builds.naturalcapitalproject.org/buildStatus/icon?job=invest-nightly-develop
+          :target: http://builds.naturalcapitalproject.org/job/invest-nightly-develop
+        
+        About  InVEST
+        =============
+        
+        InVEST (Integrated Valuation of Ecosystem Services and Tradeoffs) is a family
+        of tools for quantifying the values of natural capital in clear, credible, and
+        practical ways. In promising a return (of societal benefits) on investments in
+        nature, the scientific community needs to deliver knowledge and tools to
+        quantify and forecast this return. InVEST enables decision-makers to quantify
+        the importance of natural capital, to assess the tradeoffs associated with
+        alternative choices, and to integrate conservation and human development.
+        
+        Older versions of InVEST ran as script tools in the ArcGIS ArcToolBox environment,
+        but have almost all been ported over to a purely open-source python environment.
+        
+        InVEST is licensed under a permissive, modified BSD license.
+        
+        For more information, see:
+          * `InVEST API documentation <http://invest.readthedocs.io/>`_
+          * InVEST on `bitbucket <https://bitbucket.org/natcap/invest>`__
+          * The `Natural Capital Project website <http://naturalcapitalproject.org>`__.
+        
+        
+        .. Everything after this comment will be included in the API docs.
+        .. START API
+        
+        Installing InVEST
+        =================
+        
+        Python Dependencies
+        -------------------
+        
+        Dependencies for ``natcap.invest`` are listed in ``requirements.txt``:
+        
+        .. These dependencies are listed here statically because when I push the
+           readme page to PyPI, they won't render if I use the .. include::
+           directive.  Annoying, but oh well.  It just means that we'll need to
+           periodically check that this list is accurate.
+        
+        .. code-block::
+        
+            Pyro4>=4.41
+            gdal>=1.11.2,<2.0
+            h5py>=2.3.0
+            matplotlib
+            natcap.versioner>=0.4.2
+            numpy>=1.11.0
+            pyamg>=2.2.1
+            pygeoprocessing>=0.3.0a17
+            rtree>=0.8.2
+            scipy>=0.14.0
+            shapely
+            setuptools>=8.0
+        
+        Additionally, ``PyQt4`` is required to use the ``invest`` cli, but is not
+        required for development against ``natcap.invest``.
+        
+        Installing from Source
+        ----------------------
+        
+        If you have a compiler installed and configured for your system, and
+        dependencies installed, the easiest way to install InVEST as a python package 
+        is:
+        
+        .. code-block:: console
+        
+            $ pip install natcap.invest
+        
+        If you are working within virtual environments, there is a `documented issue
+        with namespaces 
+        <https://bitbucket.org/pypa/setuptools/issues/250/develop-and-install-single-version>`__
+        in setuptools that may cause problems when importing packages within the
+        ``natcap`` namespace.  The current workaround is to use these extra pip flags:
+        
+        .. code-block:: console
+        
+            $ pip install natcap.invest --egg --no-binary :all:
+        
+        Installing the latest development version
+        -----------------------------------------
+        
+        The latest development version of InVEST can be installed from our source tree:
+        
+        .. code-block:: console
+        
+            $ pip install hg+https://bitbucket.org/natcap/invest@develop
+        
+        
+        Usage
+        =====
+        
+        To run an InVEST model from the command-line, use the ``invest`` cli single
+        entry point:
+        
+        .. code-block:: console
+        
+            $ invest --help
+            usage: invest [-h] [--version] [--list] [model]
+        
+            Integrated Valuation of Ecosystem Services and Tradeoffs.InVEST (Integrated
+            Valuation of Ecosystem Services and Tradeoffs) is a family of tools for
+            quantifying the values of natural capital in clear, credible, and practical
+            ways. In promising a return (of societal benefits) on investments in nature,
+            the scientific community needs to deliver knowledge and tools to quantify and
+            forecast this return. InVEST enables decision-makers to quantify the
+            importance of natural capital, to assess the tradeoffs associated with
+            alternative choices, and to integrate conservation and human development.
+            Older versions of InVEST ran as script tools in the ArcGIS ArcToolBox
+            environment, but have almost all been ported over to a purely open-source
+            python environment.
+        
+            positional arguments:
+              model       The model/tool to run. Use --list to show available
+                          models/tools. Identifiable model prefixes may also be used.
+        
+            optional arguments:
+              -h, --help  show this help message and exit
+              --version   show program's version number and exit
+              --list      List available models
+        
+        To list the available models:
+        
+        .. code-block:: console 
+        
+            $ invest --list
+        
+        
+        Development
+        ===========
+        
+        Dependencies for developing InVEST are listed in ``requirements.txt`` and in
+        ``requirements-dev.txt``.
+        
+        Support
+        =======
+        
+        Participate in the NatCap forums here:
+        http://forums.naturalcapitalproject.org
+        
+        Bugs may be reported at http://bitbucket.org/natcap/invest
+        
+Keywords: gis invest
+Platform: UNKNOWN
+Classifier: Intended Audience :: Developers
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Science/Research
+Classifier: Natural Language :: English
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft
+Classifier: Operating System :: POSIX
+Classifier: Programming Language :: Python :: 2 :: Only
+Classifier: Topic :: Scientific/Engineering :: GIS
