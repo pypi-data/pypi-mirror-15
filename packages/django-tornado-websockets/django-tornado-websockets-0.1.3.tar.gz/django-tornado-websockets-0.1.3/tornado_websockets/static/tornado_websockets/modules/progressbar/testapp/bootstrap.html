@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TestApp for Bootstrap Engine</title>
+  <link rel="stylesheet" href="http://getbootstrap.com/dist/css/bootstrap.min.css">
+  <style>
+    body > div {
+      position: relative;
+    }
+
+    [id^="progress-bar--container"] {
+      text-align: center;
+    }
+
+    .progress-bar {
+      min-width: 2em;
+    }
+
+    .process {
+      position: absolute;
+      top: 0;
+      right: 10px;
+    }
+
+    .process[disabled] {
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+
+<script src="https://cdn.rawgit.com/Kocal/dtws-client/master/dist/main.min.js"></script>
+<script src="../dist/main.js"></script>
+<script>
+  var $btnProcess = document.querySelector('#process');
+  var configurations = [
+    { label: {} },
+    { label: { position: 'bottom' } },
+    { label: { visible: false } },
+    { label: { position: 'bottom', visible: false } },
+
+    { progressbar: { context: 'info' } },
+    { progressbar: { context: 'success' } },
+    { progressbar: { context: 'warning' } },
+    { progressbar: { context: 'danger' } },
+
+    { progressbar: { striped: true, context: 'not a context' } },
+    { progressbar: { striped: true, context: 'info' } },
+    { progressbar: { striped: true, context: 'success' } },
+    { progressbar: { striped: true, context: 'warning' } },
+    { progressbar: { striped: true, context: 'danger' } },
+    { progressbar: { striped: true, context: 'not a context' } },
+
+    { progressbar: { animated: true, striped: true, context: 'info' } },
+    { progressbar: { animated: true, striped: true, context: 'success' } },
+    { progressbar: { animated: true, striped: true, context: 'warning' } },
+    { progressbar: { animated: true, striped: true, context: 'danger' } },
+
+    { progression: { visible: false }, progressbar: { animated: true, striped: true, context: 'not a context' } },
+    { progression: { visible: false }, progressbar: { animated: true, striped: true, context: 'info' } },
+    { progression: { visible: false }, progressbar: { animated: true, striped: true, context: 'success' } },
+    { progression: { visible: false }, progressbar: { animated: true, striped: true, context: 'warning' } },
+    { progression: { visible: false }, progressbar: { animated: true, striped: true, context: 'danger' } },
+    { progression: { visible: false }, progressbar: { animated: true, striped: true, context: 'not a context' } },
+
+    { progression: { format: "Progression... ({{percent}} %)" }, progressbar: { animated: true, striped: true, context: 'not a context' } },
+    { progression: { format: "Progression... ({{percent}} %)" }, progressbar: { animated: true, striped: true, context: 'info' } },
+    { progression: { format: "Progression... ({{percent}} %)" }, progressbar: { animated: true, striped: true, context: 'success' } },
+    { progression: { format: "Progression... ({{percent}} %)" }, progressbar: { animated: true, striped: true, context: 'warning' } },
+    { progression: { format: "Progression... ({{percent}} %)" }, progressbar: { animated: true, striped: true, context: 'danger' } },
+    { progression: { format: "Progression... ({{percent}} %)" }, progressbar: { animated: true, striped: true, context: 'not a context' } },
+  ];
+
+  configurations.forEach(function (configuration, index) {
+    var id = 'progress-bar--container-' + index;
+    var $root = document.createElement('div');
+    var $name = document.createElement('h4');
+    var $btnProcess = document.createElement('button');
+    var $hr = document.createElement('hr');
+
+    var $container = document.createElement('div');
+
+    var websocket = new TornadoWebSocket('/my_progress_bar/' + index);
+    var engine = new ProgressBarModuleEngineBootstrap($container, configuration);
+    var progressBar = new ProgressBarModule(websocket, engine);
+
+    websocket.on('open', function () {
+      $btnProcess.removeAttribute('disabled');
+
+      $btnProcess.addEventListener('click', function (e) {
+        e.preventDefault();
+        $btnProcess.setAttribute('disabled', 'disabled');
+        $btnProcess.textContent = 'Working...';
+        progressBar.emit('start');
+      });
+    });
+
+    progressBar.on('error', function () { });
+    progressBar.on('close', function () { });
+    progressBar.on('before_init', function () {
+      progressBar.engine.updateLabel('Un label...')
+    });
+    progressBar.on('after_init', function () {
+      //progressBar.engine.updateLabel('Connexion terminée.')
+    });
+    progressBar.on('before_update', function () { });
+    progressBar.on('after_update', function () { });
+    progressBar.on('done', function () {
+      $btnProcess.removeAttribute('disabled');
+      $btnProcess.textContent = 'Start'
+    });
+
+    progressBar.on('warning', function (data) {
+      console.warn(data);
+    });
+
+    $name.textContent = index + ". " + JSON.stringify(configuration);
+    $container.setAttribute('id', id);
+
+    $btnProcess.classList.add('process');
+    $btnProcess.setAttribute('disabled', 'disabled');
+    $btnProcess.textContent = 'Start';
+
+    $root.appendChild($name);
+    $root.appendChild($container);
+    $root.appendChild($btnProcess);
+    $root.appendChild($hr);
+    document.body.appendChild($root);
+  }) </script>
+</body>
+</html>

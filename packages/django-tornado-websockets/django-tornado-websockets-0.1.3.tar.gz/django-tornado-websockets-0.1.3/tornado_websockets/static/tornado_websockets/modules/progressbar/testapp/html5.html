@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TestApp for HTML5 Engine</title>
+  <style>
+    body > div {
+      position: relative;
+    }
+
+    .process {
+      position: absolute;
+      top: 0;
+      right: 10px;
+    }
+
+    .process[disabled] {
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+
+<script src="https://cdn.rawgit.com/Kocal/dtws-client/master/dist/main.min.js"></script>
+<script src="../dist/main.js"></script>
+<script>
+  var $btnProcess = document.querySelector('#process');
+  var configurations = [
+    { label: {} },
+    { label: { position: 'top' } },
+    { label: { position: 'bottom' } },
+    { label: { position: 'top', visible: true } },
+    { label: { position: 'top', visible: false } },
+    { label: { position: 'bottom', visible: true } },
+    { label: { position: 'bottom', visible: false } },
+    { progression: {} },
+    { progression: { format: '{{percent}}% ', position: 'left', visible: true } },
+    { progression: { format: '{{percent}}% ', position: 'left', visible: false } },
+    { progression: { format: ' {{percent}}% ', position: 'right', visible: true } },
+    { progression: { format: ' {{percent}}%', position: 'right', visible: false } },
+    { progression: { format: ' Progression: {{percent}}%' } },
+    { progression: { position: 'left', format: 'Progression: {{percent}}% ' } },
+    { progression: { position: 'right', format: ' Progression: {{percent}}%' } },
+  ];
+
+  configurations.forEach(function (configuration, index) {
+    var id = 'progress-bar--container-' + index;
+    var $root = document.createElement('div');
+    var $name = document.createElement('h4');
+    var $btnProcess = document.createElement('button');
+    var $hr = document.createElement('hr');
+
+    var $container = document.createElement('div');
+
+    var websocket = new TornadoWebSocket('/my_progress_bar/' + index);
+    var engine = new ProgressBarModuleEngineHtml5($container, configuration);
+    var progressBar = new ProgressBarModule(websocket, engine);
+
+    websocket.on('open', function () {
+      $btnProcess.removeAttribute('disabled');
+
+      $btnProcess.addEventListener('click', function (e) {
+        e.preventDefault();
+        $btnProcess.setAttribute('disabled', 'disabled');
+        $btnProcess.textContent = 'Working...';
+        progressBar.emit('start');
+      });
+    });
+
+    progressBar.on('error', function () { });
+    progressBar.on('close', function () { });
+    progressBar.on('before_init', function () {
+      progressBar.engine.updateLabel('Un label...')
+    });
+    progressBar.on('after_init', function () {
+      //progressBar.engine.updateLabel('Connexion terminée.')
+    });
+    progressBar.on('before_update', function () { });
+    progressBar.on('after_update', function () { });
+    progressBar.on('done', function () {
+      $btnProcess.removeAttribute('disabled');
+      $btnProcess.textContent = 'Start'
+    });
+
+    progressBar.on('warning', function (data) {
+      console.warn(data);
+    });
+
+    $name.textContent = index + ". " + JSON.stringify(configuration);
+    $container.setAttribute('id', id);
+
+    $btnProcess.classList.add('process');
+    $btnProcess.setAttribute('disabled', 'disabled');
+    $btnProcess.textContent = 'Start';
+
+    $root.appendChild($name);
+    $root.appendChild($container);
+    $root.appendChild($btnProcess);
+    $root.appendChild($hr);
+    document.body.appendChild($root);
+  }) </script>
+</body>
+</html>
