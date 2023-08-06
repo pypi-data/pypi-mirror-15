@@ -1,0 +1,176 @@
+#!/usr/bin/env python
+import argparse
+import os
+
+from torrentcatcher import torrentcatcher, update
+
+currentVersion = "3.2.0"
+
+def main():
+    # Sets the location of torrentcatcher files
+    homeFolder = os.environ['HOME']
+    dataPath = os.path.join(homeFolder, '.torrentcatcher')
+    log = os.path.join(dataPath, 'torrentcatcher.log')
+    config = os.path.join(dataPath, 'trconfig')
+    database = os.path.join(dataPath, 'torcatch.db')
+    # Creates data directory for config file, database, and log file
+    if not os.path.isdir(dataPath):
+        os.mkdir(dataPath)
+    # Parsing out arguments for command line input
+    parser = argparse.ArgumentParser(prog='torrentcatcher')
+    parser.add_argument(
+        '-a',
+        '--archive',
+        nargs='+',
+        metavar=('all', 'ID'),
+        help=("Moves selected torrents to the archive. Using the argument "
+              "'all' will move all currently queued torrents to the archive. "
+              "Use the '--list' option to see IDs.")
+    )
+    parser.add_argument(
+        '-C',
+        nargs=1,
+        metavar='<path to trconfig file>',
+        help="Override default config file location."
+    )
+    parser.add_argument(
+        '-d',
+        '--download',
+        nargs='+',
+        metavar=('all', 'ID'),
+        help=("Moves selected torrents to Transmission. Using the argument "
+              "'all' will move all currently queued torrents to Transmission. "
+              "Use the '--list' option to see IDs.")
+    )
+    parser.add_argument(
+        '-D',
+        nargs=1,
+        metavar='<path to database>',
+        help="Overrides default database location."
+    )
+    parser.add_argument(
+        '-df',
+        '--del-feed',
+        nargs=1,
+        metavar='<ID>',
+        help="Deletes unwanted feed. Use '--list feeds' to see all feed IDs."
+    )
+    parser.add_argument(
+        '-f',
+        '--add-feed',
+        nargs=2,
+        metavar=('<name>', '<url>'),
+        help="Adds given feed to the database."
+    )
+    parser.add_argument(
+        '-F',
+        '--feed',
+        help=("Checks all feeds for new torrents to add to the queue. DOES "
+              "NOT SEND TO TRANSMISSION."),
+        action="store_true"
+    )
+    parser.add_argument(
+        '-l',
+        '--list',
+        nargs=1,
+        choices=['queue', 'archive', 'feeds'],
+        help="Lists all items for given category."
+    )
+    parser.add_argument(
+        '-L',
+        nargs=1,
+        metavar='<path to log file>',
+        help="Choose location for log output."
+    )
+    parser.add_argument(
+        '-q',
+        '--queue',
+        nargs='+',
+        metavar=('all', 'ID'),
+        help=("Moves selected torrents to the queue. Using the argument 'all' "
+              "will move all archived torrents to the queue. Use the "
+              "'--list' option to see IDs.")
+    )
+    parser.add_argument(
+        '-Q',
+        '--quiet',
+        help="Suppresses output.",
+        action="store_true"
+    )
+    parser.add_argument(
+        '--search',
+        nargs=1,
+        choices=['name', 'source', 'id'],
+        help=("Search archive and queue for given query. Can search by name, "
+              "source, or ID number.")
+    )
+    parser.add_argument(
+        '--setup',
+        help="Sets up the database and config in the default location.",
+        action="store_true"
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='%(prog)s ' + currentVersion
+    )
+    args = parser.parse_args()
+    # Override default file locations
+    if args.C:
+        config = args.C
+    if args.D:
+        database = args.D
+    if args.L:
+        database = args.L
+    # Turns quiet mode off and on
+    quiet = args.quiet
+    # Check if database needs updating
+    if not args.setup:
+    	update.start(database)
+    # Initialize Torrentcatcher class
+    tc = torrentcatcher.TorrentCatcher(
+        trconf=config,
+        trlog=log,
+        trquiet=quiet,
+        trdb=database
+    )
+    # Create the configuration file if it does not exist
+    tc.configreader()
+    # Interprets arguments to their respective functions
+    argument = False
+    if args.archive:
+        argument = True
+        tc.archive(args.archive)
+    if args.download:
+        argument = True
+        tc.download(args.download)
+    if args.add_feed:
+        argument = True
+        tc.addfeed(args.add_feed[0], args.add_feed[1])
+    if args.del_feed:
+        argument = True
+        tc.delfeed(args.del_feed[0])
+    if args.feed:
+        argument = True
+        tc.logger.info(
+            '[FEED ONLY] Checking feeds for new torrents to queue')
+        tc.feeder()
+    if args.list:
+        argument = True
+        tc.lister(args.list[0])
+    if args.queue:
+        argument = True
+        tc.queue(args.queue)
+    if args.search:
+        argument = True
+        query = raw_input('Enter query: ')
+        tc.torsearch(args.search[0], query)
+    if args.setup:
+        argument = True
+        print 'Setting up File locations...'
+        tc.setup()
+    if not argument:
+        tc.torrentcatcher()
+
+if __name__ == '__main__':
+    main()
