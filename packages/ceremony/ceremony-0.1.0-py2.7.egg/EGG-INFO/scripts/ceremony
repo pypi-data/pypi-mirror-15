@@ -1,0 +1,289 @@
+#!/usr/bin/python
+# Copyright 2016, Kristoffer Gronlund <krig@koru.se>
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import print_function
+import os
+import sys
+import re
+import pickle
+import time
+import argparse
+import subprocess
+import signal
+import hashlib
+import jinja2
+import markdown
+
+DIRS = ('build', 'css', 'img', 'js', 'layouts', 'pages')
+VERBOSE = False
+USECACHE = True
+OPTION_RE = re.compile(r'^\s*(\w+):\s*(.+)$')
+STATCACHE = {}
+CACHENAME = '.ceremony-cache'
+
+
+def is_true(sbool):
+    return sbool.lower() in ('yes', 'true', '1', 'y')
+
+
+def replace_if_different(filename, content):
+    action = 'A'
+    if os.path.isfile(filename):
+        fmd5 = hashlib.md5()
+        fmd5.update(open(filename, 'rb').read())
+        cmd5 = hashlib.md5()
+        cmd5.update(content)
+        if fmd5.digest() == cmd5.digest():
+            if VERBOSE:
+                print('.', filename)
+            return False
+        action = 'U'
+    print(action, filename)
+    with open(filename, 'wb') as outf:
+        outf.write(content)
+    return True
+
+
+def process_file(infile, outfile):
+    replace_if_different(outfile, open(infile, 'rb').read())
+
+
+def read_with_options(filename):
+    '''
+    returns options, text
+    '''
+    defaults = {'title': '', 'layout': 'page', 'pretty_url': 'true'}
+    mode = 0
+    options = {}
+    text = ""
+    for line in open(filename).readlines():
+        if mode == 0:
+            m = OPTION_RE.match(line)
+            if m:
+                options[m.group(1)] = m.group(2)
+            elif len(line.strip()) > 0:
+                mode = 1
+        if mode == 1:
+            text += line
+    ret = {}
+    ret.update(defaults)
+    ret.update(options)
+    return ret, text
+
+
+def process_markdown(filename, outdir, env):
+    options, text = read_with_options(filename)
+    parsed_text = markdown.markdown(text, output_format='html5', extensions=['markdown.extensions.extra', 'markdown.extensions.smarty'])
+
+    template = env.get_template(options.get('layout', 'page') + '.html')
+    rendered = template.render(filename=filename, text=parsed_text, **options)
+    if not rendered.endswith('\n'):
+        rendered = rendered + '\n'
+    _, fullname = os.path.split(filename)
+    name, _ = os.path.splitext(fullname)
+    if is_true(options.get('pretty_url', 'true')):
+        if not os.path.isdir(os.path.join(outdir, name)):
+            os.mkdir(os.path.join(outdir, name))
+        replace_if_different(os.path.join(outdir, name, 'index.html'), rendered.encode('utf-8'))
+    else:
+        replace_if_different(os.path.join(outdir, name + '.html'), rendered.encode('utf-8'))
+
+
+def process_html(filename, outdir, env):
+    options, text = read_with_options(filename)
+    template = env.get_template(options.get('layout', 'page') + '.html')
+    rendered = template.render(filename=filename, text=text, **options)
+    if not rendered.endswith('\n'):
+        rendered = rendered + '\n'
+    _, fullname = os.path.split(filename)
+    name, _ = os.path.splitext(fullname)
+    if is_true(options.get('pretty_url', 'true')):
+        if not os.path.isdir(os.path.join(outdir, name)):
+            os.mkdir(os.path.join(outdir, name))
+        replace_if_different(os.path.join(outdir, name, 'index.html'), rendered.encode('utf-8'))
+    else:
+        replace_if_different(os.path.join(outdir, name + '.html'), rendered.encode('utf-8'))
+
+
+def process_page(filename, outdir, env):
+    if filename.endswith('.md'):
+        process_markdown(filename, outdir, env)
+    elif filename.endswith('.html'):
+        process_html(filename, outdir, env)
+    else:
+        _, fullname = os.path.split(filename)
+        process_file(filename, os.path.join(outdir, fullname))
+
+
+def check_statcache():
+    if not USECACHE:
+        return False
+    for watchdir in DIRS:
+        for root, _, files in os.walk(watchdir):
+            for filename in files:
+                if filename.startswith('.'):
+                    continue
+                fullname = os.path.join(root, filename)
+                old_mtime = STATCACHE.get(fullname)
+                if not old_mtime:
+                    return False
+                if os.stat(fullname).st_mtime != old_mtime:
+                    return False
+    return True
+
+
+def rebuild_statcache():
+    if not USECACHE:
+        return
+    STATCACHE.clear()
+    for watchdir in DIRS:
+        for root, _, files in os.walk(watchdir):
+            for filename in files:
+                if filename.startswith('.'):
+                    continue
+                fullname = os.path.join(root, filename)
+                STATCACHE[fullname] = os.stat(fullname).st_mtime
+
+
+def process_dir(outdir, indir, reroot=False):
+    for root, _, files in os.walk(indir):
+        if reroot:
+            odir = outdir + root[len(indir):]
+        else:
+            odir = os.path.join(outdir, root)
+        if not os.path.isdir(odir):
+            os.mkdir(odir)
+        for filename in files:
+            if filename.startswith('.'):
+                continue
+            yield root, filename, odir
+
+
+def process_files(env, process_css=True):
+    if not check_statcache():
+        for root, filename, outdir in process_dir('build', 'img'):
+            process_file(os.path.join(root, filename), os.path.join(outdir, filename))
+        for root, filename, outdir in process_dir('build', 'js'):
+            process_file(os.path.join(root, filename), os.path.join(outdir, filename))
+        if not os.path.isdir(os.path.join('build', 'css')):
+            os.mkdir(os.path.join('build', 'css'))
+        if process_css:
+            subprocess.call(['sass', '--scss', '-t', 'compressed', '--update', 'css:build/css'])
+        for root, filename, outdir in process_dir('build', 'pages', reroot=True):
+            process_page(os.path.join(root, filename), outdir, env)
+        rebuild_statcache()
+
+
+def init_project(params):
+    if len(params):
+        if os.path.isdir(params[0]):
+            raise IOError("%s already exists." % (params[0]))
+        os.mkdir(params[0])
+        os.chdir(params[0])
+        print("Creating ceremony site layout in %s" % (params[0]))
+        open('.gitignore', 'w').write(""".#*
+%s
+build/**
+""" % (CACHENAME))
+
+    made_pages = False
+    for p in DIRS:
+        if not os.path.isdir(p):
+            if p == 'pages':
+                made_pages = True
+            os.mkdir(p)
+
+    if made_pages:
+        open('pages/index.md', 'w').write("""title: Main page
+pretty_url: false
+
+# Hello world!
+
+Website content goes *here*.
+""")
+        open('css/main.scss', 'w').write("""body {
+    background: #fafffd;
+    color: #444;
+}
+""")
+        open('layouts/page.html', 'w').write("""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="HandheldFriendly" content="True">
+  <title>{{title}}</title>
+  <link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+</head>
+<body>
+{{text}}
+</body>
+</html>
+""")
+
+
+def main():
+    global VERBOSE
+    global USECACHE
+    global STATCACHE
+
+    parser = argparse.ArgumentParser(description="Website building tool", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
+                        help="Verbal exuberance mode")
+    parser.add_argument('-C', '--no-cache', dest='no_cache', action='store_true',
+                        help="Disable the mstat cache")
+    parser.add_argument('command', metavar='COMMAND', nargs='?', help='Command to execute [watch | init | make]', default='make')
+    parser.add_argument('args', metavar='ARGS', nargs='*', help='Arguments to command')
+
+    args = parser.parse_args()
+    VERBOSE = args.verbose
+    USECACHE = not args.no_cache
+    if args.command and args.command not in ('watch', 'init', 'make'):
+        args.print_usage()
+        sys.exit(1)
+
+    if args.command == 'init':
+        init_project(args.args)
+        sys.exit(0)
+
+    if not all(os.path.isdir(p) for p in DIRS):
+        print("Missing essential directory, please run %s init" % (sys.argv[0]), file=sys.stderr)
+        sys.exit(1)
+
+    if USECACHE and os.path.isfile(CACHENAME):
+        STATCACHE = pickle.load(open(CACHENAME, 'rb'))
+
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader('layouts'))
+    try:
+        if args.command == 'watch':
+            p = subprocess.Popen(['sass', '--scss', '-t', 'compressed', '--watch', 'css:build/css'])
+            try:
+                while True:
+                    process_files(env, process_css=False)
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                p.send_signal(signal.SIGINT)
+                p.wait()
+        else:
+            process_files(env, process_css=True)
+    finally:
+        if USECACHE:
+            pickle.dump(STATCACHE, open(CACHENAME, 'wb'))
+
+
+if __name__ == "__main__":
+    main()
