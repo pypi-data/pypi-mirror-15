@@ -1,0 +1,81 @@
+from quipclient import Client
+
+
+@external
+class SpeechSynthesisUtterance: pass
+@external
+class Promise: pass
+
+
+class ListItem:
+    def __init__(self, text, url):
+        self.text = text
+        anchor = jq('<a>')
+        .attr('href', url)
+        .attr('target', '_blank')
+        .text(text)
+        self.li = jq('<li>').append(anchor).appendTo('ul#output')
+
+    def toggle_select(self):
+        self.li.toggleClass('bg-info')
+
+
+class MyClient(Client):
+    auto_dispatch = True
+
+    def on_title(self, obj):
+        jq('div.title').text(obj['value'])
+
+    def on_entry(self, obj):
+        title, url = obj['title'], obj['url']
+        item = ListItem(title, url)
+        list_items.append(item)
+
+    def on_done(self, obj):
+        read_titles()
+
+
+def read_titles():
+    nonlocal running
+    running = True
+
+    co(def():
+        for i, item in enumerate(list_items):
+            if not running:
+                break
+            item.toggle_select()
+            yield speak(item.text)
+            item.toggle_select()
+            yield sleep(1.0)
+
+        speak(str.format('Finished reading {} items', i+1))
+    )
+
+
+def speak(text):
+    def callback(resolve, reject):
+        utterance = SpeechSynthesisUtterance(text)
+        window.speechSynthesis.speak(utterance)
+        utterance.onend = def():
+            resolve()
+            print('Spoke: ' + text)
+    return Promise(callback)
+
+
+def sleep(seconds):
+    def callback(resolve, reject):
+        window.setTimeout(resolve, seconds * 1000)
+    return Promise(callback)
+
+
+jq = window.jQuery
+synth = window.speechSynthesis
+running = False
+list_items = []
+client = MyClient()
+
+jq('button').on('click', def():
+    nonlocal running
+    running = False
+    window.speechSynthesis.cancel()
+)

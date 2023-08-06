@@ -1,0 +1,34 @@
+import random
+
+from quipclient import Client
+
+
+COLORS = ['success', 'info', 'warning', 'danger']
+
+
+class MyClient(Client):
+    auto_dispatch = True
+
+    def on_progress(self, obj):
+        step, total = obj['step'], obj['total']
+        # We have to use str.format() instead of % operator here. The % operator
+        # is not implemented for strings.
+        print(str.format('{} / {}', step, total))
+        percent = float(step) / total * 100
+        percent_str = str.format('{:.0f}%', percent)
+        jq('div.percent').text(percent_str)
+        jq('div.progress-bar').css('width', str.format('{}%', percent))
+
+    def on_data(self, obj):
+        div = jq('<div>').text(obj['value']).appendTo('#output')
+        color = random.choice(COLORS)
+        div.addClass('bg-' + color)
+
+
+jq = window.jQuery
+client = MyClient()
+
+def on_click(evt):
+    client.stop()
+    jq('button').addClass('disabled')
+jq('button').on('click', on_click)
