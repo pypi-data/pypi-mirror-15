@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+# vim:ts=4:sw=4:ft=python:fileencoding=utf-8
+# Copyright © 2016 Carl Chenet <carl.chenet@ohmytux.com>
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+"""Checks an RSS feed and posts new entries to twitter."""
+
+# standard libraires imports
+from configparser import SafeConfigParser, NoOptionError, NoSectionError
+from argparse import ArgumentParser
+import codecs
+import logging
+import os
+import sys
+
+# 3rd party libraries imports
+import feedparser
+from persistentlist import PersistentList
+import tweepy
+
+__version__ = '0.4'
+
+config = None
+
+def post_update(status):
+    '''Send a tweet to Twitter'''
+    global config
+    consumer_key = config.get('twitter', 'consumer_key')
+    consumer_secret = config.get('twitter', 'consumer_secret')
+    access_token = config.get('twitter', 'access_token')
+    access_token_secret = config.get('twitter', 'access_token_secret')
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(access_token, access_token_secret)
+    api = tweepy.API(auth)
+    try:
+        api.update_status(status)
+    except(tweepy.error.TweepError) as e:
+        logging.warning("Error occurred while updating status: %s", e)
+    else:
+        return True
+
+
+def main():
+    """The main function."""
+    global config
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument('--version', action='version', version=__version__)
+    parser.add_argument('-c', '--config',
+                        default=os.getenv('XDG_CONFIG_HOME',
+                                          '~/.config/feed2tweet.ini'),
+                        help='Location of config file (default: %(default)s)',
+                        metavar='FILE')
+    parser.add_argument('-a', '--all', action='store_true', default=False,
+                        dest='all',
+                        help='tweet all RSS items, regardless of cache')
+    parser.add_argument('-l', '--limit', dest='limit', default=10, type=int,
+                        help='tweet only LIMIT items (default: %(default)s)')
+    parser.add_argument('--cachefile', dest='cachefile',
+                        help='location of the cache file (default: %(default)s)')
+    parser.add_argument('-n', '--dry-run', dest='dryrun',
+                        action='store_true', default=False,
+                        help='Do not actually post tweets')
+    parser.add_argument('-v', '--verbose', '--info', dest='log_level',
+                        action='store_const', const='info', default='warning',
+                        help='enable informative (verbose) output, work on log level INFO')
+    parser.add_argument('-d', '--debug', dest='log_level',
+                        action='store_const', const='debug', default='warning',
+                        help='enable debug output, work on log level DEBUG')
+    parser.add_argument('--hashtaglist', dest='hashtaglist',
+                        help='a list of hashtag to match')
+    parser.add_argument('-r', '--rss', help='the RSS feed URL to fetch items from',
+                        dest='rss_uri', metavar='http://...')
+    options = parser.parse_args()
+    logging.basicConfig(level=options.log_level.upper(), format='%(message)s')
+    config = SafeConfigParser()
+    if not config.read(os.path.expanduser(options.config)):
+        sys.exit('Could not read config file')
+
+    if not options.cachefile:
+        try:
+            options.cachefile = config.get('cache', 'cachefile')
+        except (NoOptionError, NoSectionError):
+            options.cachefile = os.path.join(os.getenv('XDG_CACHE_HOME', '~/.cache'), 'feed2tweet.dat')
+    options.cachefile = os.path.expanduser(options.cachefile)
+
+    if not options.rss_uri:
+        try:
+            options.rss_uri = config.get('rss', 'uri')
+        except (NoOptionError, NoSectionError):
+            sys.exit('uri parameter in the [rss] section of the configuration file is mandatory. Exiting.')
+    feed = feedparser.parse(options.rss_uri)
+
+    if not options.hashtaglist:
+        try:
+            options.hashtaglist = config.get('hashtaglist', 'several_words_hashtags_list')
+        except (NoOptionError, NoSectionError):
+            options.hashtaglist = False
+
+    # lots of scary warnings about possible security risk using this method
+    # but for local use I'd rather do this than a try-catch with open()
+    #if not os.path.isfile(options.cachefile):
+    #    # make a blank cache file
+    #    cPickle.dump({'id': None}, open(options.cachefile, 'wb'), -1)
+
+    #cache = cPickle.load(open(options.cachefile))
+    cache = PersistentList(options.cachefile[0:-3], 100)
+    if options.hashtaglist:
+        severalwordshashtags = codecs.open(options.hashtaglist,
+                                           encoding='utf-8').readlines()
+        severalwordshashtags = [i.rstrip('\n') for i in severalwordshashtags]
+    # fixing rss2twitter most old bug
+    # reverse feed entries because most recent one should be sent as the last one in Twitter
+    entries = feed['entries'][0:options.limit]
+    entries.reverse()
+    totweet = []
+    if not options.all:
+        for i in entries:
+            if i['id'] not in cache:
+                totweet.append(i)
+    else:
+        totweet = entries
+
+    for entry in totweet:
+        logging.debug('found feed entry %s, %s', entry['id'], entry['title'])
+
+        rss = {
+            'id': entry['id'],
+            'link': entry['link'],
+            'title': entry['title'],
+            'summary': entry['summary'],
+        }
+        severalwordsinhashtag = False
+        if options.hashtaglist:
+            prehashtags = entry['tags'][0]['term']
+            tmphashtags = entry['tags'][0]['term']
+            for element in severalwordshashtags:
+                if element in prehashtags:
+                    severalwordsinhashtag = True
+                    tmphashtags = prehashtags.replace(element,
+                                                      ''.join(element.split()))
+        if severalwordsinhashtag:
+            tmphashtags = tmphashtags.replace("'", "")
+            finalhashtags = tmphashtags.split(' ')
+            # issue with splitting hashtags in 2 words is right there
+            rss['hashtag'] = ' '.join(['#%s' % i for i in finalhashtags])
+        else:
+            rss['hashtag'] = ' '.join(['#%s' % i for i in entry['tags'][0]['term'].split()[:2]])
+
+        finalstring = '%s %s %s' % (rss['title'], rss['link'], rss['hashtag'])
+        if options.dryrun:
+            logging.warning(finalstring)
+        else:
+            post_update(finalstring)
+
+            # We keep the first feed in the cache, to use feed2tweet
+            # in normal mode the next time
+            cache.add(rss['id'])
+    # do not forget to close cache (shelf object)
+    cache.close()
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt as e:
+        # Ctrl-c
+        sys.exit('aborted')
+    except Exception:
+        logging.exception('unexpected exception')
+        raise
