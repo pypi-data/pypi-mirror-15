@@ -1,0 +1,71 @@
+CHANGES
+-------
+
+Version 0.3 : May 13, 2016
+--------------------------
+05/13/2016 Bug fixes to the run_in_process() and run_in_thread() 
+           functions so that exceptions are reported properly.
+           Also fixed logic bug on related to kernel task initialization.
+
+05/13/2016 Modification to the abide() function to allow it to work
+           with RLocks from the threading module.  One caveat: Such
+	   locks are NOT reentrant from within curio itself. 
+
+Version 0.2 : May 11, 2016
+--------------------------
+05/05/2016 Refactoring of stream I/O classes. There is now FileStream
+           and SocketStream.   The old Stream class is gone.
+
+04/30/2016 The run_blocking() and run_cpu_bound() calls are now
+           called run_in_thread() and run_in_process().
+
+04/23/2016 Changed the new_task() function to spawn().
+
+04/22/2016 Removed parent/child task relationship and associated
+           tracking.  It's an added complexity that's not really
+	   needed in the kernel and it can be done easily enough by
+	   the user in cases where it might be needed.
+
+04/18/2016 Major refactoring of timeout handling.  Virtually all
+           operations in curio support cancellation and timeouts.
+           However, putting an explicit "timeout" argument on
+           every API function/method greatly complicates the 
+           underlying implementation (and introduces performance
+           overhead in cases where timeouts aren't used). To
+           put a timeout on an operation, use the timeout_after()
+           function instead.  For example:
+
+               await timeout_after(5, sock.recv(1024))
+
+           This will cause a timeout to be raised after the
+           specified time interval.  
+
+04/01/2016 Improved management of the I/O selector.  The number of
+           register/unregister operations are reduced for tasks 
+           that constantly perform I/O on the same resources.  This
+           could offer a nice performance boost in certain cases.
+
+03/31/2016 Switched test suite to py.test. All of the tests are in the
+           top-level tests directory.  Use 'python3 -m pytest' to test.
+
+03/30/2016 Improved the curio monitor.  Instead of relying on the
+           console TTY (and invoked via Ctrl-C), it now uses a socket
+           to which you must connect via a different session. To
+           enable the monitor either use:
+
+               kernel = Kernel(with_monitor=True)
+
+           or run with an environment variable
+
+               env CURIOMONITOR=TRUE python3 yourprogram.py
+
+           To connect to the monitor, use the following command:
+
+               python3 -m curio.monitor
+          
+02/15/2016 Fixed Issue #37 where scheduling multiple tasks for sleeping
+           could potentially cause a crash in rare circumstances.
+
+Version 0.1 : October 31, 2015
+------------------------------
+Initial version
