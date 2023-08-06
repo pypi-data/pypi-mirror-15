@@ -1,0 +1,15 @@
+#########################################################################
+# File Name: run_download.sh
+# Author: wukan
+# mail: kan.wu@genetalks.com
+# Created Time: 26 May 2016 01:36:35 PM CST
+#########################################################################
+#!/bin/bash
+
+basepath=$(cd "$(dirname "$0")"; pwd)
+env_dir=${basepath}/../
+src_dir=${basepath}
+
+
+source ${env_dir}/bin/activate
+${env_dir}/bin/python  ${src_dir}/download.py $*
