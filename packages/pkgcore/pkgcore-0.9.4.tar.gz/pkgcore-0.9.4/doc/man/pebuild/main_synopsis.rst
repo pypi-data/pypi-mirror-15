@@ -1,0 +1,4 @@
+synopsis
+========
+
+pebuild [-h] [--version] [--debug] [-q] [-v] [--color BOOLEAN] [--add-config SECTION KEY VALUE] [--new-config SECTION KEY VALUE] [--empty-config] [--config PATH] [--domain DOMAIN] [--no-auto] <atom|ebuild> phase [phase ...]

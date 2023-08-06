@@ -1,0 +1,6 @@
+description
+===========
+
+pmerge is the main command-line utility for merging and unmerging packages on a
+system. It provides an interface to install, update, and uninstall ebuilds from
+source or binary packages.

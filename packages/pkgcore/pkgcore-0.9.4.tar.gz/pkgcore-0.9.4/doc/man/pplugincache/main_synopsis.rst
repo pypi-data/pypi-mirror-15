@@ -1,0 +1,4 @@
+synopsis
+========
+
+pplugincache [-h] [--version] [--debug] [-q] [-v] [packages [packages ...]]
