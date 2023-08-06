@@ -1,0 +1,411 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.instrumentation.fps &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="wlauto.instrumentation" href="../instrumentation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" accesskey="U">wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.instrumentation.fps</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="c"># pylint: disable=W0613,E1101</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">csv</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">errno</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+
+<span class="kn">from</span> <span class="nn">distutils.version</span> <span class="kn">import</span> <span class="n">LooseVersion</span>
+
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Instrument</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">IterationResult</span>
+<span class="kn">from</span> <span class="nn">wlauto.instrumentation</span> <span class="kn">import</span> <span class="n">instrument_is_installed</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="p">(</span><span class="n">InstrumentError</span><span class="p">,</span> <span class="n">WorkerThreadError</span><span class="p">,</span> <span class="n">ConfigError</span><span class="p">,</span>
+                               <span class="n">DeviceNotRespondingError</span><span class="p">,</span> <span class="n">TimeoutError</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span><span class="p">,</span> <span class="n">numeric</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">pandas</span> <span class="kn">as</span> <span class="nn">pd</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">pd</span> <span class="o">=</span> <span class="bp">None</span>
+
+
+<span class="n">VSYNC_INTERVAL</span> <span class="o">=</span> <span class="mi">16666667</span>
+<span class="n">PAUSE_LATENCY</span> <span class="o">=</span> <span class="mi">20</span>
+<span class="n">EPSYLON</span> <span class="o">=</span> <span class="mf">0.0001</span>
+
+
+<div class="viewcode-block" id="FpsInstrument"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.FpsInstrument">[docs]</a><span class="k">class</span> <span class="nc">FpsInstrument</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;fps&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Measures Frames Per Second (FPS) and associated metrics for a workload&#39;s main View.</span>
+
+<span class="s">    .. note:: This instrument depends on pandas Python library (which is not part of standard</span>
+<span class="s">              WA dependencies), so you will need to install that first, before you can use it.</span>
+
+<span class="s">    The view is specified by the workload as ``view`` attribute. This defaults</span>
+<span class="s">    to ``&#39;SurfaceView&#39;`` for game workloads, and ``None`` for non-game</span>
+<span class="s">    workloads (as for them FPS mesurement usually doesn&#39;t make sense).</span>
+<span class="s">    Individual workloads may override this.</span>
+
+<span class="s">    This instrument adds four metrics to the results:</span>
+
+<span class="s">        :FPS: Frames Per Second. This is the frame rate of the workload.</span>
+<span class="s">        :frames: The total number of frames rendered during the execution of</span>
+<span class="s">                 the workload.</span>
+<span class="s">        :janks: The number of &quot;janks&quot; that occured during execution of the</span>
+<span class="s">                workload. Janks are sudden shifts in frame rate. They result</span>
+<span class="s">                in a &quot;stuttery&quot; UI. See http://jankfree.org/jank-busters-io</span>
+<span class="s">        :not_at_vsync: The number of frames that did not render in a single</span>
+<span class="s">                       vsync cycle.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">supported_platforms</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;android&#39;</span><span class="p">]</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;drop_threshold&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">numeric</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Data points below this FPS will be dropped as they &#39;</span>
+                              <span class="s">&#39;do not constitute &quot;real&quot; gameplay. The assumption &#39;</span>
+                              <span class="s">&#39;being that while actually running, the FPS in the &#39;</span>
+                              <span class="s">&#39;game will not drop below X frames per second, &#39;</span>
+                              <span class="s">&#39;except on loading screens, menus, etc, which &#39;</span>
+                              <span class="s">&#39;should not contribute to FPS calculation. &#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;keep_raw&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;If set to ``True``, this will keep the raw dumpsys output &#39;</span>
+                              <span class="s">&#39;in the results directory (this is maily used for debugging) &#39;</span>
+                              <span class="s">&#39;Note: frames.csv with collected frames data will always be &#39;</span>
+                              <span class="s">&#39;generated regardless of this setting.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;generate_csv&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;If set to ``True``, this will produce temporal fps data &#39;</span>
+                              <span class="s">&#39;in the results directory, in a file named fps.csv &#39;</span>
+                              <span class="s">&#39;Note: fps data will appear as discrete step-like values &#39;</span>
+                              <span class="s">&#39;in order to produce a more meainingfull representation,&#39;</span>
+                              <span class="s">&#39;a rolling mean can be applied.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;crash_check&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specifies wither the instrument should check for crashed content by examining</span>
+<span class="s">                  frame data. If this is set, ``execution_time`` instrument must also be installed.</span>
+<span class="s">                  The check is performed by using the measured FPS and exection time to estimate the expected</span>
+<span class="s">                  frames cound and comparing that against the measured frames count. The the ratio of</span>
+<span class="s">                  measured/expected is too low, then it is assumed that the content has crashed part way</span>
+<span class="s">                  during the run. What is &quot;too low&quot; is determined by ``crash_threshold``.</span>
+
+<span class="s">                  .. note:: This is not 100\</span><span class="si">% f</span><span class="s">ool-proof. If the crash occurs sufficiently close to</span>
+<span class="s">                            workload&#39;s termination,  it may not be detected. If this is expected, the</span>
+<span class="s">                            threshold may be adjusted up to compensate.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;crash_threshold&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specifies the threshold used to decided whether a measured/expected frames ration indicates</span>
+<span class="s">                  a content crash. E.g. a value of ``0.75`` means the number of actual frames counted is a</span>
+<span class="s">                  quarter lower than expected, it will treated as a content crash.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">clear_command</span> <span class="o">=</span> <span class="s">&#39;dumpsys SurfaceFlinger --latency-clear &#39;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">FpsInstrument</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collector</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outfile</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fps_outfile</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_enabled</span> <span class="o">=</span> <span class="bp">True</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">pd</span> <span class="ow">or</span> <span class="n">LooseVersion</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">__version__</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">LooseVersion</span><span class="p">(</span><span class="s">&#39;0.13.1&#39;</span><span class="p">):</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;fps instrument requires pandas Python package (version 0.13.1 or higher) to be installed.</span><span class="se">\n</span><span class="s">&#39;</span>
+                       <span class="s">&#39;You can install it with pip, e.g. &quot;sudo pip install pandas&quot;&#39;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">crash_check</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">instrument_is_installed</span><span class="p">(</span><span class="s">&#39;execution_time&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;execution_time instrument must be installed in order to check for content crash.&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="FpsInstrument.setup"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.FpsInstrument.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">workload</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">workload</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="s">&#39;view&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fps_outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;fps.csv&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;frames.csv&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">collector</span> <span class="o">=</span> <span class="n">LatencyCollector</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">workload</span><span class="o">.</span><span class="n">view</span> <span class="ow">or</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">keep_raw</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">clear_command</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Workload does not contain a view; disabling...&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">is_enabled</span> <span class="o">=</span> <span class="bp">False</span>
+</div>
+<div class="viewcode-block" id="FpsInstrument.start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.FpsInstrument.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_enabled</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Starting SurfaceFlinger collection...&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="FpsInstrument.stop"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.FpsInstrument.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_enabled</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">is_alive</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Stopping SurfaceFlinger collection...&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="FpsInstrument.update_result"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.FpsInstrument.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_enabled</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>  <span class="c"># pylint: disable=maybe-no-member</span>
+                <span class="n">per_frame_fps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_update_stats</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_csv</span><span class="p">:</span>
+                    <span class="n">per_frame_fps</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fps_outfile</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;fps&#39;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s">&#39;fps.csv&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;FPS&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;nan&#39;</span><span class="p">))</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;frame_count&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;janks&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;not_at_vsync&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="FpsInstrument.slow_update_result"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.FpsInstrument.slow_update_result">[docs]</a>    <span class="k">def</span> <span class="nf">slow_update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span>
+        <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">has_metric</span><span class="p">(</span><span class="s">&#39;execution_time&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Checking for crashed content.&#39;</span><span class="p">)</span>
+            <span class="n">exec_time</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s">&#39;execution_time&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value</span>
+            <span class="n">fps</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s">&#39;FPS&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value</span>
+            <span class="n">frames</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s">&#39;frame_count&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value</span>
+            <span class="k">if</span> <span class="nb">all</span><span class="p">([</span><span class="n">exec_time</span><span class="p">,</span> <span class="n">fps</span><span class="p">,</span> <span class="n">frames</span><span class="p">]):</span>
+                <span class="n">expected_frames</span> <span class="o">=</span> <span class="n">fps</span> <span class="o">*</span> <span class="n">exec_time</span>
+                <span class="n">ratio</span> <span class="o">=</span> <span class="n">frames</span> <span class="o">/</span> <span class="n">expected_frames</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;actual/expected frames: {:.2}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ratio</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">ratio</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">crash_threshold</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Content for {} appears to have crashed.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">label</span><span class="p">))</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">FAILED</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s">&#39;Content crash detected (actual/expected frames: {:.2}).&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ratio</span><span class="p">))</span>
+</div>
+    <span class="k">def</span> <span class="nf">_update_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>  <span class="c"># pylint: disable=too-many-locals</span>
+        <span class="n">vsync_interval</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">refresh_period</span>
+        <span class="c"># fiter out bogus frames.</span>
+        <span class="n">actual_present_times</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">actual_present_time</span><span class="p">[</span><span class="n">data</span><span class="o">.</span><span class="n">actual_present_time</span> <span class="o">!=</span> <span class="mh">0x7fffffffffffffff</span><span class="p">]</span>
+        <span class="n">actual_present_time_deltas</span> <span class="o">=</span> <span class="p">(</span><span class="n">actual_present_times</span> <span class="o">-</span> <span class="n">actual_present_times</span><span class="o">.</span><span class="n">shift</span><span class="p">())</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>  <span class="c"># pylint: disable=E1103</span>
+        <span class="n">vsyncs_to_compose</span> <span class="o">=</span> <span class="p">(</span><span class="n">actual_present_time_deltas</span> <span class="o">/</span> <span class="n">vsync_interval</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">)))</span>
+        <span class="c"># drop values lower than drop_threshold FPS as real in-game frame</span>
+        <span class="c"># rate is unlikely to drop below that (except on loading screens</span>
+        <span class="c"># etc, which should not be factored in frame rate calculation).</span>
+        <span class="n">per_frame_fps</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">vsyncs_to_compose</span> <span class="o">*</span> <span class="p">(</span><span class="n">vsync_interval</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">)))</span>
+        <span class="n">keep_filter</span> <span class="o">=</span> <span class="n">per_frame_fps</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">drop_threshold</span>
+        <span class="n">filtered_vsyncs_to_compose</span> <span class="o">=</span> <span class="n">vsyncs_to_compose</span><span class="p">[</span><span class="n">keep_filter</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">filtered_vsyncs_to_compose</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+            <span class="n">total_vsyncs</span> <span class="o">=</span> <span class="n">filtered_vsyncs_to_compose</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">total_vsyncs</span><span class="p">:</span>
+                <span class="n">frame_count</span> <span class="o">=</span> <span class="n">filtered_vsyncs_to_compose</span><span class="o">.</span><span class="n">size</span>
+                <span class="n">fps</span> <span class="o">=</span> <span class="mf">1e9</span> <span class="o">*</span> <span class="n">frame_count</span> <span class="o">/</span> <span class="p">(</span><span class="n">vsync_interval</span> <span class="o">*</span> <span class="n">total_vsyncs</span><span class="p">)</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;FPS&#39;</span><span class="p">,</span> <span class="n">fps</span><span class="p">)</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;frame_count&#39;</span><span class="p">,</span> <span class="n">frame_count</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;FPS&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;nan&#39;</span><span class="p">))</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;frame_count&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+            <span class="n">vtc_deltas</span> <span class="o">=</span> <span class="n">filtered_vsyncs_to_compose</span> <span class="o">-</span> <span class="n">filtered_vsyncs_to_compose</span><span class="o">.</span><span class="n">shift</span><span class="p">()</span>
+            <span class="n">vtc_deltas</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">vtc_deltas</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+            <span class="n">vtc_deltas</span> <span class="o">=</span> <span class="n">vtc_deltas</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span>
+            <span class="n">janks</span> <span class="o">=</span> <span class="n">vtc_deltas</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">PAUSE_LATENCY</span> <span class="o">&gt;</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mf">1.5</span><span class="p">)</span> <span class="ow">and</span> <span class="mi">1</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+            <span class="n">not_at_vsync</span> <span class="o">=</span> <span class="n">vsyncs_to_compose</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">EPSYLON</span><span class="p">)</span> <span class="ow">and</span> <span class="mi">1</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;janks&#39;</span><span class="p">,</span> <span class="n">janks</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;not_at_vsync&#39;</span><span class="p">,</span> <span class="n">not_at_vsync</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c"># no filtered_vsyncs_to_compose</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;FPS&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;nan&#39;</span><span class="p">))</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;frame_count&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;janks&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;not_at_vsync&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">per_frame_fps</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#39;fps&#39;</span>
+        <span class="k">return</span> <span class="n">per_frame_fps</span>
+
+</div>
+<div class="viewcode-block" id="LatencyCollector"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.LatencyCollector">[docs]</a><span class="k">class</span> <span class="nc">LatencyCollector</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+
+    <span class="c"># Note: the size of the frames buffer for a particular surface is defined</span>
+    <span class="c">#       by NUM_FRAME_RECORDS inside android/services/surfaceflinger/FrameTracker.h.</span>
+    <span class="c">#       At the time of writing, this was hard-coded to 128. So at 60 fps</span>
+    <span class="c">#       (and there is no reason to go above that, as it matches vsync rate</span>
+    <span class="c">#       on pretty much all phones), there is just over 2 seconds&#39; worth of</span>
+    <span class="c">#       frames in there. Hence the sleep time of 2 seconds between dumps.</span>
+    <span class="c">#command_template = &#39;while (true); do dumpsys SurfaceFlinger --latency {}; sleep 2; done&#39;</span>
+    <span class="n">command_template</span> <span class="o">=</span> <span class="s">&#39;dumpsys SurfaceFlinger --latency {}&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outfile</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">activity</span><span class="p">,</span> <span class="n">keep_raw</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">LatencyCollector</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outfile</span> <span class="o">=</span> <span class="n">outfile</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">command_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">activity</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">keep_raw</span> <span class="o">=</span> <span class="n">keep_raw</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_signal</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_ready_time</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">refresh_period</span> <span class="o">=</span> <span class="n">VSYNC_INTERVAL</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">drop_threshold</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">refresh_period</span> <span class="o">*</span> <span class="mi">1000</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">exc</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">unresponsive_count</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="LatencyCollector.run"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.LatencyCollector.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;SurfaceFlinger collection started.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">stop_signal</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">fd</span><span class="p">,</span> <span class="n">temp_file</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkstemp</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;temp file: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp_file</span><span class="p">))</span>
+            <span class="n">wfh</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">fdopen</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">stop_signal</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+                    <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">))</span>
+                    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="n">wfh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="c"># TODO: this can happen after the run during results processing</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">temp_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">text</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\r\n</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\r</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">):</span>
+                    <span class="n">line</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">line</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_process_trace_line</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">keep_raw</span><span class="p">:</span>
+                <span class="n">raw_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">),</span> <span class="s">&#39;surfaceflinger.raw&#39;</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">temp_file</span><span class="p">,</span> <span class="n">raw_file</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">temp_file</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="n">DeviceNotRespondingError</span><span class="p">,</span> <span class="n">TimeoutError</span><span class="p">):</span>  <span class="c"># pylint: disable=W0703</span>
+            <span class="k">raise</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>  <span class="c"># pylint: disable=W0703</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Exception on collector thread: {}({})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">exc</span> <span class="o">=</span> <span class="n">WorkerThreadError</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;SurfaceFlinger collection stopped.&#39;</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">wfh</span><span class="p">)</span>
+            <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">([</span><span class="s">&#39;desired_present_time&#39;</span><span class="p">,</span> <span class="s">&#39;actual_present_time&#39;</span><span class="p">,</span> <span class="s">&#39;frame_ready_time&#39;</span><span class="p">])</span>
+            <span class="n">writer</span><span class="o">.</span><span class="n">writerows</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">frames</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Frames data written.&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="LatencyCollector.stop"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.fps.html#wlauto.instrumentation.fps.LatencyCollector.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_signal</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">unresponsive_count</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;SurfaceFlinger was unrepsonsive {} times.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unresponsive_count</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">unresponsive_count</span> <span class="o">&gt;</span> <span class="mi">10</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">exc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="bp">self</span><span class="o">.</span><span class="n">exc</span>  <span class="c"># pylint: disable=E0702</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;FSP collection complete.&#39;</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_process_trace_line</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">line</span><span class="p">):</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">desired_present_time</span><span class="p">,</span> <span class="n">actual_present_time</span><span class="p">,</span> <span class="n">frame_ready_time</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">parts</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">frame_ready_time</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_ready_time</span><span class="p">:</span>
+                <span class="k">return</span>  <span class="c"># duplicate frame</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">frame_ready_time</span> <span class="o">-</span> <span class="n">desired_present_time</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">drop_threshold</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Dropping bogus frame {}.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">line</span><span class="p">))</span>
+                <span class="k">return</span>  <span class="c"># bogus data</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_ready_time</span> <span class="o">=</span> <span class="n">frame_ready_time</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">desired_present_time</span><span class="p">,</span> <span class="n">actual_present_time</span><span class="p">,</span> <span class="n">frame_ready_time</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">refresh_period</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">drop_threshold</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">refresh_period</span> <span class="o">*</span> <span class="mi">10</span>
+        <span class="k">elif</span> <span class="s">&#39;SurfaceFlinger appears to be unresponsive, dumping anyways&#39;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">unresponsive_count</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Unexpected SurfaceFlinger dump output: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">line</span><span class="p">))</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" >wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

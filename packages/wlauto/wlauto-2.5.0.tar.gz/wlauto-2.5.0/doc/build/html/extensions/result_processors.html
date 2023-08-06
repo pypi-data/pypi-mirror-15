@@ -1,0 +1,577 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Result_processors &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../index.html" />
+    <link rel="next" title="Devices" href="devices.html" />
+    <link rel="prev" title="Instruments" href="instruments.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="devices.html" title="Devices"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="instruments.html" title="Instruments"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="result-processors">
+<span id="id1"></span><h1>Result_processors<a class="headerlink" href="#result-processors" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="cpustates">
+<h2>cpustates<a class="headerlink" href="#cpustates" title="Permalink to this headline">¶</a></h2>
+<p>Process power ftrace to produce CPU state and parallelism stats.</p>
+<p>Parses trace-cmd output to extract power events and uses those to generate
+statistics about parallelism and frequency/idle core residency.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">trace-cmd instrument must be enabled and configured to collect
+at least <code class="docutils literal"><span class="pre">power:cpu_idle</span></code> and <code class="docutils literal"><span class="pre">power:cpu_frequency</span></code> events.
+Reporting should also be enabled (it is by default) as
+<code class="docutils literal"><span class="pre">cpustate</span></code> parses the text version of the trace.
+Finally, the device should have <code class="docutils literal"><span class="pre">cpuidle</span></code> module installed.</p>
+</div>
+<p>This generates two reports for the run:</p>
+<p><em>parallel.csv</em></p>
+<p>Shows what percentage of time was spent with N cores active (for N
+from 0 to the total number of cores), for a cluster or for a system as
+a whole. It contain the following columns:</p>
+<blockquote>
+<div><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">workload:</th><td class="field-body">The workload label</td>
+</tr>
+<tr class="field-even field"><th class="field-name">iteration:</th><td class="field-body">iteration that was run</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">cluster:</th><td class="field-body">The cluster for which statics are reported. The value of
+<code class="docutils literal"><span class="pre">&quot;all&quot;</span></code> indicates that this row reports statistics for
+the whole system.</td>
+</tr>
+<tr class="field-even field"><th class="field-name" colspan="2">number_of_cores:</th></tr>
+<tr class="field-even field"><td>&nbsp;</td><td class="field-body">number of cores active. <code class="docutils literal"><span class="pre">0</span></code> indicates the cluster
+was idle.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">total_time:</th><td class="field-body">Total time spent in this state during workload execution</td>
+</tr>
+<tr class="field-even field"><th class="field-name">%time:</th><td class="field-body">Percentage of total workload execution time spent in this state</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">%running_time:</th><td class="field-body">Percentage of the time the cluster was active (i.e.
+ignoring time the cluster was idling) spent in this
+state.</td>
+</tr>
+</tbody>
+</table>
+</div></blockquote>
+<p><em>cpustate.csv</em></p>
+<p>Shows percentage of the time a core spent in a particular power state. The first
+column names the state is followed by a column for each core. Power states include
+available DVFS frequencies (for heterogeneous systems, this is the union of
+frequencies supported by different core types) and idle states. Some shallow
+states (e.g. ARM WFI) will consume different amount of power depending on the
+current OPP. For such states, there will be an entry for each opp. <code class="docutils literal"><span class="pre">&quot;unknown&quot;</span></code>
+indicates the percentage of time for which a state could not be established from the
+trace. This is usually due to core state being unknown at the beginning of the trace,
+but may also be caused by dropped events in the middle of the trace.</p>
+<div class="section" id="parameters">
+<h3>parameters<a class="headerlink" href="#parameters" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+<dt>first_cluster_state <span class="classifier-delimiter">:</span> <span class="classifier">integer</span></dt>
+<dd><p class="first">The first idle state which is common to a cluster.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">2</span></code></p>
+</dd>
+<dt>first_system_state <span class="classifier-delimiter">:</span> <span class="classifier">integer</span></dt>
+<dd><p class="first">The first idle state which is common to all cores.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">3</span></code></p>
+</dd>
+<dt>write_iteration_reports <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd>By default, this instrument will generate reports for the entire run
+in the overall output directory. Enabling this option will, in addition,
+create reports in each iteration&#8217;s output directory. The formats of these
+reports will be similar to the overall report, except they won&#8217;t mention
+the workload name or iteration number (as that is implied by their location).</dd>
+<dt>use_ratios <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd>By default proportional values will be reported as percentages, if this
+flag is enabled, they will be reported as ratios instead.</dd>
+<dt>create_timeline <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd><p class="first">Create a CSV with the timeline of core power states over the course of the run
+as well as the usual stats reports.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">True</span></code></p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="csv">
+<h2>csv<a class="headerlink" href="#csv" title="Permalink to this headline">¶</a></h2>
+<p>Creates a <code class="docutils literal"><span class="pre">results.csv</span></code> in the output directory containing results for
+all iterations in CSV format, each line containing a single metric.</p>
+<div class="section" id="id2">
+<h3>parameters<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+<dt>use_all_classifiers <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd><p class="first">If set to <code class="docutils literal"><span class="pre">True</span></code>, this will add a column for every classifier
+that features in at least one collected metric.</p>
+<div class="last admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This cannot be <code class="docutils literal"><span class="pre">True</span></code> if <code class="docutils literal"><span class="pre">extra_columns</span></code> is set.</p>
+</div>
+</dd>
+<dt>extra_columns <span class="classifier-delimiter">:</span> <span class="classifier">list_of_strs</span></dt>
+<dd><p class="first">List of classifiers to use as columns.</p>
+<div class="last admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This cannot be set if <code class="docutils literal"><span class="pre">use_all_classifiers</span></code> is <code class="docutils literal"><span class="pre">True</span></code>.</p>
+</div>
+</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="dvfs">
+<h2>dvfs<a class="headerlink" href="#dvfs" title="Permalink to this headline">¶</a></h2>
+<p>Reports DVFS state residency data form ftrace power events.</p>
+<p>This generates a <code class="docutils literal"><span class="pre">dvfs.csv</span></code> in the top-level results directory that,
+for each workload iteration, reports the percentage of time each CPU core
+spent in each of the DVFS frequency states (P-states), as well as percentage
+of the time spent in idle, during the execution of the workload.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><code class="docutils literal"><span class="pre">trace-cmd</span></code> instrument <em>MUST</em> be enabled in the instrumentation,
+and at least <code class="docutils literal"><span class="pre">'power*'</span></code> events must be enabled.</p>
+</div>
+<div class="section" id="id3">
+<h3>parameters<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="ipynb-exporter">
+<h2>ipynb_exporter<a class="headerlink" href="#ipynb-exporter" title="Permalink to this headline">¶</a></h2>
+<p>Generates an IPython notebook from a template with the results and runs it.
+Optionally it can show the resulting notebook in a web browser.
+It can also generate a PDF from the notebook.</p>
+<p>The template syntax is that of <a class="reference external" href="http://jinja.pocoo.org/">jinja2</a>
+and the template should generate a valid ipython notebook. The
+templates receives <code class="docutils literal"><span class="pre">result</span></code> and <code class="docutils literal"><span class="pre">context</span></code> which correspond to
+the RunResult and ExecutionContext respectively. You can use those
+in your ipython notebook template to extract any information you
+want to parse or show.</p>
+<p>This results_processor depends on <code class="docutils literal"><span class="pre">ipython</span></code> and <code class="docutils literal"><span class="pre">python-jinja2</span></code> being
+installed on the system.</p>
+<p>For example, a simple template that plots a bar graph of the results is:</p>
+<div class="highlight-python"><div class="highlight"><pre>{
+ &quot;metadata&quot;: {
+  &quot;name&quot;: &quot;&quot;
+ },
+ &quot;nbformat&quot;: 3,
+ &quot;nbformat_minor&quot;: 0,
+ &quot;worksheets&quot;: [
+  {
+   &quot;cells&quot;: [
+    {
+     &quot;cell_type&quot;: &quot;code&quot;,
+     &quot;collapsed&quot;: false,
+     &quot;input&quot;: [
+      &quot;%pylab inline&quot;
+     ],
+     &quot;language&quot;: &quot;python&quot;,
+     &quot;metadata&quot;: {},
+     &quot;outputs&quot;: [],
+     &quot;prompt_number&quot;: 1
+    },
+    {
+     &quot;cell_type&quot;: &quot;code&quot;,
+     &quot;collapsed&quot;: false,
+     &quot;input&quot;: [
+      &quot;results = {&quot;,
+      {% for ir in result.iteration_results -%}
+        {% for metric in ir.metrics -%}
+          {% if metric.name in ir.workload.summary_metrics -%}
+      &quot;\&quot;{{ ir.spec.label }}_{{ ir.id }}_{{ ir.iteration }}_{{ metric.name }}\&quot;: {{ metric.value }}, &quot;,
+          {%- endif %}
+        {%- endfor %}
+      {%- endfor %}
+      &quot;}\n&quot;,
+      &quot;width = 0.7\n&quot;,
+      &quot;ind = np.arange(len(results))&quot;
+     ],
+     &quot;language&quot;: &quot;python&quot;,
+     &quot;metadata&quot;: {},
+     &quot;outputs&quot;: [],
+     &quot;prompt_number&quot;: 2
+    },
+    {
+     &quot;cell_type&quot;: &quot;code&quot;,
+     &quot;collapsed&quot;: false,
+     &quot;input&quot;: [
+      &quot;fig, ax = plt.subplots()\n&quot;,
+      &quot;ax.bar(ind, results.values(), width)\n&quot;,
+      &quot;ax.set_xticks(ind + width/2)\n&quot;,
+      &quot;_ = ax.set_xticklabels(results.keys())&quot;
+     ],
+     &quot;language&quot;: &quot;python&quot;,
+     &quot;metadata&quot;: {},
+     &quot;outputs&quot;: [],
+     &quot;prompt_number&quot;: 3
+    }
+   ],
+   &quot;metadata&quot;: {}
+  }
+ ]
+}
+</pre></div>
+</div>
+<div class="section" id="id4">
+<h3>parameters<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+<dt>notebook_template <span class="classifier-delimiter">:</span> <span class="classifier">str</span></dt>
+<dd><p class="first">Filename of the ipython notebook template.  If
+no <cite>notebook_template</cite> is specified, the example template
+above is used.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">'template.ipynb'</span></code></p>
+</dd>
+<dt>notebook_name_prefix <span class="classifier-delimiter">:</span> <span class="classifier">str</span></dt>
+<dd><p class="first">Prefix of the name of the notebook. The date,
+time and <code class="docutils literal"><span class="pre">.ipynb</span></code> are appended to form the notebook filename.
+E.g. if notebook_name_prefix is <code class="docutils literal"><span class="pre">result_</span></code> then a run on 13th
+April 2015 at 9:54 would generate a notebook called
+<code class="docutils literal"><span class="pre">result_150413-095400.ipynb</span></code>. When generating a PDF,
+the resulting file will have the same name, but
+ending in <code class="docutils literal"><span class="pre">.pdf</span></code>.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">'result_'</span></code></p>
+</dd>
+<dt>show_notebook <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd>Open a web browser with the resulting notebook.</dd>
+<dt>notebook_directory <span class="classifier-delimiter">:</span> <span class="classifier">str</span></dt>
+<dd>Path to the notebooks directory served by the
+ipython notebook server. You must set it if
+<code class="docutils literal"><span class="pre">show_notebook</span></code> is selected. The ipython notebook
+will be copied here if specified.</dd>
+<dt>notebook_url <span class="classifier-delimiter">:</span> <span class="classifier">str</span></dt>
+<dd><p class="first">URL of the notebook on the IPython server. If
+not specified, it will be assumed to be in the root notebooks
+location on localhost, served on port 8888. Only needed if
+<code class="docutils literal"><span class="pre">show_notebook</span></code> is selected.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">the URL should not contain the final part (the notebook name) which will be populated automatically.</p>
+</div>
+<p class="last">default: <code class="docutils literal"><span class="pre">'http://localhost:8888/notebooks'</span></code></p>
+</dd>
+<dt>convert_to_html <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd>Convert the resulting notebook to HTML.</dd>
+<dt>show_html <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd>Open the exported html notebook at the end of
+the run. This can only be selected if convert_to_html has
+also been selected.</dd>
+<dt>convert_to_pdf <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd>Convert the resulting notebook to PDF.</dd>
+<dt>show_pdf <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd>Open the pdf at the end of the run. This can
+only be selected if convert_to_pdf has also been selected.</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="json">
+<h2>json<a class="headerlink" href="#json" title="Permalink to this headline">¶</a></h2>
+<p>Creates a <code class="docutils literal"><span class="pre">results.json</span></code> in the output directory containing results for
+all iterations in JSON format.</p>
+<div class="section" id="id5">
+<h3>parameters<a class="headerlink" href="#id5" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="mongodb">
+<h2>mongodb<a class="headerlink" href="#mongodb" title="Permalink to this headline">¶</a></h2>
+<p>Uploads run results to a MongoDB instance.</p>
+<p>MongoDB is a popular document-based data store (NoSQL database).</p>
+<div class="section" id="id6">
+<h3>parameters<a class="headerlink" href="#id6" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+<dt>uri <span class="classifier-delimiter">:</span> <span class="classifier">str</span></dt>
+<dd>Connection URI. If specified, this will be used for connecting
+to the backend, and host/port parameters will be ignored.</dd>
+<dt>host <span class="classifier-delimiter">:</span> <span class="classifier">str (mandatory)</span></dt>
+<dd><p class="first">IP address/name of the machinge hosting the MongoDB server.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">'localhost'</span></code></p>
+</dd>
+<dt>port <span class="classifier-delimiter">:</span> <span class="classifier">integer (mandatory)</span></dt>
+<dd><p class="first">Port on which the MongoDB server is listening.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">27017</span></code></p>
+</dd>
+<dt>db <span class="classifier-delimiter">:</span> <span class="classifier">str (mandatory)</span></dt>
+<dd><p class="first">Database on the server used to store WA results.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">'wa'</span></code></p>
+</dd>
+<dt>extra_params <span class="classifier-delimiter">:</span> <span class="classifier">dict</span></dt>
+<dd>Additional connection parameters may be specfied using this (see
+pymongo documentation.</dd>
+<dt>authentication <span class="classifier-delimiter">:</span> <span class="classifier">dict</span></dt>
+<dd>If specified, this will be passed to db.authenticate() upon connection;
+please pymongo documentaion authentication examples for detail.</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="sqlite">
+<h2>sqlite<a class="headerlink" href="#sqlite" title="Permalink to this headline">¶</a></h2>
+<p>Stores results in an sqlite database.</p>
+<p>This may be used accumulate results of multiple runs in a single file.</p>
+<div class="section" id="id7">
+<h3>parameters<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+<dt>database <span class="classifier-delimiter">:</span> <span class="classifier">str</span></dt>
+<dd><p class="first">Full path to the sqlite database to be used.  If this is not specified then
+a new database file will be created in the output directory. This setting can be
+used to accumulate results from multiple runs in a single database. If the
+specified file does not exist, it will be created, however the directory of the
+file must exist.</p>
+<div class="last admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The value must resolve to an absolute path,
+relative paths are not allowed; however the
+value may contain environment variables and/or
+the home reference ~.</p>
+</div>
+</dd>
+<dt>overwrite <span class="classifier-delimiter">:</span> <span class="classifier">boolean</span></dt>
+<dd>If <code class="docutils literal"><span class="pre">True</span></code>, this will overwrite the database file
+if it already exists. If <code class="docutils literal"><span class="pre">False</span></code> (the default) data
+will be added to the existing file (provided schema
+versions match &#8211; otherwise an error will be raised).</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="standard">
+<h2>standard<a class="headerlink" href="#standard" title="Permalink to this headline">¶</a></h2>
+<p>Creates a <code class="docutils literal"><span class="pre">result.txt</span></code> file for every iteration that contains metrics
+for that iteration.</p>
+<p>The metrics are written in</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">metric</span> <span class="o">=</span> <span class="n">value</span> <span class="p">[</span><span class="n">units</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>format.</p>
+<div class="section" id="id8">
+<h3>parameters<a class="headerlink" href="#id8" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="status">
+<h2>status<a class="headerlink" href="#status" title="Permalink to this headline">¶</a></h2>
+<p>Outputs a txt file containing general status information about which runs
+failed and which were successful</p>
+<div class="section" id="id9">
+<h3>parameters<a class="headerlink" href="#id9" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="summary-csv">
+<h2>summary_csv<a class="headerlink" href="#summary-csv" title="Permalink to this headline">¶</a></h2>
+<p>Similar to csv result processor, but only contains workloads&#8217; summary metrics.</p>
+<div class="section" id="id10">
+<h3>parameters<a class="headerlink" href="#id10" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="syeg-csv">
+<h2>syeg_csv<a class="headerlink" href="#syeg-csv" title="Permalink to this headline">¶</a></h2>
+<p>Generates a CSV results file in the format expected by SYEG toolchain.</p>
+<p>Multiple iterations get parsed into columns, adds additional columns for mean
+and standard deviation, append number of threads to metric names (where
+applicable) and add some metadata based on external mapping files.</p>
+<div class="section" id="id11">
+<h3>parameters<a class="headerlink" href="#id11" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>modules <span class="classifier-delimiter">:</span> <span class="classifier">list</span></dt>
+<dd>Lists the modules to be loaded by this extension. A module is a plug-in that
+further extends functionality of an extension.</dd>
+<dt>outfile <span class="classifier-delimiter">:</span> <span class="classifier">str</span></dt>
+<dd><p class="first">The name of the output CSV file.</p>
+<p class="last">default: <code class="docutils literal"><span class="pre">'syeg_out.csv'</span></code></p>
+</dd>
+</dl>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Result_processors</a><ul>
+<li><a class="reference internal" href="#cpustates">cpustates</a><ul>
+<li><a class="reference internal" href="#parameters">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#csv">csv</a><ul>
+<li><a class="reference internal" href="#id2">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#dvfs">dvfs</a><ul>
+<li><a class="reference internal" href="#id3">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#ipynb-exporter">ipynb_exporter</a><ul>
+<li><a class="reference internal" href="#id4">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#json">json</a><ul>
+<li><a class="reference internal" href="#id5">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#mongodb">mongodb</a><ul>
+<li><a class="reference internal" href="#id6">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#sqlite">sqlite</a><ul>
+<li><a class="reference internal" href="#id7">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#standard">standard</a><ul>
+<li><a class="reference internal" href="#id8">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#status">status</a><ul>
+<li><a class="reference internal" href="#id9">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#summary-csv">summary_csv</a><ul>
+<li><a class="reference internal" href="#id10">parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#syeg-csv">syeg_csv</a><ul>
+<li><a class="reference internal" href="#id11">parameters</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="instruments.html"
+                        title="previous chapter">Instruments</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="devices.html"
+                        title="next chapter">Devices</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/extensions/result_processors.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="devices.html" title="Devices"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="instruments.html" title="Instruments"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

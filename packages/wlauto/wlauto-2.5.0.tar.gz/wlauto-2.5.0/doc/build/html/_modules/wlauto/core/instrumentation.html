@@ -1,0 +1,491 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.instrumentation &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.instrumentation</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Adding New Instrument</span>
+<span class="sd">=====================</span>
+
+<span class="sd">Any new instrument should be a subclass of Instrument and it must have a name.</span>
+<span class="sd">When a new instrument is added to Workload Automation, the methods of the new</span>
+<span class="sd">instrument will be found automatically and hooked up to the supported signals.</span>
+<span class="sd">Once a signal is broadcasted, the corresponding registered method is invoked.</span>
+
+<span class="sd">Each method in Instrument must take two arguments, which are self and context.</span>
+<span class="sd">Supported signals can be found in [... link to signals ...] To make</span>
+<span class="sd">implementations easier and common, the basic steps to add new instrument is</span>
+<span class="sd">similar to the steps to add new workload.</span>
+
+<span class="sd">Hence, the following methods are sufficient to implement to add new instrument:</span>
+
+<span class="sd">    - setup: This method is invoked after the workload is setup. All the</span>
+<span class="sd">       necessary setups should go inside this method. Setup, includes operations</span>
+<span class="sd">       like, pushing the files to the target device, install them, clear logs,</span>
+<span class="sd">       etc.</span>
+<span class="sd">    - start: It is invoked just before the workload start execution. Here is</span>
+<span class="sd">       where instrument measures start being registered/taken.</span>
+<span class="sd">    - stop: It is invoked just after the workload execution stops. The measures</span>
+<span class="sd">       should stop being taken/registered.</span>
+<span class="sd">    - update_result: It is invoked after the workload updated its result.</span>
+<span class="sd">       update_result is where the taken measures are added to the result so it</span>
+<span class="sd">       can be processed by Workload Automation.</span>
+<span class="sd">    - teardown is invoked after the workload is teared down. It is a good place</span>
+<span class="sd">       to clean any logs generated by the instrument.</span>
+
+<span class="sd">For example, to add an instrument which will trace device errors, we subclass</span>
+<span class="sd">Instrument and overwrite the variable name.::</span>
+
+<span class="sd">        #BINARY_FILE = os.path.join(os.path.dirname(__file__), &#39;trace&#39;)</span>
+<span class="sd">        class TraceErrorsInstrument(Instrument):</span>
+
+<span class="sd">            name = &#39;trace-errors&#39;</span>
+
+<span class="sd">            def __init__(self, device):</span>
+<span class="sd">                super(TraceErrorsInstrument, self).__init__(device)</span>
+<span class="sd">                self.trace_on_device = os.path.join(self.device.working_directory, &#39;trace&#39;)</span>
+
+<span class="sd">We then declare and implement the aforementioned methods. For the setup method,</span>
+<span class="sd">we want to push the file to the target device and then change the file mode to</span>
+<span class="sd">755 ::</span>
+
+<span class="sd">    def setup(self, context):</span>
+<span class="sd">        self.device.push_file(BINARY_FILE, self.device.working_directory)</span>
+<span class="sd">        self.device.execute(&#39;chmod 755 {}&#39;.format(self.trace_on_device))</span>
+
+<span class="sd">Then we implemented the start method, which will simply run the file to start</span>
+<span class="sd">tracing. ::</span>
+
+<span class="sd">    def start(self, context):</span>
+<span class="sd">        self.device.execute(&#39;{} start&#39;.format(self.trace_on_device))</span>
+
+<span class="sd">Lastly, we need to stop tracing once the workload stops and this happens in the</span>
+<span class="sd">stop method::</span>
+
+<span class="sd">    def stop(self, context):</span>
+<span class="sd">        self.device.execute(&#39;{} stop&#39;.format(self.trace_on_device))</span>
+
+<span class="sd">The generated result can be updated inside update_result, or if it is trace, we</span>
+<span class="sd">just pull the file to the host device. context has a result variable which</span>
+<span class="sd">has add_metric method. It can be used to add the instrumentation results metrics</span>
+<span class="sd">to the final result for the workload. The method can be passed 4 params, which</span>
+<span class="sd">are metric key, value, unit and lower_is_better, which is a boolean. ::</span>
+
+<span class="sd">    def update_result(self, context):</span>
+<span class="sd">        # pull the trace file to the device</span>
+<span class="sd">        result = os.path.join(self.device.working_directory, &#39;trace.txt&#39;)</span>
+<span class="sd">        self.device.pull_file(result, context.working_directory)</span>
+
+<span class="sd">        # parse the file if needs to be parsed, or add result to</span>
+<span class="sd">        # context.result</span>
+
+<span class="sd">At the end, we might want to delete any files generated by the instrumentation</span>
+<span class="sd">and the code to clear these file goes in teardown method. ::</span>
+
+<span class="sd">    def teardown(self, context):</span>
+<span class="sd">        self.device.delete_file(os.path.join(self.device.working_directory, &#39;trace.txt&#39;))</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+
+<span class="kn">import</span> <span class="nn">wlauto.core.signal</span> <span class="kn">as</span> <span class="nn">signal</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.extension</span> <span class="kn">import</span> <span class="n">Extension</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">WAError</span><span class="p">,</span> <span class="n">DeviceNotRespondingError</span><span class="p">,</span> <span class="n">TimeoutError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">get_traceback</span><span class="p">,</span> <span class="n">isiterable</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">identifier</span>
+
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;instrumentation&#39;</span><span class="p">)</span>
+
+
+<span class="c"># Maps method names onto signals the should be registered to.</span>
+<span class="c"># Note: the begin/end signals are paired -- if a begin_ signal is sent,</span>
+<span class="c">#       then the corresponding end_ signal is guaranteed to also be sent.</span>
+<span class="c"># Note: using OrderedDict to preserve logical ordering for the table generated</span>
+<span class="c">#       in the documentation</span>
+<span class="n">SIGNAL_MAP</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="c"># Below are &quot;aliases&quot; for some of the more common signals to allow</span>
+    <span class="c"># instrumentation to have similar structure to workloads</span>
+    <span class="p">(</span><span class="s">&#39;initialize&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">RUN_INIT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;setup&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_WORKLOAD_SETUP</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;start&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_WORKLOAD_EXECUTION</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;stop&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_EXECUTION</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;process_workload_result&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_WORKLOAD_RESULT_UPDATE</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;update_result&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_RESULT_UPDATE</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;teardown&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_TEARDOWN</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;finalize&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">RUN_FIN</span><span class="p">),</span>
+
+    <span class="p">(</span><span class="s">&#39;on_run_start&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">RUN_START</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_run_end&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">RUN_END</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_workload_spec_start&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">WORKLOAD_SPEC_START</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_workload_spec_end&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">WORKLOAD_SPEC_END</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_iteration_start&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">ITERATION_START</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_iteration_end&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">ITERATION_END</span><span class="p">),</span>
+
+    <span class="p">(</span><span class="s">&#39;before_initial_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_INITIAL_BOOT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_successful_initial_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_INITIAL_BOOT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;after_initial_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_INITIAL_BOOT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;before_first_iteration_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_FIRST_ITERATION_BOOT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_successful_first_iteration_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_FIRST_ITERATION_BOOT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;after_first_iteration_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_FIRST_ITERATION_BOOT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;before_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_BOOT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_successful_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_BOOT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;after_boot&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_BOOT</span><span class="p">),</span>
+
+    <span class="p">(</span><span class="s">&#39;on_spec_init&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SPEC_INIT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_run_init&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">RUN_INIT</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_iteration_init&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">ITERATION_INIT</span><span class="p">),</span>
+
+    <span class="p">(</span><span class="s">&#39;before_workload_setup&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_WORKLOAD_SETUP</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_successful_workload_setup&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_WORKLOAD_SETUP</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;after_workload_setup&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_SETUP</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;before_workload_execution&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_WORKLOAD_EXECUTION</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_successful_workload_execution&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_WORKLOAD_EXECUTION</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;after_workload_execution&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_EXECUTION</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;before_workload_result_update&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_WORKLOAD_RESULT_UPDATE</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_successful_workload_result_update&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_WORKLOAD_RESULT_UPDATE</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;after_workload_result_update&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_RESULT_UPDATE</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;before_workload_teardown&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_WORKLOAD_TEARDOWN</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_successful_workload_teardown&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_WORKLOAD_TEARDOWN</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;after_workload_teardown&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_TEARDOWN</span><span class="p">),</span>
+
+    <span class="p">(</span><span class="s">&#39;before_overall_results_processing&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_OVERALL_RESULTS_PROCESSING</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_successful_overall_results_processing&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_OVERALL_RESULTS_PROCESSING</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;after_overall_results_processing&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_OVERALL_RESULTS_PROCESSING</span><span class="p">),</span>
+
+    <span class="p">(</span><span class="s">&#39;on_error&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">ERROR_LOGGED</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;on_warning&#39;</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">WARNING_LOGGED</span><span class="p">),</span>
+<span class="p">])</span>
+
+<span class="n">PRIORITY_MAP</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s">&#39;very_fast_&#39;</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;fast_&#39;</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;normal_&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;slow_&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mi">10</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;very_slow_&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mi">20</span><span class="p">),</span>
+<span class="p">])</span>
+
+<span class="n">installed</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<div class="viewcode-block" id="is_installed"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.is_installed">[docs]</a><span class="k">def</span> <span class="nf">is_installed</span><span class="p">(</span><span class="n">instrument</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instrument</span><span class="p">,</span> <span class="n">Instrument</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">instrument</span> <span class="ow">in</span> <span class="n">installed</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">if</span> <span class="n">instrument</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">installed</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instrument</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">instrument</span> <span class="ow">in</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">__class__</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">installed</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c"># assume string</span>
+        <span class="k">if</span> <span class="n">identifier</span><span class="p">(</span><span class="n">instrument</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="n">identifier</span><span class="p">(</span><span class="n">i</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">installed</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+    <span class="k">return</span> <span class="bp">False</span>
+
+</div>
+<div class="viewcode-block" id="is_enabled"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.is_enabled">[docs]</a><span class="k">def</span> <span class="nf">is_enabled</span><span class="p">(</span><span class="n">instrument</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instrument</span><span class="p">,</span> <span class="n">Instrument</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instrument</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">instrument</span><span class="o">.</span><span class="n">name</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c"># assume string</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">instrument</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">installed_instrument</span> <span class="o">=</span> <span class="n">get_instrument</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">installed_instrument</span><span class="o">.</span><span class="n">is_enabled</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+</div>
+<span class="n">failures_detected</span> <span class="o">=</span> <span class="bp">False</span>
+
+
+<div class="viewcode-block" id="reset_failures"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.reset_failures">[docs]</a><span class="k">def</span> <span class="nf">reset_failures</span><span class="p">():</span>
+    <span class="k">global</span> <span class="n">failures_detected</span>  <span class="c"># pylint: disable=W0603</span>
+    <span class="n">failures_detected</span> <span class="o">=</span> <span class="bp">False</span>
+
+</div>
+<div class="viewcode-block" id="check_failures"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.check_failures">[docs]</a><span class="k">def</span> <span class="nf">check_failures</span><span class="p">():</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">failures_detected</span>
+    <span class="n">reset_failures</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+</div>
+<div class="viewcode-block" id="ManagedCallback"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.ManagedCallback">[docs]</a><span class="k">class</span> <span class="nc">ManagedCallback</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This wraps instruments&#39; callbacks to ensure that errors do interfer</span>
+<span class="sd">    with run execution.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="n">callback</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span> <span class="o">=</span> <span class="n">instrument</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">callback</span> <span class="o">=</span> <span class="n">callback</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">is_enabled</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">callback</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">KeyboardInterrupt</span><span class="p">,</span> <span class="n">DeviceNotRespondingError</span><span class="p">,</span> <span class="n">TimeoutError</span><span class="p">):</span>  <span class="c"># pylint: disable=W0703</span>
+                <span class="k">raise</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>  <span class="c"># pylint: disable=W0703</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Error in insturment {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+                <span class="k">global</span> <span class="n">failures_detected</span>  <span class="c"># pylint: disable=W0603</span>
+                <span class="n">failures_detected</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">WAError</span><span class="p">):</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">tb</span> <span class="o">=</span> <span class="n">get_traceback</span><span class="p">()</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">tb</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;{}({})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">context</span><span class="o">.</span><span class="n">current_iteration</span><span class="p">:</span>
+                    <span class="c"># Error occureed outside of an iteration (most likely</span>
+                    <span class="c"># during intial setup or teardown). Since this would affect</span>
+                    <span class="c"># the rest of the run, mark the instument as broken so that</span>
+                    <span class="c"># it doesn&#39;t get re-enabled for subsequent iterations.</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">is_broken</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="n">disable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">)</span>
+
+
+<span class="c"># Need this to keep track of callbacks, because the dispatcher only keeps</span>
+<span class="c"># weak references, so if the callbacks aren&#39;t referenced elsewhere, they will</span>
+<span class="c"># be deallocated before they&#39;ve had a chance to be invoked.</span></div>
+<span class="n">_callbacks</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<div class="viewcode-block" id="install"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.install">[docs]</a><span class="k">def</span> <span class="nf">install</span><span class="p">(</span><span class="n">instrument</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This will look for methods (or any callable members) with specific names</span>
+<span class="sd">    in the instrument and hook them up to the corresponding signals.</span>
+
+<span class="sd">    :param instrument: Instrument instance to install.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Installing instrument </span><span class="si">%s</span><span class="s">.&#39;</span><span class="p">,</span> <span class="n">instrument</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">is_installed</span><span class="p">(</span><span class="n">instrument</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Instrument {} is already installed.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">instrument</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="nb">dir</span><span class="p">(</span><span class="n">instrument</span><span class="p">):</span>
+        <span class="n">priority</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">stripped_attr_name</span> <span class="o">=</span> <span class="n">attr_name</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">PRIORITY_MAP</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">attr_name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
+                <span class="n">stripped_attr_name</span> <span class="o">=</span> <span class="n">attr_name</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">):]</span>
+                <span class="n">priority</span> <span class="o">=</span> <span class="n">value</span>
+                <span class="k">break</span>
+        <span class="k">if</span> <span class="n">stripped_attr_name</span> <span class="ow">in</span> <span class="n">SIGNAL_MAP</span><span class="p">:</span>
+            <span class="n">attr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">instrument</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">attr</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attribute {} not callable in {}.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="n">instrument</span><span class="p">))</span>
+            <span class="n">argspec</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getargspec</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
+            <span class="n">arg_num</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">argspec</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+            <span class="c"># Instrument callbacks will be passed exactly two arguments: self</span>
+            <span class="c"># (the instrument instance to which the callback is bound) and</span>
+            <span class="c"># context. However, we also allow callbacks to capture the context</span>
+            <span class="c"># in variable arguments (declared as &quot;*args&quot; in the definition).</span>
+            <span class="k">if</span> <span class="n">arg_num</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="ow">or</span> <span class="p">(</span><span class="n">arg_num</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">argspec</span><span class="o">.</span><span class="n">varargs</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">):</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;{} must take exactly 2 positional arguments; {} given.&#39;</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="n">arg_num</span><span class="p">))</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Connecting </span><span class="si">%s</span><span class="s"> to </span><span class="si">%s</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">attr</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">SIGNAL_MAP</span><span class="p">[</span><span class="n">stripped_attr_name</span><span class="p">])</span>
+            <span class="n">mc</span> <span class="o">=</span> <span class="n">ManagedCallback</span><span class="p">(</span><span class="n">instrument</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+            <span class="n">_callbacks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mc</span><span class="p">)</span>
+            <span class="n">signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">mc</span><span class="p">,</span> <span class="n">SIGNAL_MAP</span><span class="p">[</span><span class="n">stripped_attr_name</span><span class="p">],</span> <span class="n">priority</span><span class="o">=</span><span class="n">priority</span><span class="p">)</span>
+    <span class="n">installed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instrument</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="uninstall"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.uninstall">[docs]</a><span class="k">def</span> <span class="nf">uninstall</span><span class="p">(</span><span class="n">instrument</span><span class="p">):</span>
+    <span class="n">instrument</span> <span class="o">=</span> <span class="n">get_instrument</span><span class="p">(</span><span class="n">instrument</span><span class="p">)</span>
+    <span class="n">installed</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">instrument</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="validate"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.validate">[docs]</a><span class="k">def</span> <span class="nf">validate</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">instrument</span> <span class="ow">in</span> <span class="n">installed</span><span class="p">:</span>
+        <span class="n">instrument</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="get_instrument"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.get_instrument">[docs]</a><span class="k">def</span> <span class="nf">get_instrument</span><span class="p">(</span><span class="n">inst</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">inst</span><span class="p">,</span> <span class="n">Instrument</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">inst</span>
+    <span class="k">for</span> <span class="n">installed_inst</span> <span class="ow">in</span> <span class="n">installed</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">identifier</span><span class="p">(</span><span class="n">installed_inst</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="o">==</span> <span class="n">identifier</span><span class="p">(</span><span class="n">inst</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">installed_inst</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Instrument {} is not installed&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">inst</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="disable_all"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.disable_all">[docs]</a><span class="k">def</span> <span class="nf">disable_all</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">instrument</span> <span class="ow">in</span> <span class="n">installed</span><span class="p">:</span>
+        <span class="n">_disable_instrument</span><span class="p">(</span><span class="n">instrument</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="enable_all"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.enable_all">[docs]</a><span class="k">def</span> <span class="nf">enable_all</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">instrument</span> <span class="ow">in</span> <span class="n">installed</span><span class="p">:</span>
+        <span class="n">_enable_instrument</span><span class="p">(</span><span class="n">instrument</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="enable"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.enable">[docs]</a><span class="k">def</span> <span class="nf">enable</span><span class="p">(</span><span class="n">to_enable</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">to_enable</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">inst</span> <span class="ow">in</span> <span class="n">to_enable</span><span class="p">:</span>
+            <span class="n">_enable_instrument</span><span class="p">(</span><span class="n">inst</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_enable_instrument</span><span class="p">(</span><span class="n">to_enable</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="disable"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.disable">[docs]</a><span class="k">def</span> <span class="nf">disable</span><span class="p">(</span><span class="n">to_disable</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">to_disable</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">inst</span> <span class="ow">in</span> <span class="n">to_disable</span><span class="p">:</span>
+            <span class="n">_disable_instrument</span><span class="p">(</span><span class="n">inst</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_disable_instrument</span><span class="p">(</span><span class="n">to_disable</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_enable_instrument</span><span class="p">(</span><span class="n">inst</span><span class="p">):</span>
+    <span class="n">inst</span> <span class="o">=</span> <span class="n">get_instrument</span><span class="p">(</span><span class="n">inst</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">inst</span><span class="o">.</span><span class="n">is_broken</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Enabling instrument {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">inst</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="n">inst</span><span class="o">.</span><span class="n">is_enabled</span> <span class="o">=</span> <span class="bp">True</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Not enabling broken instrument {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">inst</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+
+<span class="k">def</span> <span class="nf">_disable_instrument</span><span class="p">(</span><span class="n">inst</span><span class="p">):</span>
+    <span class="n">inst</span> <span class="o">=</span> <span class="n">get_instrument</span><span class="p">(</span><span class="n">inst</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">inst</span><span class="o">.</span><span class="n">is_enabled</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Disabling instrument {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">inst</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="n">inst</span><span class="o">.</span><span class="n">is_enabled</span> <span class="o">=</span> <span class="bp">False</span>
+
+
+<div class="viewcode-block" id="get_enabled"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.get_enabled">[docs]</a><span class="k">def</span> <span class="nf">get_enabled</span><span class="p">():</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">installed</span> <span class="k">if</span> <span class="n">i</span><span class="o">.</span><span class="n">is_enabled</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="get_disabled"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.get_disabled">[docs]</a><span class="k">def</span> <span class="nf">get_disabled</span><span class="p">():</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">installed</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">i</span><span class="o">.</span><span class="n">is_enabled</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="Instrument"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.instrumentation.Instrument">[docs]</a><span class="k">class</span> <span class="nc">Instrument</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for instrumentation implementations.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Instrument</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_enabled</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_broken</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;Instrument({})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

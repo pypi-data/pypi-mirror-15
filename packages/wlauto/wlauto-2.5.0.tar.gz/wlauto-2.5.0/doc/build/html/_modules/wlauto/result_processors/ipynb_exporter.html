@@ -1,0 +1,274 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.result_processors.ipynb_exporter &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.result_processors.ipynb_exporter</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=attribute-defined-outside-init</span>
+
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">webbrowser</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">File</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">ResultProcessor</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">ResultProcessorError</span>
+<span class="kn">import</span> <span class="nn">wlauto.utils.ipython</span> <span class="kn">as</span> <span class="nn">ipython</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">open_file</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">jinja2</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">jinja2</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="n">DEFAULT_NOTEBOOK_TEMPLATE</span> <span class="o">=</span> <span class="s">&#39;template.ipynb&#39;</span>
+
+
+<div class="viewcode-block" id="IPythonNotebookExporter"><a class="viewcode-back" href="../../../api/wlauto.result_processors.ipynb_exporter.html#wlauto.result_processors.ipynb_exporter.IPythonNotebookExporter">[docs]</a><span class="k">class</span> <span class="nc">IPythonNotebookExporter</span><span class="p">(</span><span class="n">ResultProcessor</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;ipynb_exporter&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Generates an IPython notebook from a template with the results and runs it.</span>
+<span class="s">    Optionally it can show the resulting notebook in a web browser.</span>
+<span class="s">    It can also generate a PDF from the notebook.</span>
+
+<span class="s">    The template syntax is that of `jinja2 &lt;http://jinja.pocoo.org/&gt;`_</span>
+<span class="s">    and the template should generate a valid ipython notebook. The</span>
+<span class="s">    templates receives ``result`` and ``context`` which correspond to</span>
+<span class="s">    the RunResult and ExecutionContext respectively. You can use those</span>
+<span class="s">    in your ipython notebook template to extract any information you</span>
+<span class="s">    want to parse or show.</span>
+
+<span class="s">    This results_processor depends on ``ipython`` and ``python-jinja2`` being</span>
+<span class="s">    installed on the system.</span>
+
+<span class="s">    For example, a simple template that plots a bar graph of the results is::</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="c"># Note: the example template is appended after the class definition</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;notebook_template&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_NOTEBOOK_TEMPLATE</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39;Filename of the ipython notebook template.  If</span>
+<span class="s">                  no `notebook_template` is specified, the example template</span>
+<span class="s">                  above is used.&#39;&#39;&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;notebook_name_prefix&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;result_&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39; Prefix of the name of the notebook. The date,</span>
+<span class="s">                  time and ``.ipynb`` are appended to form the notebook filename.</span>
+<span class="s">                  E.g. if notebook_name_prefix is ``result_`` then a run on 13th</span>
+<span class="s">                  April 2015 at 9:54 would generate a notebook called</span>
+<span class="s">                  ``result_150413-095400.ipynb``. When generating a PDF,</span>
+<span class="s">                  the resulting file will have the same name, but</span>
+<span class="s">                  ending in ``.pdf``.&#39;&#39;&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;show_notebook&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Open a web browser with the resulting notebook.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;notebook_directory&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39;Path to the notebooks directory served by the</span>
+<span class="s">                  ipython notebook server. You must set it if</span>
+<span class="s">                  ``show_notebook`` is selected. The ipython notebook</span>
+<span class="s">                  will be copied here if specified.&#39;&#39;&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;notebook_url&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;http://localhost:8888/notebooks&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39;URL of the notebook on the IPython server. If</span>
+<span class="s">                  not specified, it will be assumed to be in the root notebooks</span>
+<span class="s">                  location on localhost, served on port 8888. Only needed if</span>
+<span class="s">                  ``show_notebook`` is selected.</span>
+
+<span class="s">                  .. note:: the URL should not contain the final part (the notebook name) which will be populated automatically.</span>
+<span class="s">                  &#39;&#39;&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;convert_to_html&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Convert the resulting notebook to HTML.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;show_html&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39;Open the exported html notebook at the end of</span>
+<span class="s">                  the run. This can only be selected if convert_to_html has</span>
+<span class="s">                  also been selected.&#39;&#39;&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;convert_to_pdf&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Convert the resulting notebook to PDF.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;show_pdf&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39;Open the pdf at the end of the run. This can</span>
+<span class="s">                  only be selected if convert_to_pdf has also been selected.&#39;&#39;&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">file_resource</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">notebook_template</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">notebook_template_file</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">file_resource</span><span class="p">)</span>
+        <span class="n">nbbasename_template</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">notebook_name_prefix</span> <span class="o">+</span> <span class="s">&#39;%y%m</span><span class="si">%d</span><span class="s">-%H%M%S.ipynb&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nbbasename</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">nbbasename_template</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">ipython</span><span class="o">.</span><span class="n">import_error_str</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ResultProcessorError</span><span class="p">(</span><span class="n">ipython</span><span class="o">.</span><span class="n">import_error_str</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">jinja2</span><span class="p">:</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;{} requires python-jinja2 package to be installed&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">ResultProcessorError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">show_notebook</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">notebook_directory</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Requested &quot;show_notebook&quot; but no notebook_directory was specified&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">notebook_directory</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">notebook_directory</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;notebook_directory {} does not exist&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">notebook_directory</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">show_html</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">convert_to_html</span><span class="p">:</span>  <span class="c"># pylint: disable=E0203</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">convert_to_html</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Assuming &quot;convert_to_html&quot; as &quot;show_html&quot; is set&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">show_pdf</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">convert_to_pdf</span><span class="p">:</span>  <span class="c"># pylint: disable=E0203</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">convert_to_pdf</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Assuming &quot;convert_to_pdf&quot; as &quot;show_pdf&quot; is set&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="IPythonNotebookExporter.export_run_result"><a class="viewcode-back" href="../../../api/wlauto.result_processors.ipynb_exporter.html#wlauto.result_processors.ipynb_exporter.IPythonNotebookExporter.export_run_result">[docs]</a>    <span class="k">def</span> <span class="nf">export_run_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generate_notebook</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">show_notebook</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">open_notebook</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">convert_to_pdf</span><span class="p">:</span>
+            <span class="n">ipython</span><span class="o">.</span><span class="n">export_notebook</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nbbasename</span><span class="p">,</span>
+                                    <span class="n">context</span><span class="o">.</span><span class="n">run_output_directory</span><span class="p">,</span> <span class="s">&#39;pdf&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">show_pdf</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">open_file</span><span class="p">(</span><span class="s">&#39;pdf&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">convert_to_html</span><span class="p">:</span>
+            <span class="n">ipython</span><span class="o">.</span><span class="n">export_notebook</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nbbasename</span><span class="p">,</span>
+                                    <span class="n">context</span><span class="o">.</span><span class="n">run_output_directory</span><span class="p">,</span> <span class="s">&#39;html&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">show_html</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">open_file</span><span class="p">(</span><span class="s">&#39;html&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="IPythonNotebookExporter.generate_notebook"><a class="viewcode-back" href="../../../api/wlauto.result_processors.ipynb_exporter.html#wlauto.result_processors.ipynb_exporter.IPythonNotebookExporter.generate_notebook">[docs]</a>    <span class="k">def</span> <span class="nf">generate_notebook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generate a notebook from the template and run it&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">notebook_template_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">fin</span><span class="p">:</span>
+            <span class="n">template</span> <span class="o">=</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="n">fin</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+
+        <span class="n">notebook_in</span> <span class="o">=</span> <span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">result</span><span class="o">=</span><span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">notebook</span> <span class="o">=</span> <span class="n">ipython</span><span class="o">.</span><span class="n">read_notebook</span><span class="p">(</span><span class="n">notebook_in</span><span class="p">)</span>
+
+        <span class="n">ipython</span><span class="o">.</span><span class="n">run_notebook</span><span class="p">(</span><span class="n">notebook</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">notebook_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">run_output_directory</span><span class="p">,</span>
+                                          <span class="bp">self</span><span class="o">.</span><span class="n">nbbasename</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">notebook_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">ipython</span><span class="o">.</span><span class="n">write_notebook</span><span class="p">(</span><span class="n">notebook</span><span class="p">,</span> <span class="n">wfh</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">notebook_directory</span><span class="p">:</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">notebook_file</span><span class="p">,</span>
+                        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">notebook_directory</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="IPythonNotebookExporter.open_notebook"><a class="viewcode-back" href="../../../api/wlauto.result_processors.ipynb_exporter.html#wlauto.result_processors.ipynb_exporter.IPythonNotebookExporter.open_notebook">[docs]</a>    <span class="k">def</span> <span class="nf">open_notebook</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Open the notebook in a browser&quot;&quot;&quot;</span>
+        <span class="n">webbrowser</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">notebook_url</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s">&#39;/&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s">&#39;/&#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbbasename</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="IPythonNotebookExporter.open_file"><a class="viewcode-back" href="../../../api/wlauto.result_processors.ipynb_exporter.html#wlauto.result_processors.ipynb_exporter.IPythonNotebookExporter.open_file">[docs]</a>    <span class="k">def</span> <span class="nf">open_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_format</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Open the exported notebook&quot;&quot;&quot;</span>
+        <span class="n">fname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">notebook_file</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s">&quot;.&quot;</span> <span class="o">+</span> <span class="n">output_format</span>
+        <span class="n">open_file</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+
+
+<span class="c"># Add the default template to the documentation</span></div></div>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">),</span> <span class="n">DEFAULT_NOTEBOOK_TEMPLATE</span><span class="p">))</span> <span class="k">as</span> <span class="n">in_file</span><span class="p">:</span>
+    <span class="c"># Without an empty indented line, wlauto.misc.doc.strip_inlined_text() gets</span>
+    <span class="c"># confused</span>
+    <span class="n">IPythonNotebookExporter</span><span class="o">.</span><span class="n">description</span> <span class="o">+=</span> <span class="s">&quot;     </span><span class="se">\n</span><span class="s">&quot;</span>
+
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">in_file</span><span class="p">:</span>
+        <span class="n">IPythonNotebookExporter</span><span class="o">.</span><span class="n">description</span> <span class="o">+=</span> <span class="s">&quot;     &quot;</span> <span class="o">+</span> <span class="n">line</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

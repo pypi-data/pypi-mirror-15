@@ -1,0 +1,250 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.glbenchmark &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.glbenchmark</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101,E0203</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">AndroidUiAutoBenchmark</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Alias</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span>
+<span class="kn">import</span> <span class="nn">wlauto.common.android.resources</span>
+
+<span class="c"># These maps provide use-friendly aliases for the most common options.</span>
+<span class="n">USE_CASE_MAP</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;egypt&#39;</span><span class="p">:</span> <span class="s">&#39;GLBenchmark 2.5 Egypt HD&#39;</span><span class="p">,</span>
+    <span class="s">&#39;egypt-classic&#39;</span><span class="p">:</span> <span class="s">&#39;GLBenchmark 2.1 Egypt Classic&#39;</span><span class="p">,</span>
+    <span class="s">&#39;t-rex&#39;</span><span class="p">:</span> <span class="s">&#39;GLBenchmark 2.7 T-Rex HD&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">VARIANT_MAP</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;onscreen&#39;</span><span class="p">:</span> <span class="s">&#39;C24Z16 Onscreen Auto&#39;</span><span class="p">,</span>
+    <span class="s">&#39;offscreen&#39;</span><span class="p">:</span> <span class="s">&#39;C24Z16 Offscreen Auto&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="Glb"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbenchmark.html#wlauto.workloads.glbenchmark.Glb">[docs]</a><span class="k">class</span> <span class="nc">Glb</span><span class="p">(</span><span class="n">AndroidUiAutoBenchmark</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;glbenchmark&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Measures the graphics performance of Android devices by testing</span>
+<span class="s">    the underlying OpenGL (ES) implementation.</span>
+
+<span class="s">    http://gfxbench.com/about-gfxbench.jsp</span>
+
+<span class="s">    From the website:</span>
+
+<span class="s">        The benchmark includes console-quality high-level 3D animations</span>
+<span class="s">        (T-Rex HD and Egypt HD) and low-level graphics measurements.</span>
+
+<span class="s">        With high vertex count and complex effects such as motion blur, parallax</span>
+<span class="s">        mapping and particle systems, the engine of GFXBench stresses GPUs in order</span>
+<span class="s">        provide users a realistic feedback on their device.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">activity</span> <span class="o">=</span> <span class="s">&#39;com.glbenchmark.activities.GLBenchmarkDownloaderActivity&#39;</span>
+    <span class="n">view</span> <span class="o">=</span> <span class="s">&#39;com.glbenchmark.glbenchmark27/com.glbenchmark.activities.GLBRender&#39;</span>
+
+    <span class="n">packages</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;2.7.0&#39;</span><span class="p">:</span> <span class="s">&#39;com.glbenchmark.glbenchmark27&#39;</span><span class="p">,</span>
+        <span class="s">&#39;2.5.1&#39;</span><span class="p">:</span> <span class="s">&#39;com.glbenchmark.glbenchmark25&#39;</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="c"># If usecase is not specified the default usecase is the first supported usecase alias</span>
+    <span class="c"># for the specified version.</span>
+    <span class="n">supported_usecase_aliases</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;2.7.0&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;t-rex&#39;</span><span class="p">,</span> <span class="s">&#39;egypt&#39;</span><span class="p">],</span>
+        <span class="s">&#39;2.5.1&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;egypt-classic&#39;</span><span class="p">,</span> <span class="s">&#39;egypt&#39;</span><span class="p">],</span>
+    <span class="p">}</span>
+
+    <span class="n">default_iterations</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">install_timeout</span> <span class="o">=</span> <span class="mi">500</span>
+
+    <span class="n">regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;GLBenchmark (metric|FPS): (.*)&#39;</span><span class="p">)</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;version&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;2.7.0&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;2.7.0&#39;</span><span class="p">,</span> <span class="s">&#39;2.5.1&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;Specifies which version of the benchmark to run (different versions &#39;</span>
+                               <span class="s">&#39;support different use cases).&#39;</span><span class="p">)),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;use_case&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;Specifies which usecase to run, as listed in the benchmark menu; e.g.</span>
+<span class="s">                                 ``&#39;GLBenchmark 2.5 Egypt HD&#39;``. For convenience, two aliases are provided</span>
+<span class="s">                                 for the most common use cases: ``&#39;egypt&#39;`` and ``&#39;t-rex&#39;``. These could</span>
+<span class="s">                                 be use instead of the full use case title. For version ``&#39;2.7.0&#39;`` it defaults</span>
+<span class="s">                                 to ``&#39;t-rex&#39;``, for version ``&#39;2.5.1&#39;`` it defaults to ``&#39;egypt-classic&#39;``.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;variant&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;onscreen&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;Specifies which variant of the use case to run, as listed in the benchmarks</span>
+<span class="s">                                 menu (small text underneath the use case name); e.g. ``&#39;C24Z16 Onscreen Auto&#39;``.</span>
+<span class="s">                                 For convenience, two aliases are provided for the most common variants:</span>
+<span class="s">                                 ``&#39;onscreen&#39;`` and ``&#39;offscreen&#39;``. These may be used instead of full variant</span>
+<span class="s">                                 names.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;times&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;Specfies the number of times the benchmark will be run in a &quot;tight &#39;</span>
+                               <span class="s">&#39;loop&quot;, i.e. without performaing setup/teardown inbetween.&#39;</span><span class="p">)),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;timeout&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;Specifies how long, in seconds, UI automation will wait for results screen to</span>
+<span class="s">                                 appear before assuming something went wrong.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">aliases</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;glbench&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;egypt&#39;</span><span class="p">,</span> <span class="n">use_case</span><span class="o">=</span><span class="s">&#39;egypt&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;t-rex&#39;</span><span class="p">,</span> <span class="n">use_case</span><span class="o">=</span><span class="s">&#39;t-rex&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;egypt_onscreen&#39;</span><span class="p">,</span> <span class="n">use_case</span><span class="o">=</span><span class="s">&#39;egypt&#39;</span><span class="p">,</span> <span class="n">variant</span><span class="o">=</span><span class="s">&#39;onscreen&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;t-rex_onscreen&#39;</span><span class="p">,</span> <span class="n">use_case</span><span class="o">=</span><span class="s">&#39;t-rex&#39;</span><span class="p">,</span> <span class="n">variant</span><span class="o">=</span><span class="s">&#39;onscreen&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;egypt_offscreen&#39;</span><span class="p">,</span> <span class="n">use_case</span><span class="o">=</span><span class="s">&#39;egypt&#39;</span><span class="p">,</span> <span class="n">variant</span><span class="o">=</span><span class="s">&#39;offscreen&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;t-rex_offscreen&#39;</span><span class="p">,</span> <span class="n">use_case</span><span class="o">=</span><span class="s">&#39;t-rex&#39;</span><span class="p">,</span> <span class="n">variant</span><span class="o">=</span><span class="s">&#39;offscreen&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Glb</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;version&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_case</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">use_case</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">supported_usecase_aliases</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_case</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">USE_CASE_MAP</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_case</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">supported_usecase_aliases</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;usecases {} is not supported in version {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">use_case</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">use_case</span> <span class="o">=</span> <span class="n">USE_CASE_MAP</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">use_case</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;use_case&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_case</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="s">&#39;_&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">variant</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">VARIANT_MAP</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">variant</span> <span class="o">=</span> <span class="n">VARIANT_MAP</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">variant</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;variant&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">variant</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="s">&#39;_&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">times</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_timeout</span> <span class="o">=</span> <span class="mi">4</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">times</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;timeout&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">package</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">packages</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Glb.init_resources"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbenchmark.html#wlauto.workloads.glbenchmark.Glb.init_resources">[docs]</a>    <span class="k">def</span> <span class="nf">init_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">apk_file</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">wlauto</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">android</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">ApkFile</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="n">version</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_file</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">wlauto</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">android</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">JarFile</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_uiauto_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span>
+                                                        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uiauto_file</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_package</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_package</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uiauto_file</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="Glb.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbenchmark.html#wlauto.workloads.glbenchmark.Glb.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Glb</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update_result</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">match_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">logcat_log</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">match</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                    <span class="n">metric</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">value</span><span class="p">,</span> <span class="n">units</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;*&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">metric</span> <span class="o">==</span> <span class="s">&#39;metric&#39;</span><span class="p">:</span>
+                        <span class="n">metric</span> <span class="o">=</span> <span class="s">&#39;Frames&#39;</span>
+                        <span class="n">units</span> <span class="o">=</span> <span class="s">&#39;frames&#39;</span>
+                    <span class="n">metric</span> <span class="o">=</span> <span class="n">metric</span> <span class="o">+</span> <span class="s">&#39;_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">match_count</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+                    <span class="n">match_count</span> <span class="o">+=</span> <span class="mi">1</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

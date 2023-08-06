@@ -1,0 +1,741 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.common.gem5.device &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.common.gem5.device</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># Original implementation by Rene de Jong. Updated by Sascha Bischoff.</span>
+
+<span class="c"># pylint: disable=E1101</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">tarfile</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">pexpect</span> <span class="kn">import</span> <span class="n">EOF</span><span class="p">,</span> <span class="n">TIMEOUT</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">settings</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.core</span> <span class="kn">import</span> <span class="n">signal</span> <span class="k">as</span> <span class="n">sig</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">DeviceError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils</span> <span class="kn">import</span> <span class="n">ssh</span><span class="p">,</span> <span class="n">types</span>
+
+
+<div class="viewcode-block" id="BaseGem5Device"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device">[docs]</a><span class="k">class</span> <span class="nc">BaseGem5Device</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base implementation for a gem5-based device</span>
+
+<span class="sd">    This class is used as the base class for OS-specific devices such as the</span>
+<span class="sd">    G3m5LinuxDevice and the Gem5AndroidDevice. The majority of the gem5-specific</span>
+<span class="sd">    functionality is included here.</span>
+
+<span class="sd">    Note: When inheriting from this class, make sure to inherit from this class</span>
+<span class="sd">    prior to inheriting from the OS-specific class, i.e. LinuxDevice, to ensure</span>
+<span class="sd">    that the methods are correctly overridden.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># gem5 can be very slow. Hence, we use some very long timeouts!</span>
+    <span class="n">delay</span> <span class="o">=</span> <span class="mi">3600</span>
+    <span class="n">long_delay</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">delay</span>
+    <span class="n">ready_timeout</span> <span class="o">=</span> <span class="n">long_delay</span>
+    <span class="n">default_timeout</span> <span class="o">=</span> <span class="n">delay</span>
+
+    <span class="n">platform</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">path_module</span> <span class="o">=</span> <span class="s">&#39;posixpath&#39;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;gem5_binary&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;./build/ARM/gem5.fast&#39;</span><span class="p">,</span>
+                  <span class="n">mandatory</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&quot;Command used to execute gem5. &quot;</span>
+                  <span class="s">&quot;Adjust according to needs.&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;gem5_args&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">types</span><span class="o">.</span><span class="n">arguments</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;Command line passed to the gem5 simulation. This&quot;</span>
+                  <span class="s">&quot; command line is used to set up the simulated system, and &quot;</span>
+                  <span class="s">&quot;should be the same as used for a standard gem5 simulation &quot;</span>
+                  <span class="s">&quot;without workload automation. Note that this is simulation &quot;</span>
+                  <span class="s">&quot;script specific and will hence need to be tailored to each &quot;</span>
+                  <span class="s">&quot;particular use case.&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;gem5_vio_args&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">types</span><span class="o">.</span><span class="n">arguments</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">constraint</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="s">&quot;{}&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">),</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;gem5 VirtIO command line used to enable the &quot;</span>
+                  <span class="s">&quot;VirtIO device in the simulated system. At the very least, &quot;</span>
+                  <span class="s">&quot;the root parameter of the VirtIO9PDiod device must be &quot;</span>
+                  <span class="s">&quot;exposed on the command line. Please set this root mount to &quot;</span>
+                  <span class="s">&quot;{}, as it will be replaced with the directory used by &quot;</span>
+                  <span class="s">&quot;Workload Automation at runtime.&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;temp_dir&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/tmp&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;Temporary directory used to pass files into the &quot;</span>
+                  <span class="s">&quot;gem5 simulation. Workload Automation will automatically &quot;</span>
+                  <span class="s">&quot;create a directory in this folder, and will remove it again &quot;</span>
+                  <span class="s">&quot;once the simulation completes.&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;checkpoint&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">mandatory</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&quot;This parameter &quot;</span>
+                  <span class="s">&quot;tells Workload Automation to create a checkpoint of the &quot;</span>
+                  <span class="s">&quot;simulated system once the guest system has finished booting.&quot;</span>
+                  <span class="s">&quot; This checkpoint can then be used at a later stage by other &quot;</span>
+                  <span class="s">&quot;WA runs to avoid booting the guest system a second time. Set&quot;</span>
+                  <span class="s">&quot; to True to take a checkpoint of the simulated system post &quot;</span>
+                  <span class="s">&quot;boot.&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;run_delay&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">constraint</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;This sets the time that the &quot;</span>
+                  <span class="s">&quot;system should sleep in the simulated system prior to &quot;</span>
+                  <span class="s">&quot;running and workloads or taking checkpoints. This allows &quot;</span>
+                  <span class="s">&quot;the system to quieten down prior to running the workloads. &quot;</span>
+                  <span class="s">&quot;When this is combined with the checkpoint_post_boot&quot;</span>
+                  <span class="s">&quot; option, it allows the checkpoint to be created post-sleep,&quot;</span>
+                  <span class="s">&quot; and therefore the set of workloads resuming from this &quot;</span>
+                  <span class="s">&quot;checkpoint will not be required to sleep.&quot;</span><span class="p">)</span>
+    <span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">is_rooted</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c"># pylint: disable=R0201</span>
+        <span class="c"># gem5 is always rooted</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+    <span class="c"># pylint: disable=E0203</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;gem5Device&#39;</span><span class="p">)</span>
+
+        <span class="c"># The gem5 subprocess</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_port</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&quot;gem5&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stdout_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stderr_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stderr_filename</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c"># Find the first one that does not exist. Ensures that we do not re-use</span>
+        <span class="c"># the directory used by someone else.</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">maxint</span><span class="p">):</span>
+            <span class="n">directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">,</span> <span class="s">&quot;wa_{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">stat</span><span class="p">(</span><span class="n">directory</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+                <span class="k">break</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span> <span class="o">=</span> <span class="n">directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Using {} as the temporary directory.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">))</span>
+
+        <span class="c"># Start the gem5 simulation when WA starts a run using a signal.</span>
+        <span class="n">sig</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">init_gem5</span><span class="p">,</span> <span class="n">sig</span><span class="o">.</span><span class="n">RUN_START</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BaseGem5Device.validate"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Assemble the virtio args</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_vio_args</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5_vio_args</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">)</span>  <span class="c"># pylint: disable=W0201</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;gem5 VirtIO command: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5_vio_args</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.init_gem5"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.init_gem5">[docs]</a>    <span class="k">def</span> <span class="nf">init_gem5</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Start gem5, find out the telnet port and connect to the simulation.</span>
+
+<span class="sd">        We first create the temporary directory used by VirtIO to pass files</span>
+<span class="sd">        into the simulation, as well as the gem5 output directory.We then create</span>
+<span class="sd">        files for the standard output and error for the gem5 process. The gem5</span>
+<span class="sd">        process then is started.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Creating temporary directory: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">))</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span><span class="p">)</span>
+
+        <span class="c"># We need to redirect the standard output and standard error for the</span>
+        <span class="c"># gem5 process to a file so that we can debug when things go wrong.</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span><span class="p">,</span> <span class="s">&#39;stdout&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stdout_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span><span class="p">,</span> <span class="s">&#39;stderr&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stderr_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="c"># We need to keep this so we can check which port to use for the telnet</span>
+        <span class="c"># connection.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stderr_filename</span> <span class="o">=</span> <span class="n">f</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_gem5</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.start_gem5"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.start_gem5">[docs]</a>    <span class="k">def</span> <span class="nf">start_gem5</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Starts the gem5 simulator, and parses the output to get the telnet port.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Starting the gem5 simulator&quot;</span><span class="p">)</span>
+
+        <span class="n">command_line</span> <span class="o">=</span> <span class="s">&quot;{} --outdir={}/gem5 {} {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5_binary</span><span class="p">,</span>
+                                                          <span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span>
+                                                          <span class="bp">self</span><span class="o">.</span><span class="n">gem5_args</span><span class="p">,</span>
+                                                          <span class="bp">self</span><span class="o">.</span><span class="n">gem5_vio_args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;gem5 command line: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command_line</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">command_line</span><span class="o">.</span><span class="n">split</span><span class="p">(),</span>
+                                     <span class="n">stdout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">stdout_file</span><span class="p">,</span>
+                                     <span class="n">stderr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">stderr_file</span><span class="p">)</span>
+
+        <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_port</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="c"># Check that gem5 is running!</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5</span><span class="o">.</span><span class="n">poll</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&quot;The gem5 process has crashed with error code {}!&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5</span><span class="o">.</span><span class="n">poll</span><span class="p">()))</span>
+
+            <span class="c"># Open the stderr file</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stderr_filename</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+                <span class="n">m</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">r&quot;Listening\ for\ system\ connection\ on\ port\ (?P&lt;port&gt;\d+)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">m</span><span class="p">:</span>
+                    <span class="n">port</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;port&#39;</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="n">port</span> <span class="o">&gt;=</span> <span class="mi">3456</span> <span class="ow">and</span> <span class="n">port</span> <span class="o">&lt;</span> <span class="mi">5900</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_port</span> <span class="o">=</span> <span class="n">port</span>
+                        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                        <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.connect"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.connect">[docs]</a>    <span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c"># pylint: disable=R0912,W0201</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Connect to the gem5 simulation and wait for Android to boot. Then,</span>
+<span class="sd">        create checkpoints, and mount the VirtIO device.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connect_gem5</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_boot</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_delay</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Sleeping for {} seconds in the guest&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_delay</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;sleep {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_delay</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_gem5</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mount_virtio</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Creating the working directory in the simulated system&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;mkdir -p {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">working_directory</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">True</span>  <span class="c"># pylint: disable=W0201</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.wait_for_boot"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.wait_for_boot">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_boot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.connect_gem5"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.connect_gem5">[docs]</a>    <span class="k">def</span> <span class="nf">connect_gem5</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c"># pylint: disable=R0912</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Connect to the telnet port of the gem5 simulation.</span>
+
+<span class="sd">        We connect, and wait for the prompt to be found. We do not use a timeout</span>
+<span class="sd">        for this, and wait for the prompt in a while loop as the gem5 simulation</span>
+<span class="sd">        can take many hours to reach a prompt when booting the system. We also</span>
+<span class="sd">        inject some newlines periodically to try and force gem5 to show a</span>
+<span class="sd">        prompt. Once the prompt has been found, we replace it with a unique</span>
+<span class="sd">        prompt to ensure that we are able to match it properly. We also disable</span>
+<span class="sd">        the echo as this simplifies parsing the output when executing commands</span>
+<span class="sd">        on the device.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Connecting to the gem5 simulation on port {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5_port</span><span class="p">))</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">gethostname</span><span class="p">()</span>
+        <span class="n">port</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_port</span>
+
+        <span class="c"># Connect to the gem5 telnet port. Use a short timeout here.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span> <span class="o">=</span> <span class="n">ssh</span><span class="o">.</span><span class="n">TelnetConnection</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="s">&#39;None&#39;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">,</span> <span class="n">auto_prompt_reset</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                        <span class="n">login_timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Connected! Waiting for prompt...&quot;</span><span class="p">)</span>
+
+        <span class="c"># We need to find the prompt. It might be different if we are resuming</span>
+        <span class="c"># from a checkpoint. Therefore, we test multiple options here.</span>
+        <span class="n">prompt_found</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">prompt_found</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">login_to_device</span><span class="p">()</span>
+            <span class="k">except</span> <span class="n">TIMEOUT</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c"># Try and force a prompt to be shown</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="s">r&#39;# &#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">UNIQUE_PROMPT</span><span class="p">,</span> <span class="s">r&#39;\[PEXPECT\][</span><span class="se">\\</span><span class="s">\$\#]+ &#39;</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
+                <span class="n">prompt_found</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">except</span> <span class="n">TIMEOUT</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Setting unique prompt...&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">set_unique_prompt</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">prompt</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Prompt found and replaced with a unique string&quot;</span><span class="p">)</span>
+
+        <span class="c"># We check that the prompt is what we think it should be. If not, we</span>
+        <span class="c"># need to update the regex we use to match.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">find_prompt</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">setecho</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sync_gem5_shell</span><span class="p">()</span>
+
+        <span class="c"># Try and avoid line wrapping as much as possible. Don&#39;t check the error</span>
+        <span class="c"># codes from these command because some of them WILL fail.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;stty columns 1024&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;busybox stty columns 1024&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;stty cols 1024&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;busybox stty cols 1024&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;reset&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.get_properties"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.get_properties">[docs]</a>    <span class="k">def</span> <span class="nf">get_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=R0801</span>
+        <span class="sd">&quot;&quot;&quot; Get the property files from the device &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">propfile</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">property_files</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">normname</span> <span class="o">=</span> <span class="n">propfile</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">,</span> <span class="s">&#39;.&#39;</span><span class="p">)</span>
+                <span class="n">outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="n">normname</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_file</span><span class="p">(</span><span class="n">propfile</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;cat {} &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">propfile</span><span class="p">,</span> <span class="n">normname</span><span class="p">))</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="n">normname</span><span class="p">,</span> <span class="n">outfile</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_directory</span><span class="p">(</span><span class="n">propfile</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">get_directory</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">propfile</span><span class="p">)</span>
+                    <span class="k">continue</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">continue</span>
+            <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>
+                <span class="c"># We pull these files &quot;opportunistically&quot;, so if a pull fails</span>
+                <span class="c"># (e.g. we don&#39;t have permissions to read the file), just note</span>
+                <span class="c"># it quietly (not as an error/warning) and move on.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Could not pull property file &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">propfile</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">{}</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.get_directory"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.get_directory">[docs]</a>    <span class="k">def</span> <span class="nf">get_directory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">directory</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Pull a directory from the device &quot;&quot;&quot;</span>
+        <span class="n">normname</span> <span class="o">=</span> <span class="n">directory</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">,</span> <span class="s">&#39;.&#39;</span><span class="p">)</span>
+        <span class="n">outdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="n">normname</span><span class="p">)</span>
+        <span class="n">temp_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="s">&quot;{}.tar&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">normname</span><span class="p">))</span>
+        <span class="c"># Check that the folder exists</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;ls -la {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">directory</span><span class="p">))</span>
+        <span class="c"># Compress the folder</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;{} tar -cvf {}.tar {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">busybox</span><span class="p">,</span> <span class="n">normname</span><span class="p">,</span> <span class="n">directory</span><span class="p">))</span>
+        <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Failed to run tar command on device! Not pulling {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">directory</span><span class="p">))</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="n">normname</span><span class="p">,</span> <span class="n">temp_file</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">temp_file</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">outdir</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">extractall</span><span class="p">(</span><span class="n">outdir</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">temp_file</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.get_pids_of"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.get_pids_of">[docs]</a>    <span class="k">def</span> <span class="nf">get_pids_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">process_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns a list of PIDs of all processes with the specified name. &quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;ps | busybox grep {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">process_name</span><span class="p">),</span>
+                                 <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">and</span> <span class="s">&#39;not found&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">))</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.find_prompt"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.find_prompt">[docs]</a>    <span class="k">def</span> <span class="nf">find_prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">prompt</span> <span class="o">=</span> <span class="s">r&#39;\[PEXPECT\][</span><span class="se">\\</span><span class="s">\$\#]+ &#39;</span>
+        <span class="n">synced</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">synced</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="n">prompt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">UNIQUE_PROMPT</span><span class="p">,</span> <span class="s">r&#39;[\$\#] &#39;</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">synced</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">elif</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">prompt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">UNIQUE_PROMPT</span>
+                <span class="n">synced</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">prompt</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;\$&#39;</span><span class="p">,</span> <span class="s">r&#39;</span><span class="se">\\</span><span class="s">\$&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+                <span class="n">prompt</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;\#&#39;</span><span class="p">,</span> <span class="s">r&#39;</span><span class="se">\\</span><span class="s">\#&#39;</span><span class="p">,</span> <span class="n">prompt</span><span class="p">)</span>
+                <span class="n">prompt</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;\[&#39;</span><span class="p">,</span> <span class="s">r&#39;\[&#39;</span><span class="p">,</span> <span class="n">prompt</span><span class="p">)</span>
+                <span class="n">prompt</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;\]&#39;</span><span class="p">,</span> <span class="s">r&#39;\]&#39;</span><span class="p">,</span> <span class="n">prompt</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">PROMPT</span> <span class="o">=</span> <span class="n">prompt</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.login"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.login">[docs]</a>    <span class="k">def</span> <span class="nf">login</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.close"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.reset"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;Attempt to restart the gem5 device. This is not &quot;</span>
+                         <span class="s">&quot;supported!&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.init"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.init">[docs]</a>    <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.push_file"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.push_file">[docs]</a>    <span class="k">def</span> <span class="nf">push_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">_</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Push a file to the gem5 device using VirtIO</span>
+
+<span class="sd">        The file to push to the device is copied to the temporary directory on</span>
+<span class="sd">        the host, before being copied within the simulation to the destination.</span>
+<span class="sd">        Checks, in the form of &#39;ls&#39; with error code checking, are performed to</span>
+<span class="sd">        ensure that the file is copied to the destination.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Pushing {} to device.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;temp_dir: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;dest: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dest</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;filename: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+
+        <span class="c"># We need to copy the file to copy to the temporary directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">move_to_temp_dir</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+
+        <span class="c"># Back to the gem5 world</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;ls -al /mnt/obb/{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;busybox cp /mnt/obb/{} {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">dest</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;busybox sync&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;ls -al {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dest</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;ls -al /mnt/obb/&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Push complete.&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.pull_file"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.pull_file">[docs]</a>    <span class="k">def</span> <span class="nf">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">_</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Pull a file from the gem5 device using m5 writefile</span>
+
+<span class="sd">        First, we check the extension of the file to be copied. If the file ends</span>
+<span class="sd">        in .gz, then gem5 wrongly assumes that it should create a gzipped output</span>
+<span class="sd">        stream, which results in a gem5 error. Therefore, we rename the file on</span>
+<span class="sd">        the local device prior to the writefile command when required. Next, the</span>
+<span class="sd">        file is copied to the local directory within the guest as the m5</span>
+<span class="sd">        writefile command assumes that the file is local. The file is then</span>
+<span class="sd">        written out to the host system using writefile, prior to being moved to</span>
+<span class="sd">        the destination on the host.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Pulling {} from device.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+
+        <span class="c"># gem5 assumes that files ending in .gz are gzip-compressed. We need to</span>
+        <span class="c"># work around this, else gem5 panics on us. Rename the file for use in</span>
+        <span class="c"># gem5</span>
+        <span class="k">if</span> <span class="n">filename</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">:]</span> <span class="o">==</span> <span class="s">&#39;.gz&#39;</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">+=</span> <span class="s">&#39;.fugem5&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;pull_file {} {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">filename</span><span class="p">))</span>
+        <span class="c"># We don&#39;t check the exit code here because it is non-zero if the source</span>
+        <span class="c"># and destination are the same. The ls below will cause an error if the</span>
+        <span class="c"># file was not where we expected it to be.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;busybox cp {} {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">filename</span><span class="p">),</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;busybox sync&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;ls -la {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Finished the copy in the simulator&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_util</span><span class="p">(</span><span class="s">&quot;writefile {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="s">&#39;cpu&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">filename</span><span class="p">:</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span><span class="p">,</span> <span class="n">filename</span><span class="p">)):</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c"># Perform the local move</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span><span class="p">,</span> <span class="n">filename</span><span class="p">),</span> <span class="n">dest</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Pull complete.&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.delete_file"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.delete_file">[docs]</a>    <span class="k">def</span> <span class="nf">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">_</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Delete a file on the device &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;rm &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.file_exists"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.file_exists">[docs]</a>    <span class="k">def</span> <span class="nf">file_exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Check if a file exists &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;if [ -e </span><span class="se">\&#39;</span><span class="s">{}</span><span class="se">\&#39;</span><span class="s"> ]; then echo 1; else echo 0; fi&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">output</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">False</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="c"># If we cannot process the output, assume that there is no file</span>
+            <span class="k">return</span> <span class="bp">False</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.disconnect"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.disconnect">[docs]</a>    <span class="k">def</span> <span class="nf">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Close and disconnect from the gem5 simulation. Additionally, we remove</span>
+<span class="sd">        the temporary directory used to pass files into the simulation.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Gracefully terminating the gem5 simulation.&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">gem5_util</span><span class="p">(</span><span class="s">&quot;exit&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">gem5</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">EOF</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Removing the temporary directory&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;Failed to remove the temporary directory!&quot;</span><span class="p">)</span>
+
+    <span class="c"># gem5 might be slow. Hence, we need to make the ping timeout very long.</span></div>
+<div class="viewcode-block" id="BaseGem5Device.ping"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.ping">[docs]</a>    <span class="k">def</span> <span class="nf">ping</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Pinging gem5 to see if it is still alive&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;ls /&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">longdelay</span><span class="p">)</span>
+
+    <span class="c"># Additional Android-specific methods.</span></div>
+<div class="viewcode-block" id="BaseGem5Device.forward_port"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.forward_port">[docs]</a>    <span class="k">def</span> <span class="nf">forward_port</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_</span><span class="p">):</span>  <span class="c"># pylint: disable=R0201</span>
+        <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;we do not need forwarding&#39;</span><span class="p">)</span>
+
+    <span class="c"># gem5 should dump out a framebuffer. We can use this if it exists. Failing</span>
+    <span class="c"># that, fall back to the parent class implementation.</span></div>
+<div class="viewcode-block" id="BaseGem5Device.capture_screen"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.capture_screen">[docs]</a>    <span class="k">def</span> <span class="nf">capture_screen</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="n">file_list</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span><span class="p">)</span>
+        <span class="n">screen_caps</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">file_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s">&#39;.bmp&#39;</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+                <span class="n">screen_caps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">screen_caps</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="c"># Bail out if we do not have image, and resort to the slower, built</span>
+            <span class="c"># in method.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="kn">import</span> <span class="nn">Image</span>
+                <span class="n">gem5_image</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span><span class="p">,</span> <span class="n">screen_caps</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="n">temp_image</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5outdir</span><span class="p">,</span> <span class="s">&quot;file.png&quot;</span><span class="p">)</span>
+                <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">gem5_image</span><span class="p">)</span>
+                <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">temp_image</span><span class="p">,</span> <span class="s">&quot;PNG&quot;</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">temp_image</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">temp_image</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;capture_screen: using gem5 screencap&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">True</span>
+            <span class="k">except</span> <span class="p">(</span><span class="n">shutil</span><span class="o">.</span><span class="n">Error</span><span class="p">,</span> <span class="ne">ImportError</span><span class="p">,</span> <span class="ne">IOError</span><span class="p">):</span>
+                <span class="k">pass</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+    <span class="c"># pylint: disable=W0613</span></div>
+<div class="viewcode-block" id="BaseGem5Device.execute"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.execute">[docs]</a>    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">background</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">busybox</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">as_root</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Attempting to execute &quot;{}&quot; as root on unrooted device.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">busybox</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Attempting to execute &quot;{}&quot; with busybox. &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">)</span> <span class="o">+</span>
+                                  <span class="s">&#39;Busybox can only be deployed to rooted devices.&#39;</span><span class="p">)</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">busybox</span><span class="p">,</span> <span class="n">command</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">background</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Attempt to execute in background. Not supported &quot;</span>
+                              <span class="s">&quot;in gem5, hence ignored.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="n">as_root</span><span class="p">)</span>
+
+    <span class="c"># Internal methods: do not use outside of the class.</span>
+</div>
+    <span class="k">def</span> <span class="nf">_check_ready</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Check if the device is ready.</span>
+
+<span class="sd">        As this is gem5, we just assume that the device is ready once we have</span>
+<span class="sd">        connected to the gem5 simulation, and updated the prompt.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Device not ready.&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BaseGem5Device.gem5_shell"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.gem5_shell">[docs]</a>    <span class="k">def</span> <span class="nf">gem5_shell</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">sync</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>  <span class="c"># pylint: disable=R0912</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute a command in the gem5 shell</span>
+
+<span class="sd">        This wraps the telnet connection to gem5 and processes the raw output.</span>
+
+<span class="sd">        This method waits for the shell to return, and then will try and</span>
+<span class="sd">        separate the output from the command from the command itself. If this</span>
+<span class="sd">        fails, warn, but continue with the potentially wrong output.</span>
+
+<span class="sd">        The exit code is also checked by default, and non-zero exit codes will</span>
+<span class="sd">        raise a DeviceError.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span>
+        <span class="k">if</span> <span class="n">sync</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sync_gem5_shell</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;gem5_shell command: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">))</span>
+
+        <span class="c"># Send the actual command</span>
+        <span class="n">conn</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s">&quot;{}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">))</span>
+
+        <span class="c"># Wait for the response. We just sit here and wait for the prompt to</span>
+        <span class="c"># appear, as gem5 might take a long time to provide the output. This</span>
+        <span class="c"># avoids timeout issues.</span>
+        <span class="n">command_index</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="k">while</span> <span class="n">command_index</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">conn</span><span class="o">.</span><span class="n">prompt</span><span class="p">():</span>
+                <span class="n">output</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39; \r([^\n])&#39;</span><span class="p">,</span> <span class="s">r&#39;\1&#39;</span><span class="p">,</span> <span class="n">conn</span><span class="o">.</span><span class="n">before</span><span class="p">)</span>
+                <span class="n">output</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;[\b]&#39;</span><span class="p">,</span> <span class="s">r&#39;&#39;</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+                <span class="c"># Deal with line wrapping</span>
+                <span class="n">output</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;[\r].+?&lt;&#39;</span><span class="p">,</span> <span class="s">r&#39;&#39;</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+                <span class="n">command_index</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+
+                <span class="c"># If we have -1, then we cannot match the command, but the</span>
+                <span class="c"># prompt has returned. Hence, we have a bit of an issue. We</span>
+                <span class="c"># warn, and return the whole output.</span>
+                <span class="k">if</span> <span class="n">command_index</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;gem5_shell: Unable to match command in &quot;</span>
+                                     <span class="s">&quot;command output. Expect parsing errors!&quot;</span><span class="p">)</span>
+                    <span class="n">command_index</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="p">[</span><span class="n">command_index</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">command</span><span class="p">):]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+        <span class="c"># It is possible that gem5 will echo the command. Therefore, we need to</span>
+        <span class="c"># remove that too!</span>
+        <span class="n">command_index</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">command_index</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="p">[</span><span class="n">command_index</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">command</span><span class="p">):]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;gem5_shell output: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">output</span><span class="p">))</span>
+
+        <span class="c"># We get a second prompt. Hence, we need to eat one to make sure that we</span>
+        <span class="c"># stay in sync. If we do not do this, we risk getting out of sync for</span>
+        <span class="c"># slower simulations.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">UNIQUE_PROMPT</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">PROMPT</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">check_exit_code</span><span class="p">:</span>
+            <span class="n">exit_code_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;echo $?&#39;</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="n">as_root</span><span class="p">,</span>
+                                             <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                             <span class="n">sync</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">exit_code</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">exit_code_text</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">exit_code</span><span class="p">:</span>
+                    <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Got exit code {}</span><span class="se">\n</span><span class="s">from: {}</span><span class="se">\n</span><span class="s">OUTPUT: {}&#39;</span>
+                    <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">exit_code</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">output</span><span class="p">))</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">IndexError</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Could not get exit code for &quot;{}&quot;,</span><span class="se">\n</span><span class="s">got: &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">exit_code_text</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">output</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.gem5_util"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.gem5_util">[docs]</a>    <span class="k">def</span> <span class="nf">gem5_util</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Execute a gem5 utility command using the m5 binary on the device &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;/sbin/m5 &#39;</span> <span class="o">+</span> <span class="n">command</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.sync_gem5_shell"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.sync_gem5_shell">[docs]</a>    <span class="k">def</span> <span class="nf">sync_gem5_shell</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Synchronise with the gem5 shell.</span>
+
+<span class="sd">        Write some unique text to the gem5 device to allow us to synchronise</span>
+<span class="sd">        with the shell output. We actually get two prompts so we need to match</span>
+<span class="sd">        both of these.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Sending Sync&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s">&quot;echo \*\*sync\*\*</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">r&quot;\*\*sync\*\*&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">UNIQUE_PROMPT</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">PROMPT</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">UNIQUE_PROMPT</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sckt</span><span class="o">.</span><span class="n">PROMPT</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.move_to_temp_dir"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.move_to_temp_dir">[docs]</a>    <span class="k">def</span> <span class="nf">move_to_temp_dir</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Move a file to the temporary directory on the host for copying to the</span>
+<span class="sd">        gem5 device</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="s">&quot;cp {} {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Local copy command: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">))</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">command</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="s">&quot;sync&quot;</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.checkpoint_gem5"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.checkpoint_gem5">[docs]</a>    <span class="k">def</span> <span class="nf">checkpoint_gem5</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">end_simulation</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Checkpoint the gem5 simulation, storing all system state &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Taking a post-boot checkpoint&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_util</span><span class="p">(</span><span class="s">&quot;checkpoint&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">end_simulation</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="BaseGem5Device.mount_virtio"><a class="viewcode-back" href="../../../../api/wlauto.common.gem5.html#wlauto.common.gem5.device.BaseGem5Device.mount_virtio">[docs]</a>    <span class="k">def</span> <span class="nf">mount_virtio</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Mount the VirtIO device in the simulated system.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Mounting VirtIO device in simulated system&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;busybox mkdir -p /mnt/obb&#39;</span><span class="p">)</span>
+
+        <span class="n">mount_command</span> <span class="o">=</span> <span class="s">&quot;mount -t 9p -o trans=virtio,version=9p2000.L,aname={} gem5 /mnt/obb&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s">&#39;linux&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="n">mount_command</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;busybox {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">mount_command</span><span class="p">))</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

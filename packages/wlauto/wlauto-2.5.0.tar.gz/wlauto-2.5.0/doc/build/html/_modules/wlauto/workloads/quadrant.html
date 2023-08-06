@@ -1,0 +1,204 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.quadrant &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.quadrant</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">AndroidUiAutoBenchmark</span>
+
+
+<span class="n">TEST_TYPES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;benchmark_cpu_branching_logic&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_cpu_matrix_int&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_cpu_matrix_long&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_cpu_matrix_short&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_cpu_matrix_byte&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_cpu_matrix_float&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_cpu_matrix_double&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_cpu_checksum&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_cpu&#39;</span><span class="p">:</span> <span class="s">&#39;aggregate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_memory_transfer&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_memory&#39;</span><span class="p">:</span> <span class="s">&#39;aggregate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_io_fs_write&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_io_fs_read&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_io_db_write&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_io_db_read&#39;</span><span class="p">:</span> <span class="s">&#39;time&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_io&#39;</span><span class="p">:</span> <span class="s">&#39;aggregate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_g2d_fractal&#39;</span><span class="p">:</span> <span class="s">&#39;rate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_g2d&#39;</span><span class="p">:</span> <span class="s">&#39;aggregate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_g3d_corridor&#39;</span><span class="p">:</span> <span class="s">&#39;rate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_g3d_planet&#39;</span><span class="p">:</span> <span class="s">&#39;rate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_g3d_dna&#39;</span><span class="p">:</span> <span class="s">&#39;rate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark_g3d&#39;</span><span class="p">:</span> <span class="s">&#39;aggregate&#39;</span><span class="p">,</span>
+    <span class="s">&#39;benchmark&#39;</span><span class="p">:</span> <span class="s">&#39;aggregate&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">TYPE_TESTS</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">TEST_TYPES</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+    <span class="n">TYPE_TESTS</span><span class="p">[</span><span class="n">v</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+
+<span class="n">TYPE_UNITS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;time&#39;</span><span class="p">:</span> <span class="s">&#39;ms&#39;</span><span class="p">,</span>
+    <span class="s">&#39;rate&#39;</span><span class="p">:</span> <span class="s">&#39;Hz&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">REGEX_TEMPLATES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;aggregate&#39;</span><span class="p">:</span> <span class="s">r&#39;(?P&lt;metric&gt;{}) aggregate score is (?P&lt;score&gt;\d+)&#39;</span><span class="p">,</span>
+    <span class="s">&#39;time&#39;</span><span class="p">:</span> <span class="s">r&#39;(?P&lt;metric&gt;{}) executed in (?P&lt;time&gt;\d+) ms, &#39;</span>
+            <span class="s">r&#39;reference time: (?P&lt;reference&gt;\d+) ms, &#39;</span>
+            <span class="s">r&#39;score: (?P&lt;score&gt;\d+)&#39;</span><span class="p">,</span>
+    <span class="s">&#39;rate&#39;</span><span class="p">:</span> <span class="s">r&#39;(?P&lt;metric&gt;{}) executed with a rate of (?P&lt;rate&gt;[0-9.]+)/sec, &#39;</span>
+            <span class="s">r&#39;reference rate: (?P&lt;reference&gt;[0-9.]+)/sec, &#39;</span>
+            <span class="s">r&#39;score: (?P&lt;score&gt;\d+)&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">TEST_REGEXES</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">for</span> <span class="n">test_</span><span class="p">,</span> <span class="n">type_</span> <span class="ow">in</span> <span class="n">TEST_TYPES</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">TEST_REGEXES</span><span class="p">[</span><span class="n">test_</span><span class="p">]</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">REGEX_TEMPLATES</span><span class="p">[</span><span class="n">type_</span><span class="p">]</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">test_</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="Quadrant"><a class="viewcode-back" href="../../../api/wlauto.workloads.quadrant.html#wlauto.workloads.quadrant.Quadrant">[docs]</a><span class="k">class</span> <span class="nc">Quadrant</span><span class="p">(</span><span class="n">AndroidUiAutoBenchmark</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;quadrant&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Quadrant is a benchmark for mobile devices, capable of measuring CPU, memory,</span>
+<span class="s">    I/O and 3D graphics performance.</span>
+
+<span class="s">    http://www.aurorasoftworks.com/products/quadrant</span>
+
+<span class="s">    From the website:</span>
+<span class="s">    Quadrant outputs a score for the following categories: 2D, 3D, Mem, I/O, CPU</span>
+<span class="s">    , Total.</span>
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">package</span> <span class="o">=</span> <span class="s">&#39;com.aurorasoftworks.quadrant.ui.professional&#39;</span>
+    <span class="n">activity</span> <span class="o">=</span> <span class="s">&#39;.QuadrantProfessionalLauncherActivity&#39;</span>
+    <span class="n">summary_metrics</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;benchmark_score&#39;</span><span class="p">]</span>
+
+    <span class="n">run_timeout</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">60</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Quadrant</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;has_gpu&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">has_gpu</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">regex</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="Quadrant.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.quadrant.html#wlauto.workloads.quadrant.Quadrant.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Quadrant</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update_result</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">logcat_log</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">test</span><span class="p">,</span> <span class="n">regex</span> <span class="ow">in</span> <span class="n">TEST_REGEXES</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="n">match</span> <span class="o">=</span> <span class="n">regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                        <span class="n">test_type</span> <span class="o">=</span> <span class="n">TEST_TYPES</span><span class="p">[</span><span class="n">test</span><span class="p">]</span>
+                        <span class="n">data</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">groupdict</span><span class="p">()</span>
+                        <span class="k">if</span> <span class="n">test_type</span> <span class="o">!=</span> <span class="s">&#39;aggregate&#39;</span><span class="p">:</span>
+                            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;metric&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s">&#39;_&#39;</span> <span class="o">+</span> <span class="n">test_type</span><span class="p">,</span>
+                                                      <span class="n">data</span><span class="p">[</span><span class="n">test_type</span><span class="p">],</span>
+                                                      <span class="n">TYPE_UNITS</span><span class="p">[</span><span class="n">test_type</span><span class="p">])</span>
+                        <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;metric&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s">&#39;_score&#39;</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;score&#39;</span><span class="p">])</span>
+                        <span class="k">break</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

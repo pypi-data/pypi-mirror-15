@@ -1,0 +1,296 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.sysbench &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.sysbench</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101,W0201,E0203</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Workload</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Executable</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">WorkloadError</span><span class="p">,</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">parse_value</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">numeric</span>
+
+
+<div class="viewcode-block" id="Sysbench"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.Sysbench">[docs]</a><span class="k">class</span> <span class="nc">Sysbench</span><span class="p">(</span><span class="n">Workload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;sysbench&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    SysBench is a modular, cross-platform and multi-threaded benchmark tool</span>
+<span class="s">    for evaluating OS parameters that are important for a system running a</span>
+<span class="s">    database under intensive load.</span>
+
+<span class="s">    The idea of this benchmark suite is to quickly get an impression about</span>
+<span class="s">    system performance without setting up complex database benchmarks or</span>
+<span class="s">    even without installing a database at all.</span>
+
+<span class="s">    **Features of SysBench**</span>
+
+<span class="s">       * file I/O performance</span>
+<span class="s">       * scheduler performance</span>
+<span class="s">       * memory allocation and transfer speed</span>
+<span class="s">       * POSIX threads implementation performance</span>
+<span class="s">       * database server performance</span>
+
+
+<span class="s">    See: https://github.com/akopytov/sysbench</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;timeout&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;timeout for workload execution (adjust from default &#39;</span>
+                              <span class="s">&#39;if running on a slow device and/or specifying a large value for &#39;</span>
+                              <span class="s">&#39;``max_requests``&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;cpu&#39;</span><span class="p">,</span>
+                  <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;fileio&#39;</span><span class="p">,</span> <span class="s">&#39;cpu&#39;</span><span class="p">,</span> <span class="s">&#39;memory&#39;</span><span class="p">,</span> <span class="s">&#39;threads&#39;</span><span class="p">,</span> <span class="s">&#39;mutex&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;sysbench test to run&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;threads&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The number of threads sysbench will launch&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;num_threads&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The number of threads sysbench will launch, overrides &#39;</span>
+                              <span class="s">&#39; ``threads`` (old parameter name)&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;max_requests&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The limit for the total number of requests.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;max_time&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39;The limit for the total execution time. If neither this nor</span>
+<span class="s">                                 ``max_requests`` is specified, this will default to 30 seconds.&#39;&#39;&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;file_test_mode&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;seqwr&#39;</span><span class="p">,</span> <span class="s">&#39;seqrewr&#39;</span><span class="p">,</span> <span class="s">&#39;seqrd&#39;</span><span class="p">,</span> <span class="s">&#39;rndrd&#39;</span><span class="p">,</span> <span class="s">&#39;rndwr&#39;</span><span class="p">,</span> <span class="s">&#39;rndrw&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;File test mode to use. This should only be specified if ``test`` is &#39;</span>
+                              <span class="s">&#39;``&quot;fileio&quot;``; if that is the case and ``file_test_mode`` is not specified, &#39;</span>
+                              <span class="s">&#39;it will default to ``&quot;seqwr&quot;`` (please see sysbench documentation for &#39;</span>
+                              <span class="s">&#39;explanation of various modes).&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;cmd_params&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Additional parameters to be passed to sysbench as a single stiring&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;force_install&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Always install binary found on the host, even if already installed on device&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;taskset_mask&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The processes spawned by sysbench will be pinned to cores as specified by this parameter&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_threads</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">num_threads</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">threads</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_requests</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_time</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">max_time</span> <span class="o">=</span> <span class="mi">30</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_time</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_time</span> <span class="o">+</span> <span class="mi">10</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_time</span> <span class="o">+</span> <span class="mi">10</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">test</span> <span class="o">==</span> <span class="s">&#39;fileio&#39;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_test_mode</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Test is &quot;fileio&quot; and no file_test_mode specified -- using default.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file_test_mode</span> <span class="o">=</span> <span class="s">&#39;seqwr&#39;</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">test</span> <span class="o">!=</span> <span class="s">&#39;fileio&#39;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_test_mode</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;file_test_mode must not be specified unless test is &quot;fileio&quot;&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Sysbench.init_resources"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.Sysbench.init_resources">[docs]</a>    <span class="k">def</span> <span class="nf">init_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">on_host_binary</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Executable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;armeabi&#39;</span><span class="p">,</span> <span class="s">&#39;sysbench&#39;</span><span class="p">),</span> <span class="n">strict</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Sysbench.setup"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.Sysbench.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">test</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">test</span><span class="p">,</span>
+                      <span class="n">num_threads</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_threads</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_requests</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;max_requests&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_requests</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_time</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;max_time&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_time</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="s">&#39;sysbench_result.txt&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_executable</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_command</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Sysbench.run"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.Sysbench.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Sysbench.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.Sysbench.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">host_results_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;sysbench_result.txt&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_file</span><span class="p">,</span> <span class="n">host_results_file</span><span class="p">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">add_iteration_artifact</span><span class="p">(</span><span class="s">&#39;sysbench_output&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;raw&#39;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">host_results_file</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">host_results_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">find_line_with</span><span class="p">(</span><span class="s">&#39;General statistics:&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="p">)</span>
+            <span class="n">extract_metric</span><span class="p">(</span><span class="s">&#39;total time&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">(),</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+            <span class="n">extract_metric</span><span class="p">(</span><span class="s">&#39;total number of events&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">(),</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">find_line_with</span><span class="p">(</span><span class="s">&#39;response time:&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="p">)</span>
+            <span class="n">extract_metric</span><span class="p">(</span><span class="s">&#39;min&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">(),</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="p">,</span> <span class="s">&#39;response time &#39;</span><span class="p">)</span>
+            <span class="n">extract_metric</span><span class="p">(</span><span class="s">&#39;avg&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">(),</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="p">,</span> <span class="s">&#39;response time &#39;</span><span class="p">)</span>
+            <span class="n">extract_metric</span><span class="p">(</span><span class="s">&#39;max&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">(),</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="p">,</span> <span class="s">&#39;response time &#39;</span><span class="p">)</span>
+            <span class="n">extract_metric</span><span class="p">(</span><span class="s">&#39;approx.  95 percentile&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">(),</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+            <span class="n">find_line_with</span><span class="p">(</span><span class="s">&#39;Threads fairness:&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="p">)</span>
+            <span class="n">extract_threads_fairness_metric</span><span class="p">(</span><span class="s">&#39;events&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">(),</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+            <span class="n">extract_threads_fairness_metric</span><span class="p">(</span><span class="s">&#39;execution time&#39;</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">(),</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Sysbench.teardown"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.Sysbench.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_file</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_check_executable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">on_device_binary</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">binaries_directory</span><span class="p">,</span> <span class="s">&#39;sysbench&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">is_installed</span><span class="p">(</span><span class="s">&#39;sysbench&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">force_install</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;sysbench found on device&#39;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_host_binary</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;sysbench binary is not installed on the device, and it is not found on the host.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">on_host_binary</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_build_command</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">parameters</span><span class="p">):</span>
+        <span class="n">param_strings</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;--{}={}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;_&#39;</span><span class="p">,</span> <span class="s">&#39;-&#39;</span><span class="p">),</span> <span class="n">v</span><span class="p">)</span>
+                         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">parameters</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_test_mode</span><span class="p">:</span>
+            <span class="n">param_strings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;--file-test-mode={}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_test_mode</span><span class="p">))</span>
+        <span class="n">sysbench_command</span> <span class="o">=</span> <span class="s">&#39;{} {} {} run&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">on_device_binary</span><span class="p">,</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">param_strings</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmd_params</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">taskset_mask</span><span class="p">:</span>
+            <span class="n">taskset_string</span> <span class="o">=</span> <span class="s">&#39;busybox taskset 0x{:x} &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">taskset_mask</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">taskset_string</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="k">return</span> <span class="s">&#39;cd {} &amp;&amp; {} {} &gt; sysbench_result.txt&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">taskset_string</span><span class="p">,</span> <span class="n">sysbench_command</span><span class="p">)</span>
+
+
+<span class="c"># Utility functions</span>
+</div>
+<div class="viewcode-block" id="find_line_with"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.find_line_with">[docs]</a><span class="k">def</span> <span class="nf">find_line_with</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">fh</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+            <span class="k">return</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Could not extract sysbench results from {}; did not see &quot;{}&quot;&#39;</span>
+    <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">text</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="extract_metric"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.extract_metric">[docs]</a><span class="k">def</span> <span class="nf">extract_metric</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">line</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">value_part</span> <span class="o">=</span> <span class="p">[</span><span class="n">part</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;:&#39;</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">!=</span> <span class="n">metric</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Name mismatch: expected &quot;{}&quot;, got &quot;{}&quot;&#39;</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">name</span><span class="o">.</span><span class="n">strip</span><span class="p">()))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">value_part</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">value_part</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;value part does not start with a digit: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value_part</span><span class="p">))</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">value_part</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>  <span class="c"># units detected at the end of the line</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="n">value_part</span><span class="p">[</span><span class="n">idx</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+                <span class="n">idx</span> <span class="o">-=</span> <span class="mi">1</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">numeric</span><span class="p">(</span><span class="n">value_part</span><span class="p">[:</span><span class="n">idx</span><span class="p">])</span>
+            <span class="n">units</span> <span class="o">=</span> <span class="n">value_part</span><span class="p">[</span><span class="n">idx</span><span class="p">:]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">numeric</span><span class="p">(</span><span class="n">value_part</span><span class="p">)</span>
+            <span class="n">units</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">prefix</span> <span class="o">+</span> <span class="n">metric</span><span class="p">,</span>
+                          <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="n">lower_is_better</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Could not extract sysbench metric &quot;{}&quot;; got &quot;{}&quot;&#39;</span>
+        <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prefix</span> <span class="o">+</span> <span class="n">metric</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="extract_threads_fairness_metric"><a class="viewcode-back" href="../../../api/wlauto.workloads.sysbench.html#wlauto.workloads.sysbench.extract_threads_fairness_metric">[docs]</a><span class="k">def</span> <span class="nf">extract_threads_fairness_metric</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">line</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">name_part</span><span class="p">,</span> <span class="n">value_part</span> <span class="o">=</span> <span class="p">[</span><span class="n">part</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;:&#39;</span><span class="p">)]</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">name_part</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;(&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">!=</span> <span class="n">metric</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Name mismatch: expected &quot;{}&quot;, got &quot;{}&quot;&#39;</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+        <span class="n">avg</span><span class="p">,</span> <span class="n">stddev</span> <span class="o">=</span> <span class="p">[</span><span class="n">numeric</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value_part</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;/&#39;</span><span class="p">)]</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;thread fairness {} avg&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">metric</span><span class="p">),</span> <span class="n">avg</span><span class="p">)</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;thread fairness {} stddev&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">metric</span><span class="p">),</span>
+                          <span class="n">stddev</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Could not extract sysbench metric &quot;{}&quot;; got &quot;{}&quot;&#39;</span>
+        <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

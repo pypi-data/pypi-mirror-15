@@ -1,0 +1,374 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.instrumentation.streamline &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="wlauto.instrumentation" href="../instrumentation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" accesskey="U">wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.instrumentation.streamline</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="c"># pylint: disable=W0613,E1101</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">signal</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">settings</span><span class="p">,</span> <span class="n">Instrument</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">ResourceGetter</span><span class="p">,</span> <span class="n">GetterPriority</span><span class="p">,</span> <span class="n">File</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">InstrumentError</span><span class="p">,</span> <span class="n">DeviceError</span><span class="p">,</span> <span class="n">ResourceError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">ensure_file_directory_exists</span> <span class="k">as</span> <span class="n">_f</span><span class="p">,</span> <span class="n">which</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.log</span> <span class="kn">import</span> <span class="n">StreamLogger</span><span class="p">,</span> <span class="n">LogWriter</span><span class="p">,</span> <span class="n">LineLogWriter</span>
+
+
+<span class="n">SESSION_TEXT_TEMPLATE</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;&lt;?xml version=&quot;1.0&quot; encoding=&quot;US-ASCII&quot; ?&gt;&#39;</span>
+                         <span class="s">&#39;&lt;session&#39;</span>
+                         <span class="s">&#39;    version=&quot;1&quot;&#39;</span>
+                         <span class="s">&#39;    output_path=&quot;x&quot;&#39;</span>
+                         <span class="s">&#39;    call_stack_unwinding=&quot;no&quot;&#39;</span>
+                         <span class="s">&#39;    parse_debug_info=&quot;no&quot;&#39;</span>
+                         <span class="s">&#39;    high_resolution=&quot;no&quot;&#39;</span>
+                         <span class="s">&#39;    buffer_mode=&quot;streaming&quot;&#39;</span>
+                         <span class="s">&#39;    sample_rate=&quot;none&quot;&#39;</span>
+                         <span class="s">&#39;    duration=&quot;0&quot;&#39;</span>
+                         <span class="s">&#39;    target_host=&quot;{}&quot;&#39;</span>
+                         <span class="s">&#39;    target_port=&quot;{}&quot;&#39;</span>
+                         <span class="s">&#39;    energy_cmd_line=&quot;{}&quot;&gt;&#39;</span>
+                         <span class="s">&#39;&lt;/session&gt;&#39;</span><span class="p">)</span>
+
+<span class="n">VERSION_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;Streamline (.*?) &#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="StreamlineResourceGetter"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.streamline.html#wlauto.instrumentation.streamline.StreamlineResourceGetter">[docs]</a><span class="k">class</span> <span class="nc">StreamlineResourceGetter</span><span class="p">(</span><span class="n">ResourceGetter</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;streamline_resource&#39;</span>
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="s">&#39;file&#39;</span>
+    <span class="n">priority</span> <span class="o">=</span> <span class="n">GetterPriority</span><span class="o">.</span><span class="n">environment</span> <span class="o">+</span> <span class="mi">1</span>  <span class="c"># run before standard enviroment resolvers.</span>
+
+    <span class="n">dependencies_directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">dependencies_directory</span><span class="p">,</span> <span class="s">&#39;streamline&#39;</span><span class="p">)</span>
+    <span class="n">old_dependencies_directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">environment_root</span><span class="p">,</span> <span class="s">&#39;streamline&#39;</span><span class="p">)</span>  <span class="c"># backwards compatibility</span>
+
+<div class="viewcode-block" id="StreamlineResourceGetter.get"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.streamline.html#wlauto.instrumentation.streamline.StreamlineResourceGetter.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">owner</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="s">&#39;streamline&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+        <span class="n">test_path</span> <span class="o">=</span> <span class="n">_f</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dependencies_directory</span><span class="p">,</span> <span class="n">resource</span><span class="o">.</span><span class="n">path</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">test_path</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">test_path</span>
+        <span class="n">test_path</span> <span class="o">=</span> <span class="n">_f</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">old_dependencies_directory</span><span class="p">,</span> <span class="n">resource</span><span class="o">.</span><span class="n">path</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">test_path</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">test_path</span>
+
+</div></div>
+<span class="k">def</span> <span class="nf">_instantiate</span><span class="p">(</span><span class="n">resolver</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">StreamlineResourceGetter</span><span class="p">(</span><span class="n">resolver</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="StreamlineInstrument"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.streamline.html#wlauto.instrumentation.streamline.StreamlineInstrument">[docs]</a><span class="k">class</span> <span class="nc">StreamlineInstrument</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;streamline&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Collect Streamline traces from the device.</span>
+
+<span class="s">    .. note:: This instrument supports streamline that comes with DS-5 5.17 and later</span>
+<span class="s">              earlier versions of streamline  may not work correctly (or at all).</span>
+
+<span class="s">    This Instrument allows collecting streamline traces (such as PMU counter values) from</span>
+<span class="s">    the device. It assumes you have DS-5 (which Streamline is part of) installed on your</span>
+<span class="s">    system, and that streamline command is somewhere in PATH.</span>
+
+<span class="s">    Streamline works by connecting to gator service on the device. gator comes in two parts</span>
+<span class="s">    a driver (gator.ko) and daemon (gatord). The driver needs to be compiled against your</span>
+<span class="s">    kernel and both driver and daemon need to be compatible with your version of Streamline.</span>
+<span class="s">    The best way to ensure compatibility is to build them from source which came with your</span>
+<span class="s">    DS-5. gator source can be found in ::</span>
+
+<span class="s">        /usr/local/DS-5/arm/gator</span>
+
+<span class="s">    (the exact path may vary depending of where you have installed DS-5.) Please refer to the</span>
+<span class="s">    README the accompanies the source for instructions on how to build it.</span>
+
+<span class="s">    Once you have built the driver and the daemon, place the binaries into your</span>
+<span class="s">    ~/.workload_automation/streamline/ directory (if you haven&#39;t tried running WA with</span>
+<span class="s">    this instrument before, the streamline/ subdirectory might not exist, in which</span>
+<span class="s">    case you will need to create it.</span>
+
+<span class="s">    In order to specify which events should be captured, you need to provide a</span>
+<span class="s">    configuration.xml for the gator. The easiest way to obtain this file is to export it</span>
+<span class="s">    from event configuration dialog in DS-5 streamline GUI. The file should be called</span>
+<span class="s">    &quot;configuration.xml&quot; and it be placed in the same directory as the gator binaries.</span>
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;port&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;8080&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Specifies the port on which streamline will connect to gator&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;configxml&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;streamline configuration XML file to be used. This must be &#39;</span>
+                              <span class="s">&#39;an absolute path, though it may count the user home symbol (~)&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;report&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;streamline_report_csv&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Specifies whether a report should be generated from streamline data.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;report_options&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;-format csv&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;A string with options that will be added to streamline -report command.&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">daemon</span> <span class="o">=</span> <span class="s">&#39;gatord&#39;</span>
+    <span class="n">driver</span> <span class="o">=</span> <span class="s">&#39;gator.ko&#39;</span>
+    <span class="n">configuration_file_name</span> <span class="o">=</span> <span class="s">&#39;configuration.xml&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">StreamlineInstrument</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">streamline</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">capture_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">analysis_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">report_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">configuration_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">on_device_config</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">daemon_process</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resource_getter</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">host_daemon_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">host_driver_file</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_driver_file</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_has_valid_display</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">which</span><span class="p">(</span><span class="s">&#39;streamline&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;streamline not in PATH. Cannot enable Streamline tracing.&#39;</span><span class="p">)</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="s">&#39;streamline --version 2&gt;&amp;1&#39;</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">out</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">communicate</span><span class="p">()</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">VERSION_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;Could not find streamline version.&#39;</span><span class="p">)</span>
+        <span class="n">version_tuple</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="n">version_tuple</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">17</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;Need DS-5 v5.17 or greater; found v{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resource_getter</span> <span class="o">=</span> <span class="n">_instantiate</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resource_getter</span><span class="o">.</span><span class="n">register</span><span class="p">()</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">host_daemon_file</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">daemon</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Using daemon from {}.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_daemon_file</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">killall</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">daemon</span><span class="p">)</span>  <span class="c"># in case a version is already running</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_daemon_file</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ResourceError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Using on-device daemon.&#39;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">host_driver_file</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">driver</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Using driver from {}.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_driver_file</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device_driver_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_driver_file</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ResourceError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Using on-device driver.&#39;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">configuration_file</span> <span class="o">=</span> <span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configxml</span> <span class="ow">or</span> <span class="s">&#39;&#39;</span><span class="p">)</span> <span class="ow">or</span>
+                                       <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">configuration_file_name</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Using {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configuration_file</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">on_device_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="s">&#39;configuration.xml&#39;</span><span class="p">)</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configuration_file</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">meta_directory</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ResourceError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;No configuration file was specfied.&#39;</span><span class="p">)</span>
+
+        <span class="n">caiman_path</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">(</span><span class="s">&#39;which caiman&#39;</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>  <span class="c"># pylint: disable=E1103</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="s">&#39;streamline_session.xml&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s">&quot;android&quot;</span><span class="p">:</span>
+                <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">SESSION_TEXT_TEMPLATE</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span> <span class="n">caiman_path</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">SESSION_TEXT_TEMPLATE</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span> <span class="n">caiman_path</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">configuration_file</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">push_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configuration_file</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_device_config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_initialize_daemon</span><span class="p">()</span>
+
+<div class="viewcode-block" id="StreamlineInstrument.setup"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.streamline.html#wlauto.instrumentation.streamline.StreamlineInstrument.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">capture_file</span> <span class="o">=</span> <span class="n">_f</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;streamline&#39;</span><span class="p">,</span> <span class="s">&#39;capture.apc&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">report_file</span> <span class="o">=</span> <span class="n">_f</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;streamline&#39;</span><span class="p">,</span> <span class="s">&#39;streamline.csv&#39;</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="StreamlineInstrument.start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.streamline.html#wlauto.instrumentation.streamline.StreamlineInstrument.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;streamline&#39;</span><span class="p">,</span> <span class="s">&#39;-capture&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_file</span><span class="p">,</span> <span class="s">&#39;-output&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">capture_file</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">streamline</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">command</span><span class="p">,</span>
+                                           <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                                           <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                                           <span class="n">stdin</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                                           <span class="n">preexec_fn</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">setpgrp</span><span class="p">)</span>
+        <span class="n">outlogger</span> <span class="o">=</span> <span class="n">StreamLogger</span><span class="p">(</span><span class="s">&#39;streamline&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">streamline</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="n">klass</span><span class="o">=</span><span class="n">LineLogWriter</span><span class="p">)</span>
+        <span class="n">errlogger</span> <span class="o">=</span> <span class="n">StreamLogger</span><span class="p">(</span><span class="s">&#39;streamline&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">streamline</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="n">klass</span><span class="o">=</span><span class="n">LineLogWriter</span><span class="p">)</span>
+        <span class="n">outlogger</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="n">errlogger</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="StreamlineInstrument.stop"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.streamline.html#wlauto.instrumentation.streamline.StreamlineInstrument.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">killpg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">streamline</span><span class="o">.</span><span class="n">pid</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SIGTERM</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="StreamlineInstrument.update_result"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.streamline.html#wlauto.instrumentation.streamline.StreamlineInstrument.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">report</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Creating report...&#39;</span><span class="p">)</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;streamline&#39;</span><span class="p">,</span> <span class="s">&#39;-report&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">capture_file</span><span class="p">,</span> <span class="s">&#39;-output&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">report_file</span><span class="p">]</span>
+            <span class="n">command</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">report_options</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="n">_run_streamline_command</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;streamlinecsv&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">report_file</span><span class="p">,</span> <span class="s">&#39;data&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="StreamlineInstrument.teardown"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.streamline.html#wlauto.instrumentation.streamline.StreamlineInstrument.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kill_daemon</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">on_device_config</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_check_has_valid_display</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c"># pylint: disable=R0201</span>
+        <span class="n">reason</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s">&#39;posix&#39;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;DISPLAY&#39;</span><span class="p">):</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="s">&#39;DISPLAY is not set.&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="s">&#39;xhost&#39;</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span> <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">error</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">communicate</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">returncode</span><span class="p">:</span>
+                <span class="n">reason</span> <span class="o">=</span> <span class="s">&#39;Invalid DISPLAY; xhost returned: &quot;{}&quot;.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">error</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>  <span class="c"># pylint: disable=E1103</span>
+        <span class="k">if</span> <span class="n">reason</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;{}</span><span class="se">\n</span><span class="s">streamline binary requires a valid display server to be running.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">reason</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_initialize_daemon</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device_driver_file</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;insmod {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device_driver_file</span><span class="p">))</span>
+            <span class="k">except</span> <span class="n">DeviceError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s">&#39;File exists&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">:</span>
+                    <span class="k">raise</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Driver was already installed.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_start_daemon</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s">&quot;android&quot;</span><span class="p">:</span>
+            <span class="n">port_spec</span> <span class="o">=</span> <span class="s">&#39;tcp:{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">forward_port</span><span class="p">(</span><span class="n">port_spec</span><span class="p">,</span> <span class="n">port_spec</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_start_daemon</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Starting gatord&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">killall</span><span class="p">(</span><span class="s">&#39;gatord&#39;</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">configuration_file</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;{} -c {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">daemon</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_device_config</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">daemon</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">daemon_process</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">background</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">outlogger</span> <span class="o">=</span> <span class="n">StreamLogger</span><span class="p">(</span><span class="s">&#39;gatord&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">daemon_process</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+        <span class="n">errlogger</span> <span class="o">=</span> <span class="n">StreamLogger</span><span class="p">(</span><span class="s">&#39;gatord&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">daemon_process</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
+        <span class="n">outlogger</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="n">errlogger</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">daemon_process</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="c"># If adb returned, something went wrong.</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;Could not start gatord.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_kill_daemon</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Killing daemon process.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">daemon_process</span><span class="o">.</span><span class="n">kill</span><span class="p">()</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_run_streamline_command</span><span class="p">(</span><span class="n">command</span><span class="p">):</span>
+    <span class="n">streamline</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">command</span><span class="p">,</span>
+                                  <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                                  <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                                  <span class="n">stdin</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+    <span class="n">output</span><span class="p">,</span> <span class="n">error</span> <span class="o">=</span> <span class="n">streamline</span><span class="o">.</span><span class="n">communicate</span><span class="p">()</span>
+    <span class="n">LogWriter</span><span class="p">(</span><span class="s">&#39;streamline&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">output</span><span class="p">)</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">LogWriter</span><span class="p">(</span><span class="s">&#39;streamline&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" >wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,399 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.telemetry &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.telemetry</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=attribute-defined-outside-init</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">csv</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">urllib</span>
+<span class="kn">import</span> <span class="nn">stat</span>
+<span class="kn">from</span> <span class="nn">zipfile</span> <span class="kn">import</span> <span class="n">is_zipfile</span><span class="p">,</span> <span class="n">ZipFile</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">pandas</span> <span class="kn">as</span> <span class="nn">pd</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">pd</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Workload</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">WorkloadError</span><span class="p">,</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">check_output</span><span class="p">,</span> <span class="n">get_null</span><span class="p">,</span> <span class="n">get_meansd</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">numeric</span>
+
+
+<span class="n">RESULT_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;RESULT ([^:]+): ([^=]+)\s*=\s*&#39;</span>  <span class="c"># preamble and test/metric name</span>
+                          <span class="s">r&#39;(\[([^\]]+)\]|(\S+))&#39;</span>  <span class="c"># value</span>
+                          <span class="s">r&#39;\s*(\S+)&#39;</span><span class="p">)</span>  <span class="c"># units</span>
+<span class="n">TRACE_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;Trace saved as ([^\n]+)&#39;</span><span class="p">)</span>
+
+<span class="c"># Trace event that signifies rendition of a Frame</span>
+<span class="n">FRAME_EVENT</span> <span class="o">=</span> <span class="s">&#39;SwapBuffersLatency&#39;</span>
+
+<span class="n">TELEMETRY_ARCHIVE_URL</span> <span class="o">=</span> <span class="s">&#39;http://storage.googleapis.com/chromium-telemetry/snapshots/telemetry.zip&#39;</span>
+
+
+<div class="viewcode-block" id="Telemetry"><a class="viewcode-back" href="../../../api/wlauto.workloads.telemetry.html#wlauto.workloads.telemetry.Telemetry">[docs]</a><span class="k">class</span> <span class="nc">Telemetry</span><span class="p">(</span><span class="n">Workload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;telemetry&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Executes Google&#39;s Telemetery benchmarking framework</span>
+
+<span class="s">    Url: https://www.chromium.org/developers/telemetry</span>
+
+<span class="s">    From the web site:</span>
+
+<span class="s">    Telemetry is Chrome&#39;s performance testing framework. It allows you to</span>
+<span class="s">    perform arbitrary actions on a set of web pages and report metrics about</span>
+<span class="s">    it. The framework abstracts:</span>
+
+<span class="s">      - Launching a browser with arbitrary flags on any platform.</span>
+<span class="s">      - Opening a tab and navigating to the page under test.</span>
+<span class="s">      - Fetching data via the Inspector timeline and traces.</span>
+<span class="s">      - Using Web Page Replay to cache real-world websites so they don&#39;t</span>
+<span class="s">        change when used in benchmarks.</span>
+
+<span class="s">    Design Principles</span>
+
+<span class="s">      - Write one performance test that runs on all platforms - Windows, Mac,</span>
+<span class="s">        Linux, Chrome OS, and Android for both Chrome and ContentShell.</span>
+<span class="s">      - Runs on browser binaries, without a full Chromium checkout, and without</span>
+<span class="s">        having to build the browser yourself.</span>
+<span class="s">      - Use WebPageReplay to get repeatable test results.</span>
+<span class="s">      - Clean architecture for writing benchmarks that keeps measurements and</span>
+<span class="s">        use cases separate.</span>
+<span class="s">      - Run on non-Chrome browsers for comparative studies.</span>
+
+<span class="s">    This instrument runs  telemetry via its ``run_benchmark`` script (which</span>
+<span class="s">    must be in PATH or specified using ``run_benchmark_path`` parameter) and</span>
+<span class="s">    parses metrics from the resulting output.</span>
+
+<span class="s">    **device setup**</span>
+
+<span class="s">    The device setup will depend on whether you&#39;re running a test image (in</span>
+<span class="s">    which case little or no setup should be necessary)</span>
+
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">supported_platforms</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;android&#39;</span><span class="p">,</span> <span class="s">&#39;chromeos&#39;</span><span class="p">]</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;run_benchmark_path&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  This is the path to run_benchmark script which runs a</span>
+<span class="s">                  Telemetry benchmark. If not specified, WA will look for Telemetry in its</span>
+<span class="s">                  dependencies; if not found there, Telemetry will be downloaded.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;page_cycler.top_10_mobile&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specifies the telemetry test to run.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;run_benchmark_params&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Additional paramters to be passed to ``run_benchmark``.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;run_timeout&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">900</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Timeout for execution of the test.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;extract_fps&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  if ``True``, FPS for the run will be computed from the trace (must be enabled).</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;target_config&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Manually specify target configuration for telemetry. This must contain</span>
+<span class="s">                  --browser option plus any addition options Telemetry requires for a particular</span>
+<span class="s">                  target (e.g. --device or --remote)</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&#39;{} &gt; {} 2&gt;&amp;1&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">,</span> <span class="n">get_null</span><span class="p">()))</span>
+        <span class="k">if</span> <span class="n">ret</span> <span class="o">&gt;</span> <span class="mi">255</span><span class="p">:</span>
+            <span class="k">pass</span>  <span class="c"># telemetry found and appears to be installed properly.</span>
+        <span class="k">elif</span> <span class="n">ret</span> <span class="o">==</span> <span class="mi">127</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;run_benchmark not found (did you specify correct run_benchmark_path?)&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;Unexected error from run_benchmark: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ret</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract_fps</span> <span class="ow">and</span> <span class="s">&#39;trace&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_params</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;&quot;trace&quot; profiler must be enabled in order to extract FPS for Telemetry&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_run_benchmark_path</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Telemetry.setup"><a class="viewcode-back" href="../../../api/wlauto.workloads.telemetry.html#wlauto.workloads.telemetry.Telemetry.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">raw_output</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">error_output</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">build_command</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Telemetry.run"><a class="viewcode-back" href="../../../api/wlauto.workloads.telemetry.html#wlauto.workloads.telemetry.Telemetry.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">raw_output</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">error_output</span> <span class="o">=</span> <span class="n">check_output</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run_timeout</span><span class="p">,</span> <span class="n">ignore</span><span class="o">=</span><span class="s">&#39;all&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Telemetry.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.telemetry.html#wlauto.workloads.telemetry.Telemetry.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=too-many-locals</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">error_output</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;run_benchmarks output contained errors:</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">error_output</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_output</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Did not get run_benchmark output.&#39;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="n">raw_outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;telemetry_raw.out&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">raw_outfile</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">raw_output</span><span class="p">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;telemetry-raw&#39;</span><span class="p">,</span> <span class="n">raw_outfile</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;raw&#39;</span><span class="p">)</span>
+
+        <span class="n">results</span><span class="p">,</span> <span class="n">artifacts</span> <span class="o">=</span> <span class="n">parse_telemetry_results</span><span class="p">(</span><span class="n">raw_outfile</span><span class="p">)</span>
+        <span class="n">csv_outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;telemetry.csv&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">csv_outfile</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">wfh</span><span class="p">)</span>
+            <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">([</span><span class="s">&#39;kind&#39;</span><span class="p">,</span> <span class="s">&#39;url&#39;</span><span class="p">,</span> <span class="s">&#39;iteration&#39;</span><span class="p">,</span> <span class="s">&#39;value&#39;</span><span class="p">,</span> <span class="s">&#39;units&#39;</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">writer</span><span class="o">.</span><span class="n">writerows</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">rows</span><span class="p">)</span>
+
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">units</span><span class="p">,</span>
+                                       <span class="n">classifiers</span><span class="o">=</span><span class="p">{</span><span class="s">&#39;url&#39;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">url</span><span class="p">,</span> <span class="s">&#39;time&#39;</span><span class="p">:</span> <span class="n">i</span><span class="p">})</span>
+
+            <span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;telemetry&#39;</span><span class="p">,</span> <span class="n">csv_outfile</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">artifact</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">artifacts</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">is_zipfile</span><span class="p">(</span><span class="n">artifact</span><span class="p">):</span>
+                <span class="n">zf</span> <span class="o">=</span> <span class="n">ZipFile</span><span class="p">(</span><span class="n">artifact</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">zf</span><span class="o">.</span><span class="n">infolist</span><span class="p">():</span>
+                    <span class="n">zf</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">)</span>
+                    <span class="n">zf</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;telemetry_trace_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">idx</span><span class="p">),</span> <span class="n">path</span><span class="o">=</span><span class="n">item</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c"># not a zip archive</span>
+                <span class="n">wa_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span>
+                                       <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">artifact</span><span class="p">))</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">artifact</span><span class="p">,</span> <span class="n">wa_path</span><span class="p">)</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;telemetry_artifact_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">idx</span><span class="p">),</span> <span class="n">path</span><span class="o">=</span><span class="n">wa_path</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract_fps</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Extracting FPS...&#39;</span><span class="p">)</span>
+            <span class="n">_extract_fps</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Telemetry.build_command"><a class="viewcode-back" href="../../../api/wlauto.workloads.telemetry.html#wlauto.workloads.telemetry.Telemetry.build_command">[docs]</a>    <span class="k">def</span> <span class="nf">build_command</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">device_opts</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_config</span><span class="p">:</span>
+            <span class="n">device_opts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_config</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s">&#39;chromeos&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s">&#39;--remote&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_params</span><span class="p">:</span>
+                    <span class="n">device_opts</span> <span class="o">+=</span> <span class="s">&#39;--remote={} &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">host</span><span class="p">)</span>
+                <span class="k">if</span> <span class="s">&#39;--browser&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_params</span><span class="p">:</span>
+                    <span class="n">device_opts</span> <span class="o">+=</span> <span class="s">&#39;--browser=cros-chrome &#39;</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s">&#39;android&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s">&#39;--device&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_params</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">adb_name</span><span class="p">:</span>
+                    <span class="n">device_opts</span> <span class="o">+=</span> <span class="s">&#39;--device={} &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">adb_name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="s">&#39;--browser&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_params</span><span class="p">:</span>
+                    <span class="n">device_opts</span> <span class="o">+=</span> <span class="s">&#39;--browser=android-webview-shell &#39;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;Unless you</span><span class="se">\&#39;</span><span class="s">re running Telemetry on a ChromeOS or Android device, &#39;</span>
+                                    <span class="s">&#39;you mast specify target_config option&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s">&#39;{} {} {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">,</span>
+                                    <span class="bp">self</span><span class="o">.</span><span class="n">test</span><span class="p">,</span>
+                                    <span class="n">device_opts</span><span class="p">,</span>
+                                    <span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_params</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_resolve_run_benchmark_path</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># pylint: disable=access-member-before-definition</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;run_benchmark path &quot;{}&quot; does not exist&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dependencies_directory</span><span class="p">,</span> <span class="s">&#39;telemetry&#39;</span><span class="p">,</span> <span class="s">&#39;run_benchmark&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;run_benchmark_path not specified using {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Telemetry not found locally; downloading...&#39;</span><span class="p">)</span>
+                <span class="n">local_archive</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dependencies_directory</span><span class="p">,</span> <span class="s">&#39;telemetry.zip&#39;</span><span class="p">)</span>
+                <span class="n">urllib</span><span class="o">.</span><span class="n">urlretrieve</span><span class="p">(</span><span class="n">TELEMETRY_ARCHIVE_URL</span><span class="p">,</span> <span class="n">local_archive</span><span class="p">)</span>
+                <span class="n">zf</span> <span class="o">=</span> <span class="n">ZipFile</span><span class="p">(</span><span class="n">local_archive</span><span class="p">)</span>
+                <span class="n">zf</span><span class="o">.</span><span class="n">extractall</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dependencies_directory</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;Could not download and extract Telemetry&#39;</span><span class="p">)</span>
+            <span class="n">old_mode</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">stat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">)</span><span class="o">.</span><span class="n">st_mode</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_benchmark_path</span><span class="p">,</span> <span class="n">old_mode</span> <span class="o">|</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IXUSR</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_extract_fps</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="n">trace_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">path</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">context</span><span class="o">.</span><span class="n">iteration_artifacts</span>
+                   <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;telemetry_trace_&#39;</span><span class="p">)]</span>
+    <span class="k">for</span> <span class="n">tf</span> <span class="ow">in</span> <span class="n">trace_files</span><span class="p">:</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">tf</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">fps_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s">&#39;-fps.csv&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">tf</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+            <span class="n">events</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">([</span><span class="n">e</span><span class="p">[</span><span class="s">&#39;ts&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;traceEvents&#39;</span><span class="p">]</span> <span class="k">if</span>
+                                <span class="n">FRAME_EVENT</span> <span class="o">==</span> <span class="n">e</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]])</span>
+            <span class="n">fps</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1000000</span> <span class="o">/</span> <span class="p">(</span><span class="n">events</span> <span class="o">-</span> <span class="n">events</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+            <span class="n">fps</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">events</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">fps</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+            <span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;timestamp&#39;</span><span class="p">,</span> <span class="s">&#39;fps&#39;</span><span class="p">]</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fps_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+                <span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">wfh</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;{}_fps&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="n">fps_file</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;{} FPS&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="n">df</span><span class="o">.</span><span class="n">fps</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span>
+                                      <span class="n">units</span><span class="o">=</span><span class="s">&#39;fps&#39;</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;{} FPS (std)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="n">df</span><span class="o">.</span><span class="n">fps</span><span class="o">.</span><span class="n">std</span><span class="p">(),</span>
+                                      <span class="n">units</span><span class="o">=</span><span class="s">&#39;fps&#39;</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="TelemetryResult"><a class="viewcode-back" href="../../../api/wlauto.workloads.telemetry.html#wlauto.workloads.telemetry.TelemetryResult">[docs]</a><span class="k">class</span> <span class="nc">TelemetryResult</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">average</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_meansd</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">std</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_meansd</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">rows</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">url</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">units</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">url</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">kind</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">url</span> <span class="o">=</span> <span class="n">url</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">values</span> <span class="o">=</span> <span class="n">values</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="n">units</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;TR({kind},{url},{values},{units})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">)</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+</div>
+<div class="viewcode-block" id="parse_telemetry_results"><a class="viewcode-back" href="../../../api/wlauto.workloads.telemetry.html#wlauto.workloads.telemetry.parse_telemetry_results">[docs]</a><span class="k">def</span> <span class="nf">parse_telemetry_results</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">artifacts</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">RESULT_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">TelemetryResult</span><span class="p">()</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">url</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">values</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">numeric</span><span class="p">,</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">numeric</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">5</span><span class="p">))]</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">TRACE_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">artifacts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">results</span><span class="p">,</span> <span class="n">artifacts</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">sys</span>
+    <span class="kn">from</span> <span class="nn">pprint</span> <span class="kn">import</span> <span class="n">pprint</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">pprint</span><span class="p">(</span><span class="n">parse_telemetry_results</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

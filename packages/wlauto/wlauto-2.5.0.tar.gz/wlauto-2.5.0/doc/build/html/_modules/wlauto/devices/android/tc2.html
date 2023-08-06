@@ -1,0 +1,942 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.devices.android.tc2 &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.devices.android.tc2</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">Counter</span>
+
+<span class="kn">import</span> <span class="nn">pexpect</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">BigLittleDevice</span><span class="p">,</span> <span class="n">RuntimeParameter</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">DeviceError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.android</span> <span class="kn">import</span> <span class="n">adb_connect</span><span class="p">,</span> <span class="n">adb_disconnect</span><span class="p">,</span> <span class="n">adb_list_devices</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.serial_port</span> <span class="kn">import</span> <span class="n">open_serial_connection</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">merge_dicts</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span>
+
+
+<span class="n">BOOT_FIRMWARE</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;uefi&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;SCC_0x010&#39;</span><span class="p">:</span> <span class="s">&#39;0x000003E0&#39;</span><span class="p">,</span>
+        <span class="s">&#39;reboot_attempts&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s">&#39;bootmon&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;SCC_0x010&#39;</span><span class="p">:</span> <span class="s">&#39;0x000003D0&#39;</span><span class="p">,</span>
+        <span class="s">&#39;reboot_attempts&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="n">MODES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;mp_a7_only&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_mp.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;mp_a7&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_mp&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_mp&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x1032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s">&#39;mp_a7_bootcluster&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_mp.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;mp_a7bc&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_mp&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_mp&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x1032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s">&#39;mp_a15_only&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_mp.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;mp_a15&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_mp&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_mp&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x0032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a15&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s">&#39;mp_a15_bootcluster&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_mp.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;mp_a15bc&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_mp&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_mp&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x0032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a15&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s">&#39;iks_cpu&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_iks.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x1032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s">&#39;iks_a15&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_iks.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x0032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a15&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s">&#39;iks_a7&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_iks.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x0032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s">&#39;iks_ns_a15&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_iks.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x0032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s">&#39;iks_ns_a7&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;images_file&#39;</span><span class="p">:</span> <span class="s">&#39;images_iks.txt&#39;</span><span class="p">,</span>
+        <span class="s">&#39;dtb&#39;</span><span class="p">:</span> <span class="s">&#39;iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;initrd&#39;</span><span class="p">:</span> <span class="s">&#39;init_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;kernel&#39;</span><span class="p">:</span> <span class="s">&#39;kern_iks&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="s">&#39;0x0032F003&#39;</span><span class="p">,</span>
+        <span class="s">&#39;cpus&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a7&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">,</span> <span class="s">&#39;a15&#39;</span><span class="p">],</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="n">A7_ONLY_MODES</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;mp_a7_only&#39;</span><span class="p">,</span> <span class="s">&#39;iks_a7&#39;</span><span class="p">,</span> <span class="s">&#39;iks_cpu&#39;</span><span class="p">]</span>
+<span class="n">A15_ONLY_MODES</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;mp_a15_only&#39;</span><span class="p">,</span> <span class="s">&#39;iks_a15&#39;</span><span class="p">]</span>
+
+<span class="n">DEFAULT_A7_GOVERNOR_TUNABLES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;interactive&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;above_hispeed_delay&#39;</span><span class="p">:</span> <span class="mi">80000</span><span class="p">,</span>
+        <span class="s">&#39;go_hispeed_load&#39;</span><span class="p">:</span> <span class="mi">85</span><span class="p">,</span>
+        <span class="s">&#39;hispeed_freq&#39;</span><span class="p">:</span> <span class="mi">800000</span><span class="p">,</span>
+        <span class="s">&#39;min_sample_time&#39;</span><span class="p">:</span> <span class="mi">80000</span><span class="p">,</span>
+        <span class="s">&#39;timer_rate&#39;</span><span class="p">:</span> <span class="mi">20000</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s">&#39;ondemand&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;sampling_rate&#39;</span><span class="p">:</span> <span class="mi">50000</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="n">DEFAULT_A15_GOVERNOR_TUNABLES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;interactive&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;above_hispeed_delay&#39;</span><span class="p">:</span> <span class="mi">80000</span><span class="p">,</span>
+        <span class="s">&#39;go_hispeed_load&#39;</span><span class="p">:</span> <span class="mi">85</span><span class="p">,</span>
+        <span class="s">&#39;hispeed_freq&#39;</span><span class="p">:</span> <span class="mi">1000000</span><span class="p">,</span>
+        <span class="s">&#39;min_sample_time&#39;</span><span class="p">:</span> <span class="mi">80000</span><span class="p">,</span>
+        <span class="s">&#39;timer_rate&#39;</span><span class="p">:</span> <span class="mi">20000</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s">&#39;ondemand&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;sampling_rate&#39;</span><span class="p">:</span> <span class="mi">50000</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="n">ADB_SHELL_TIMEOUT</span> <span class="o">=</span> <span class="mi">30</span>
+
+
+<span class="k">class</span> <span class="nc">_TC2DeviceConfig</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;TC2 Configuration&#39;</span>
+    <span class="n">device_name</span> <span class="o">=</span> <span class="s">&#39;TC2&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>  <span class="c"># pylint: disable=R0914,W0613</span>
+                 <span class="n">root_mount</span><span class="o">=</span><span class="s">&#39;/media/VEMSD&#39;</span><span class="p">,</span>
+
+                 <span class="n">disable_boot_configuration</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">boot_firmware</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">mode</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+
+                 <span class="n">fs_medium</span><span class="o">=</span><span class="s">&#39;usb&#39;</span><span class="p">,</span>
+
+                 <span class="n">device_working_directory</span><span class="o">=</span><span class="s">&#39;/data/local/usecase&#39;</span><span class="p">,</span>
+
+                 <span class="n">bm_image</span><span class="o">=</span><span class="s">&#39;bm_v519r.axf&#39;</span><span class="p">,</span>
+
+                 <span class="n">serial_device</span><span class="o">=</span><span class="s">&#39;/dev/ttyS0&#39;</span><span class="p">,</span>
+                 <span class="n">serial_baud</span><span class="o">=</span><span class="mi">38400</span><span class="p">,</span>
+                 <span class="n">serial_max_timeout</span><span class="o">=</span><span class="mi">600</span><span class="p">,</span>
+                 <span class="n">serial_log</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span>
+
+                 <span class="n">init_timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span>
+
+                 <span class="n">always_delete_uefi_entry</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">psci_enable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+
+                 <span class="n">host_working_directory</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+
+                 <span class="n">a7_governor_tunables</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">a15_governor_tunables</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+
+                 <span class="n">adb_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="c"># Compatibility with other android devices.</span>
+                 <span class="n">enable_screen_check</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>  <span class="c"># pylint: disable=W0613</span>
+                 <span class="o">**</span><span class="n">kwargs</span>
+                 <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">root_mount</span> <span class="o">=</span> <span class="n">root_mount</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">disable_boot_configuration</span> <span class="o">=</span> <span class="n">disable_boot_configuration</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">disable_boot_configuration</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">boot_firmware</span> <span class="o">=</span> <span class="n">boot_firmware</span> <span class="ow">or</span> <span class="s">&#39;uefi&#39;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">default_mode</span> <span class="o">=</span> <span class="n">mode</span> <span class="ow">or</span> <span class="s">&#39;mp_a7_bootcluster&#39;</span>
+        <span class="k">elif</span> <span class="n">boot_firmware</span> <span class="ow">or</span> <span class="n">mode</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;boot_firmware and/or mode cannot be specified when disable_boot_configuration is enabled.&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_mode</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">working_directory</span> <span class="o">=</span> <span class="n">device_working_directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">serial_device</span> <span class="o">=</span> <span class="n">serial_device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">serial_baud</span> <span class="o">=</span> <span class="n">serial_baud</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">serial_max_timeout</span> <span class="o">=</span> <span class="n">serial_max_timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">serial_log</span> <span class="o">=</span> <span class="n">serial_log</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bootmon_prompt</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39;^([KLM]:</span><span class="se">\\</span><span class="s">\)?&gt;&#39;</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">fs_medium</span> <span class="o">=</span> <span class="n">fs_medium</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">bm_image</span> <span class="o">=</span> <span class="n">bm_image</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">init_timeout</span> <span class="o">=</span> <span class="n">init_timeout</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">always_delete_uefi_entry</span> <span class="o">=</span> <span class="n">always_delete_uefi_entry</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">psci_enable</span> <span class="o">=</span> <span class="n">psci_enable</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">resource_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">),</span> <span class="s">&#39;resources&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">board_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_mount</span><span class="p">,</span> <span class="s">&#39;SITE1&#39;</span><span class="p">,</span> <span class="s">&#39;HBI0249A&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">board_file</span> <span class="o">=</span> <span class="s">&#39;board.txt&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">board_file_bak</span> <span class="o">=</span> <span class="s">&#39;board.bak&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">images_file</span> <span class="o">=</span> <span class="s">&#39;images.txt&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">host_working_directory</span> <span class="o">=</span> <span class="n">host_working_directory</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">meta_directory</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">a7_governor_tunables</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">a7_governor_tunables</span> <span class="o">=</span> <span class="n">DEFAULT_A7_GOVERNOR_TUNABLES</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">a7_governor_tunables</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">DEFAULT_A7_GOVERNOR_TUNABLES</span><span class="p">,</span> <span class="n">a7_governor_tunables</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">a15_governor_tunables</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">a15_governor_tunables</span> <span class="o">=</span> <span class="n">DEFAULT_A15_GOVERNOR_TUNABLES</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">a15_governor_tunables</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">DEFAULT_A15_GOVERNOR_TUNABLES</span><span class="p">,</span> <span class="n">a15_governor_tunables</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="o">=</span> <span class="n">adb_name</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">src_images_template_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_dir</span><span class="p">,</span> <span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;images_file&#39;</span><span class="p">])</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">src_images_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="s">&#39;images.txt&#39;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">src_board_template_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_dir</span><span class="p">,</span> <span class="s">&#39;board_template.txt&#39;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">src_board_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="s">&#39;board.txt&#39;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">kernel_arguments</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">kernel_args</span> <span class="o">=</span> <span class="s">&#39; console=ttyAMA0,38400 androidboot.console=ttyAMA0 selinux=0&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fs_medium</span> <span class="o">==</span> <span class="s">&#39;usb&#39;</span><span class="p">:</span>
+            <span class="n">kernel_args</span> <span class="o">+=</span> <span class="s">&#39; androidboot.hardware=arm-versatileexpress-usb&#39;</span>
+        <span class="k">if</span> <span class="s">&#39;iks&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">:</span>
+            <span class="n">kernel_args</span> <span class="o">+=</span> <span class="s">&#39; no_bL_switcher=0&#39;</span>
+        <span class="k">return</span> <span class="n">kernel_args</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">kernel</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;kernel&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">initrd</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;initrd&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">dtb</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;dtb&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">SCC_0x700</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;SCC_0x700&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">SCC_0x010</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">BOOT_FIRMWARE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">boot_firmware</span><span class="p">][</span><span class="s">&#39;SCC_0x010&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">reboot_attempts</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">BOOT_FIRMWARE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">boot_firmware</span><span class="p">][</span><span class="s">&#39;reboot_attempts&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">valid_modes</span> <span class="o">=</span> <span class="n">MODES</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_modes</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid mode: {}; must be in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">,</span> <span class="n">valid_modes</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+        <span class="n">valid_boot_firmware</span> <span class="o">=</span> <span class="n">BOOT_FIRMWARE</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">boot_firmware</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_boot_firmware</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid boot_firmware: {}; must be in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">boot_firmware</span><span class="p">,</span>
+                <span class="n">valid_boot_firmware</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fs_medium</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;usb&#39;</span><span class="p">,</span> <span class="s">&#39;sdcard&#39;</span><span class="p">]:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid filesystem medium: {}  allowed values : usb, sdcard &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fs_medium</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="TC2Device"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device">[docs]</a><span class="k">class</span> <span class="nc">TC2Device</span><span class="p">(</span><span class="n">BigLittleDevice</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;TC2&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    TC2 is a development board, which has three A7 cores and two A15 cores.</span>
+
+<span class="s">    TC2 has a number of boot parameters which are:</span>
+
+<span class="s">        :root_mount: Defaults to &#39;/media/VEMSD&#39;</span>
+<span class="s">        :boot_firmware: It has only two boot firmware options, which are</span>
+<span class="s">                        uefi and bootmon. Defaults to &#39;uefi&#39;.</span>
+<span class="s">        :fs_medium: Defaults to &#39;usb&#39;.</span>
+<span class="s">        :device_working_directory: The direcitory that WA will be using to copy</span>
+<span class="s">                                   files to. Defaults to &#39;data/local/usecase&#39;</span>
+<span class="s">        :serial_device: The serial device which TC2 is connected to. Defaults to</span>
+<span class="s">                        &#39;/dev/ttyS0&#39;.</span>
+<span class="s">        :serial_baud: Defaults to 38400.</span>
+<span class="s">        :serial_max_timeout: Serial timeout value in seconds. Defaults to 600.</span>
+<span class="s">        :serial_log: Defaults to standard output.</span>
+<span class="s">        :init_timeout: The timeout in seconds to init the device. Defaults set</span>
+<span class="s">                       to 30.</span>
+<span class="s">        :always_delete_uefi_entry: If true, it will delete the ufi entry.</span>
+<span class="s">                                   Defaults to True.</span>
+<span class="s">        :psci_enable: Enabling the psci. Defaults to True.</span>
+<span class="s">        :host_working_directory: The host working directory. Defaults to None.</span>
+<span class="s">        :disable_boot_configuration: Disables boot configuration through images.txt and board.txt. When</span>
+<span class="s">                                     this is ``True``, those two files will not be overwritten in VEMSD.</span>
+<span class="s">                                     This option may be necessary if the firmware version in the ``TC2``</span>
+<span class="s">                                     is not compatible with the templates in WA. Please note that enabling</span>
+<span class="s">                                     this will prevent you form being able to set ``boot_firmware`` and</span>
+<span class="s">                                     ``mode`` parameters. Defaults to ``False``.</span>
+
+<span class="s">    TC2 can also have a number of different booting mode, which are:</span>
+
+<span class="s">        :mp_a7_only: Only the A7 cluster.</span>
+<span class="s">        :mp_a7_bootcluster: Both A7 and A15 clusters, but it boots on A7</span>
+<span class="s">                            cluster.</span>
+<span class="s">        :mp_a15_only: Only the A15 cluster.</span>
+<span class="s">        :mp_a15_bootcluster: Both A7 and A15 clusters, but it boots on A15</span>
+<span class="s">                             clusters.</span>
+<span class="s">        :iks_cpu: Only A7 cluster with only 2 cpus.</span>
+<span class="s">        :iks_a15: Only A15 cluster.</span>
+<span class="s">        :iks_a7: Same as iks_cpu</span>
+<span class="s">        :iks_ns_a15: Both A7 and A15 clusters.</span>
+<span class="s">        :iks_ns_a7: Both A7 and A15 clusters.</span>
+
+<span class="s">    The difference between mp and iks is the scheduling policy.</span>
+
+<span class="s">    TC2 takes the following runtime parameters</span>
+
+<span class="s">        :a7_cores: Number of active A7 cores.</span>
+<span class="s">        :a15_cores: Number of active A15 cores.</span>
+<span class="s">        :a7_governor: CPUFreq governor for the A7 cluster.</span>
+<span class="s">        :a15_governor: CPUFreq governor for the A15 cluster.</span>
+<span class="s">        :a7_min_frequency: Minimum CPU frequency for the A7 cluster.</span>
+<span class="s">        :a15_min_frequency: Minimum CPU frequency for the A15 cluster.</span>
+<span class="s">        :a7_max_frequency: Maximum CPU frequency for the A7 cluster.</span>
+<span class="s">        :a15_max_frequency: Maximum CPU frequency for the A7 cluster.</span>
+<span class="s">        :irq_affinity: lambda x: Which cluster will receive IRQs.</span>
+<span class="s">        :cpuidle: Whether idle states should be enabled.</span>
+<span class="s">        :sysfile_values: A dict mapping a complete file path to the value that</span>
+<span class="s">                         should be echo&#39;d into it. By default, the file will be</span>
+<span class="s">                         subsequently read to verify that the value was written</span>
+<span class="s">                         into it with DeviceError raised otherwise. For write-only</span>
+<span class="s">                         files, this check can be disabled by appending a ``!`` to</span>
+<span class="s">                         the end of the file path.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">has_gpu</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">a15_only_modes</span> <span class="o">=</span> <span class="n">A15_ONLY_MODES</span>
+    <span class="n">a7_only_modes</span> <span class="o">=</span> <span class="n">A7_ONLY_MODES</span>
+    <span class="n">not_configurable_modes</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;iks_a7&#39;</span><span class="p">,</span> <span class="s">&#39;iks_cpu&#39;</span><span class="p">,</span> <span class="s">&#39;iks_a15&#39;</span><span class="p">]</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;core_names&#39;</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;This parameter will be ignored for TC2&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;core_clusters&#39;</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;This parameter will be ignored for TC2&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">runtime_parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">RuntimeParameter</span><span class="p">(</span><span class="s">&#39;irq_affinity&#39;</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">d</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">d</span><span class="o">.</span><span class="n">set_irq_affinity</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">lower</span><span class="p">()),</span> <span class="k">lambda</span><span class="p">:</span> <span class="bp">None</span><span class="p">),</span>
+        <span class="n">RuntimeParameter</span><span class="p">(</span><span class="s">&#39;cpuidle&#39;</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">d</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">d</span><span class="o">.</span><span class="n">enable_idle_states</span><span class="p">()</span> <span class="k">if</span> <span class="n">boolean</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">else</span> <span class="n">d</span><span class="o">.</span><span class="n">disable_idle_states</span><span class="p">(),</span>
+                         <span class="k">lambda</span> <span class="n">d</span><span class="p">:</span> <span class="n">d</span><span class="o">.</span><span class="n">get_cpuidle</span><span class="p">())</span>
+    <span class="p">]</span>
+
+<div class="viewcode-block" id="TC2Device.get_mode"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.get_mode">[docs]</a>    <span class="k">def</span> <span class="nf">get_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">mode</span>
+</div>
+<div class="viewcode-block" id="TC2Device.set_mode"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.set_mode">[docs]</a>    <span class="k">def</span> <span class="nf">set_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_booted</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Attempting to set boot mode when already booted.&#39;</span><span class="p">)</span>
+        <span class="n">valid_modes</span> <span class="o">=</span> <span class="n">MODES</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">mode</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">default_mode</span>
+        <span class="k">if</span> <span class="n">mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_modes</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid mode: {}; must be in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">mode</span><span class="p">,</span> <span class="n">valid_modes</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">mode</span>
+</div>
+    <span class="n">mode</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">get_mode</span><span class="p">,</span> <span class="n">set_mode</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_core_names</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;cpus&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_set_core_names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="n">core_names</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_get_core_names</span><span class="p">,</span> <span class="n">_set_core_names</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_core_clusters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([])</span>
+        <span class="n">core_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">cluster_id</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="k">for</span> <span class="n">core</span> <span class="ow">in</span> <span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;cpus&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">core</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">core</span><span class="p">)</span>
+                <span class="n">cluster_id</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">core_clusters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cluster_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">core_clusters</span>
+
+    <span class="k">def</span> <span class="nf">_set_core_clusters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="n">core_clusters</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">_get_core_clusters</span><span class="p">,</span> <span class="n">_set_core_clusters</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">cpu_cores</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;cpus&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">max_a7_cores</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Counter</span><span class="p">(</span><span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;cpus&#39;</span><span class="p">])[</span><span class="s">&#39;a7&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">max_a15_cores</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Counter</span><span class="p">(</span><span class="n">MODES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">][</span><span class="s">&#39;cpus&#39;</span><span class="p">])[</span><span class="s">&#39;a15&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">a7_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">a7_governor_tunables</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">a15_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">a15_governor_tunables</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">TC2Device</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">_TC2DeviceConfig</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">working_directory</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">working_directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_serial</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_has_booted</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="TC2Device.boot"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.boot">[docs]</a>    <span class="k">def</span> <span class="nf">boot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>  <span class="c"># NOQA</span>
+        <span class="n">mode</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;os_mode&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_has_booted</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">mode</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Booting in {} mode&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">))</span>
+
+        <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">serial_max_timeout</span><span class="p">,</span>
+                                    <span class="n">port</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">serial_device</span><span class="p">,</span>
+                                    <span class="n">baudrate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">serial_baud</span><span class="p">)</span> <span class="k">as</span> <span class="n">target</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">boot_firmware</span> <span class="o">==</span> <span class="s">&#39;bootmon&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_boot_using_bootmon</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">boot_firmware</span> <span class="o">==</span> <span class="s">&#39;uefi&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_boot_using_uefi</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Unexpected boot firmware: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">boot_firmware</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for the Android prompt.&#39;</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">android_prompt</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>  <span class="c"># pylint: disable=E1101</span>
+            <span class="k">except</span> <span class="n">pexpect</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+                <span class="c"># Try a second time before giving up.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Did not get Android prompt, retrying...&#39;</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">android_prompt</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>  <span class="c"># pylint: disable=E1101</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for OS to initialize...&#39;</span><span class="p">)</span>
+            <span class="n">started_waiting_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>  <span class="c"># we know it&#39;s not going to to take less time than this.</span>
+            <span class="n">boot_completed</span><span class="p">,</span> <span class="n">got_ip_address</span> <span class="o">=</span> <span class="bp">False</span><span class="p">,</span> <span class="bp">False</span>
+            <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">boot_completed</span><span class="p">:</span>
+                        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;getprop sys.boot_completed&#39;</span><span class="p">)</span>
+                        <span class="n">boot_completed</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="s">&#39;0.*&#39;</span><span class="p">,</span> <span class="s">&#39;1.*&#39;</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">got_ip_address</span><span class="p">:</span>
+                        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;getprop dhcp.eth0.ipaddress&#39;</span><span class="p">)</span>
+                        <span class="c"># regexes  are processed in order, so ip regex has to</span>
+                        <span class="c"># come first (as we only want to match new line if we</span>
+                        <span class="c"># don&#39;t match the IP). We do a &quot;not&quot; make the logic</span>
+                        <span class="c"># consistent with boot_completed.</span>
+                        <span class="n">got_ip_address</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="s">&#39;[1-9]\d*.\d+.\d+.\d+&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">pexpect</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+                    <span class="k">pass</span>  <span class="c"># We have our own timeout -- see below.</span>
+                <span class="k">if</span> <span class="n">boot_completed</span> <span class="ow">and</span> <span class="n">got_ip_address</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">started_waiting_time</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">init_timeout</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Timed out waiting for the device to initialize.&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_has_booted</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+<div class="viewcode-block" id="TC2Device.connect"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.connect">[docs]</a>    <span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">adb_name</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">adb_name</span>  <span class="c"># pylint: disable=attribute-defined-outside-init</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">serial_max_timeout</span><span class="p">,</span>
+                                            <span class="n">port</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">serial_device</span><span class="p">,</span>
+                                            <span class="n">baudrate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">serial_baud</span><span class="p">)</span> <span class="k">as</span> <span class="n">target</span><span class="p">:</span>
+                    <span class="c"># Get IP address and push the Gator and PMU logger.</span>
+                    <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;su&#39;</span><span class="p">)</span>  <span class="c"># as of Android v5.0.2, Linux does not boot into root shell</span>
+                    <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;netcfg&#39;</span><span class="p">)</span>
+                    <span class="n">ipaddr_re</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39;eth0 +UP +(.+)/.+&#39;</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span><span class="p">)</span>
+                    <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">ipaddr_re</span><span class="p">)</span>
+                    <span class="n">output</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">after</span>
+                    <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">&#39;eth0 +UP +(.+)/.+&#39;</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Could not get adb IP address.&#39;</span><span class="p">)</span>
+                    <span class="n">ipaddr</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+                    <span class="c"># Connect to device using adb.</span>
+                    <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">android_prompt</span><span class="p">)</span>  <span class="c"># pylint: disable=E1101</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="o">=</span> <span class="n">ipaddr</span> <span class="o">+</span> <span class="s">&quot;:5555&quot;</span>  <span class="c"># pylint: disable=W0201</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="ow">in</span> <span class="n">adb_list_devices</span><span class="p">():</span>
+                <span class="n">adb_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">)</span>
+            <span class="n">adb_connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;input keyevent 82&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">ADB_SHELL_TIMEOUT</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;svc power stayon true&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">ADB_SHELL_TIMEOUT</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TC2Device.disconnect"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.disconnect">[docs]</a>    <span class="k">def</span> <span class="nf">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">adb_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="c"># TC2-specific methods. You should avoid calling these in</span>
+    <span class="c"># Workloads/Instruments as that would tie them to TC2 (and if that is</span>
+    <span class="c"># the case, then you should set the supported_devices parameter in the</span>
+    <span class="c"># Workload/Instrument accordingly). Most of these can be replace with a</span>
+    <span class="c"># call to set_runtime_parameters.</span>
+</div>
+<div class="viewcode-block" id="TC2Device.get_cpuidle"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.get_cpuidle">[docs]</a>    <span class="k">def</span> <span class="nf">get_cpuidle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="s">&#39;/sys/devices/system/cpu/cpu0/cpuidle/state1/disable&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TC2Device.enable_idle_states"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.enable_idle_states">[docs]</a>    <span class="k">def</span> <span class="nf">enable_idle_states</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fully enables idle states on TC2.</span>
+<span class="sd">        See http://wiki.arm.com/Research/TC2SetupAndUsage (&quot;Enabling Idle Modes&quot; section)</span>
+<span class="sd">        and http://wiki.arm.com/ASD/ControllingPowerManagementInLinaroKernels</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># Enable C1 (cluster shutdown).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="s">&#39;/sys/devices/system/cpu/cpu0/cpuidle/state1/disable&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="c"># Enable C0 on A15 cluster.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="s">&#39;/sys/kernel/debug/idle_debug/enable_idle&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="c"># Enable C0 on A7 cluster.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="s">&#39;/sys/kernel/debug/idle_debug/enable_idle&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TC2Device.disable_idle_states"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.disable_idle_states">[docs]</a>    <span class="k">def</span> <span class="nf">disable_idle_states</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Disable idle states on TC2.</span>
+<span class="sd">        See http://wiki.arm.com/Research/TC2SetupAndUsage (&quot;Enabling Idle Modes&quot; section)</span>
+<span class="sd">        and http://wiki.arm.com/ASD/ControllingPowerManagementInLinaroKernels</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># Disable C1 (cluster shutdown).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="s">&#39;/sys/devices/system/cpu/cpu0/cpuidle/state1/disable&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="c"># Disable C0.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="s">&#39;/sys/kernel/debug/idle_debug/enable_idle&#39;</span><span class="p">,</span> <span class="mh">0xFF</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TC2Device.set_irq_affinity"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.tc2.html#wlauto.devices.android.tc2.TC2Device.set_irq_affinity">[docs]</a>    <span class="k">def</span> <span class="nf">set_irq_affinity</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set&#39;s IRQ affinity to the specified cluster.</span>
+
+<span class="sd">        This method will only work if the device mode is mp_a7_bootcluster or</span>
+<span class="sd">        mp_a15_bootcluster. This operation does not make sense if there is only one</span>
+<span class="sd">        cluster active (all IRQs will obviously go to that), and it will not work for</span>
+<span class="sd">        IKS kernel because clusters are not exposed to sysfs.</span>
+
+<span class="sd">        :param cluster: must be either &#39;a15&#39; or &#39;a7&#39;.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s">&#39;mp_a7_bootcluster&#39;</span><span class="p">,</span> <span class="s">&#39;mp_a15_bootcluster&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Cannot set IRQ affinity with mode {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">mode</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">cluster</span> <span class="o">==</span> <span class="s">&#39;a7&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;/sbin/set_irq_affinity.sh 0xc07&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">cluster</span> <span class="o">==</span> <span class="s">&#39;a15&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;/sbin/set_irq_affinity.sh 0xc0f&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;cluster must either &quot;a15&quot; or &quot;a7&quot;; got {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cluster</span><span class="p">))</span>
+</div>
+    <span class="k">def</span> <span class="nf">_boot_using_uefi</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Booting using UEFI.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_vemsd_mount</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_setup_before_reboot</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_perform_uefi_reboot</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+
+        <span class="c"># Get to the UEFI menu.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for UEFI default selection.&#39;</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;reboot&#39;</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;The default boot selection will start in&#39;</span><span class="o">.</span><span class="n">rstrip</span><span class="p">())</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">rstrip</span><span class="p">())</span>
+
+        <span class="c"># If delete every time is specified, try to delete entry.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">always_delete_uefi_entry</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_delete_uefi_entry</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">entry</span><span class="o">=</span><span class="s">&#39;workload_automation_MP&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">always_delete_uefi_entry</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="c"># Specify argument to be passed specifying that psci is (or is not) enabled</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">psci_enable</span><span class="p">:</span>
+            <span class="n">psci_enable</span> <span class="o">=</span> <span class="s">&#39; psci=enable&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">psci_enable</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+
+        <span class="c"># Identify the workload automation entry.</span>
+        <span class="n">selection_pattern</span> <span class="o">=</span> <span class="s">r&#39;\[([0-9]*)\] &#39;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;workload_automation_MP&#39;</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="n">wl_menu_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">pexpect</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_create_uefi_entry</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">psci_enable</span><span class="p">,</span> <span class="n">entry_name</span><span class="o">=</span><span class="s">&#39;workload_automation_MP&#39;</span><span class="p">)</span>
+            <span class="c"># At this point the board should be rebooted so we need to retry to boot</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_boot_using_uefi</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c"># Did not time out.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c">#Identify the boot manager menu item</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;Boot Manager&#39;</span><span class="p">))</span>
+                <span class="n">boot_manager_menu_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+                <span class="c">#Update FDT</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">boot_manager_menu_item</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;Update FDT path&#39;</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+                <span class="n">update_fdt_menu_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">update_fdt_menu_item</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;NOR Flash .*&#39;</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+                <span class="n">bootmonfs_menu_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">bootmonfs_menu_item</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;File path of the FDT blob:&#39;</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dtb</span><span class="p">)</span>
+
+                <span class="c">#Return to main manu and boot from wl automation</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;Return to main menu&#39;</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+                <span class="n">return_to_main_menu_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">return_to_main_menu_item</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">wl_menu_item</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">pexpect</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Timed out&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_setup_before_reboot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">disable_boot_configuration</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Performing pre-boot setup.&#39;</span><span class="p">)</span>
+            <span class="n">substitution</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s">&#39;SCC_0x010&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">SCC_0x010</span><span class="p">,</span>
+                <span class="s">&#39;SCC_0x700&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">SCC_0x700</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">src_board_template_file</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">template_board_txt</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">src_board_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+                    <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">template_board_txt</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span><span class="n">substitution</span><span class="p">))</span>
+
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">src_images_template_file</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">template_images_txt</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">src_images_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+                    <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">template_images_txt</span><span class="o">.</span><span class="n">substitute</span><span class="p">({</span><span class="s">&#39;bm_image&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">bm_image</span><span class="p">}))</span>
+
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copyfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">src_board_file</span><span class="p">,</span>
+                            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">board_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">board_file</span><span class="p">))</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copyfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">src_images_file</span><span class="p">,</span>
+                            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">board_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">images_file</span><span class="p">))</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&#39;sync&#39;</span><span class="p">)</span>  <span class="c"># make sure everything is flushed to microSD</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Boot configuration disabled proceeding with existing board.txt and images.txt.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_delete_uefi_entry</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">entry</span><span class="p">):</span>  <span class="c"># pylint: disable=R0201</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        this method deletes the entry specified as parameter</span>
+<span class="sd">        as a precondition serial port input needs to be parsed AT MOST up to</span>
+<span class="sd">        the point BEFORE recognizing this entry (both entry and boot manager has</span>
+<span class="sd">        not yet been parsed)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">selection_pattern</span> <span class="o">=</span> <span class="s">r&#39;\[([0-9]+)\] *&#39;</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="n">entry</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+                <span class="n">wl_menu_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">pexpect</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+                <span class="k">return</span>  <span class="c"># Entry does not exist, nothing to delete here...</span>
+
+            <span class="c"># Identify and select boot manager menu item</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;Boot Manager&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+            <span class="n">bootmanager_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">bootmanager_item</span><span class="p">)</span>
+
+            <span class="c"># Identify and select &#39;Remove entry&#39;</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;Remove Boot Device Entry&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+            <span class="n">new_entry_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">new_entry_item</span><span class="p">)</span>
+
+            <span class="c"># Delete entry</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="n">entry</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="n">wl_menu_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">wl_menu_item</span><span class="p">)</span>
+
+            <span class="c"># Return to main manu</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;Return to main menu&#39;</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+            <span class="n">return_to_main_menu_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">return_to_main_menu_item</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">pexpect</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Timed out while deleting UEFI entry.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_create_uefi_entry</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">psci_enable</span><span class="p">,</span> <span class="n">entry_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Creates the default boot entry that is expected when booting in uefi mode.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_vemsd_mount</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">selection_pattern</span> <span class="o">=</span> <span class="s">&#39;\[([0-9]+)\] *&#39;</span>
+
+            <span class="c"># Identify and select boot manager menu item.</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;Boot Manager&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+            <span class="n">bootmanager_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">bootmanager_item</span><span class="p">)</span>
+
+            <span class="c"># Identify and select &#39;add new entry&#39;.</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;Add Boot Device Entry&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+            <span class="n">new_entry_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">new_entry_item</span><span class="p">)</span>
+
+            <span class="c"># Identify and select BootMonFs.</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">selection_pattern</span> <span class="o">+</span> <span class="s">&#39;NOR Flash .*&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+            <span class="n">BootMonFs_item</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">BootMonFs_item</span><span class="p">)</span>
+
+            <span class="c"># Specify the parameters of the new entry.</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;.+the kernel&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">kernel</span><span class="p">)</span>  <span class="c"># kernel path</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;Has FDT support\?.*\[y\/n\].*&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;y&#39;</span><span class="p">)</span>   <span class="c"># Has Fdt support? -&gt; y</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;Add an initrd.*\[y\/n\].*&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;y&#39;</span><span class="p">)</span>   <span class="c"># add an initrd? -&gt; y</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;.+the initrd.*&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initrd</span><span class="p">)</span>  <span class="c"># initrd path</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;.+to the binary.*&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+            <span class="n">_slow_sendline</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">kernel_arguments</span> <span class="o">+</span> <span class="n">psci_enable</span><span class="p">)</span>  <span class="c"># arguments to pass to binary</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;.+new Entry.+&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="n">_slow_sendline</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">entry_name</span><span class="p">)</span>  <span class="c"># Entry name</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;Choice.+&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">pexpect</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Timed out while creating UEFI entry.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_perform_uefi_reboot</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_perform_uefi_reboot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_vemsd_mount</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+        <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">root_mount</span><span class="p">,</span> <span class="s">&#39;reboot.txt&#39;</span><span class="p">),</span> <span class="s">&#39;a&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_wait_for_vemsd_mount</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">attempts</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">reboot_attempts</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">root_mount</span><span class="p">,</span> <span class="s">&#39;config.txt&#39;</span><span class="p">)):</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for VEMSD to mount...&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">attempts</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">:</span>  <span class="c"># Do not reboot on the first attempt.</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;reboot&#39;</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;usb_on&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">timeout</span><span class="p">):</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">root_mount</span><span class="p">,</span> <span class="s">&#39;config.txt&#39;</span><span class="p">)):</span>
+                    <span class="k">return</span>
+
+        <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Timed out waiting for VEMSD to mount.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_boot_using_bootmon</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method Boots TC2 using the bootmon interface.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Booting using bootmon.&#39;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_vemsd_mount</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>
+            <span class="c"># OK, something&#39;s wrong. Reboot the board and try again.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;VEMSD not mounted, attempting to power cycle device.&#39;</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">)</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="s">&#39;Cmd&gt; &#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">bootmon_prompt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">android_prompt</span><span class="p">])</span>  <span class="c"># pylint: disable=E1101</span>
+
+            <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">state</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="c"># Reboot - Bootmon</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;reboot&#39;</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;Powering up system...&#39;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">state</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;reboot -n&#39;</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;Powering up system...&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Unexpected board state {}; should be 0, 1 or 2&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_vemsd_mount</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_setup_before_reboot</span><span class="p">()</span>
+
+        <span class="c"># Reboot - Bootmon</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Rebooting into bootloader...&#39;</span><span class="p">)</span>
+        <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">root_mount</span><span class="p">,</span> <span class="s">&#39;reboot.txt&#39;</span><span class="p">),</span> <span class="s">&#39;a&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;Powering up system...&#39;</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">bootmon_prompt</span><span class="p">)</span>
+
+        <span class="c"># Wait for VEMSD to mount</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_vemsd_mount</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+
+        <span class="c">#Boot Linux - Bootmon</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;fl linux fdt &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dtb</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">bootmon_prompt</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;fl linux initrd &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initrd</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">bootmon_prompt</span><span class="p">)</span>
+        <span class="c">#Workaround TC2 bootmon serial issue for loading large initrd blob</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">bootmon_prompt</span><span class="p">)</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;fl linux boot &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">kernel</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">kernel_arguments</span><span class="p">)</span>
+
+
+<span class="c"># Utility functions.</span>
+</div>
+<span class="k">def</span> <span class="nf">_slow_sendline</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">line</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+    <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,403 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>DAQ Server Guide &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="index.html" />
+    <link rel="next" title="revent" href="revent.html" />
+    <link rel="prev" title="Additional Topics" href="additional_topics.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="revent.html" title="revent"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="additional_topics.html" title="Additional Topics"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="daq-server-guide">
+<span id="daq-setup"></span><h1>DAQ Server Guide<a class="headerlink" href="#daq-server-guide" title="Permalink to this headline">¶</a></h1>
+<p>NI-DAQ, or just &#8220;DAQ&#8221;, is the Data Acquisition device developed by National
+Instruments:</p>
+<blockquote>
+<div><a class="reference external" href="http://www.ni.com/data-acquisition/">http://www.ni.com/data-acquisition/</a></div></blockquote>
+<p>WA uses the DAQ to collect power measurements during workload execution. A
+client/server solution for this is distributed as part of WA, though it is
+distinct from WA and may be used separately (by invoking the client APIs from a
+Python script, or used directly from the command line).</p>
+<p>This solution is dependent on the NI-DAQmx driver for the DAQ device. At the
+time of writing, only Windows versions of the driver are supported (there is an
+old Linux version that works on some versions of RHEL and Centos, but it is
+unsupported and won&#8217;t work with recent Linux kernels). Because of this, the
+server part of the solution will need to be run on a Windows machine (though it
+should also work on Linux, if the driver becomes available).</p>
+<div class="section" id="daq-device-wiring">
+<span id="daq-wiring"></span><h2>DAQ Device Wiring<a class="headerlink" href="#daq-device-wiring" title="Permalink to this headline">¶</a></h2>
+<p>The server expects the device to be wired in a specific way in order to be able
+to collect power measurements. Two consecutive Analogue Input (AI) channels on
+the DAQ are used to form a logical &#8220;port&#8221; (starting with AI/0 and AI/1 for port
+0). Of these, the lower/even channel (e.g. AI/0) is used to measure the voltage
+on the rail we&#8217;re interested in; the higher/odd channel (e.g. AI/1) is used to
+measure the voltage drop across a known very small resistor on the same rail,
+which is then used to calculate current. The logical wiring diagram looks like
+this:</p>
+<div class="highlight-python"><div class="highlight"><pre>Port N
+======
+|
+|   AI/(N*2)+   &lt;--- Vr -------------------------|
+|                                                |
+|   AI/(N*2)-   &lt;--- GND -------------------//   |
+|                                                |
+|   AI/(N*2+1)+ &lt;--- V  ------------|-------V    |
+|                           r       |            |
+|   AI/(N*2+1)- &lt;--- Vr --/\/\/\----|            |
+|                 |                              |
+|                 |                              |
+|                 |------------------------------|
+======
+
+Where:
+        V: Voltage going into the resistor
+        Vr: Voltage between resistor and the SOC
+        GND: Ground
+        r: The resistor across the rail with a known
+           small value.
+</pre></div>
+</div>
+<p>The physical wiring will depend on the specific DAQ device, as channel layout
+varies between models.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Current solution supports variable number of ports, however it
+assumes that the ports are sequential and start at zero. E.g. if you
+want to measure power on three rails, you will need to wire ports 0-2
+(AI/0 to AI/5 channels on the DAQ) to do it. It is not currently
+possible to use any other configuration (e.g. ports 1, 2 and 5).</p>
+</div>
+<p>As an example, the following illustration shows the wiring of PORT0 (using AI/0
+and AI/1 channels) on a DAQ USB-6210</p>
+<a class="reference internal image-reference" href="_images/daq-wiring.png"><img alt="_images/daq-wiring.png" src="_images/daq-wiring.png" /></a>
+</div>
+<div class="section" id="setting-up-ni-daqmx-driver-on-a-windows-machine">
+<h2>Setting up NI-DAQmx driver on a Windows Machine<a class="headerlink" href="#setting-up-ni-daqmx-driver-on-a-windows-machine" title="Permalink to this headline">¶</a></h2>
+<blockquote>
+<div><ul>
+<li><p class="first">The NI-DAQmx driver is pretty big in size, 1.5 GB. The driver name is
+&#8216;NI-DAQmx&#8217; and its version &#8216;9.7.0f0&#8217; which you can obtain it from National
+Instruments website by downloading NI Measurement &amp; Automation Explorer (Ni
+MAX) from: <a class="reference external" href="http://joule.ni.com/nidu/cds/view/p/id/3811/lang/en">http://joule.ni.com/nidu/cds/view/p/id/3811/lang/en</a></p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">During the installation process, you might be prompted to install
+.NET framework 4.</p>
+</div>
+</li>
+<li><p class="first">The installation process is quite long, 7-15 minutes.</p>
+</li>
+<li><p class="first">Once installed, open NI MAX, which should be in your desktop, if not type its
+name in the start-&gt;search.</p>
+</li>
+<li><p class="first">Connect the NI-DAQ device to your machine. You should see it appear under
+&#8216;Devices and Interfaces&#8217;. If not, press &#8216;F5&#8217; to refresh the list.</p>
+</li>
+<li><p class="first">Complete the device wiring as described in the <a class="reference internal" href="#daq-wiring"><span>DAQ Device Wiring</span></a> section.</p>
+</li>
+<li><p class="first">Quit NI MAX.</p>
+</li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="setting-up-daq-server">
+<h2>Setting up DAQ server<a class="headerlink" href="#setting-up-daq-server" title="Permalink to this headline">¶</a></h2>
+<p>The DAQ power measurement solution is implemented in daqpower Python library,
+the package for which can be found in WA&#8217;s install location under
+<code class="docutils literal"><span class="pre">wlauto/external/daq_server/daqpower-1.0.0.tar.gz</span></code> (the version number in your
+installation may be different).</p>
+<blockquote>
+<div><ul>
+<li><p class="first">Install NI-DAQmx driver, as described in the previous section.</p>
+</li>
+<li><p class="first">Install Python 2.7.</p>
+</li>
+<li><p class="first">Download and install <code class="docutils literal"><span class="pre">pip</span></code>, <code class="docutils literal"><span class="pre">numpy</span></code> and <code class="docutils literal"><span class="pre">twisted</span></code> Python packages.
+These packages have C extensions, an so you will need a native compiler set
+up if you want to install them from PyPI. As an easier alternative, you can
+find pre-built Windows installers for these packages <a class="reference external" href="http://www.lfd.uci.edu/~gohlke/pythonlibs/">here</a> (the versions are
+likely to be older than what&#8217;s on PyPI though).</p>
+</li>
+<li><p class="first">Install the daqpower package using pip:</p>
+<div class="highlight-python"><div class="highlight"><pre>pip install C:\Python27\Lib\site-packages\wlauto\external\daq_server\daqpower-1.0.0.tar.gz
+</pre></div>
+</div>
+<p>This should automatically download and install <code class="docutils literal"><span class="pre">PyDAQmx</span></code> package as well
+(the Python bindings for the NI-DAQmx driver).</p>
+</li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="running-daq-server">
+<h2>Running DAQ server<a class="headerlink" href="#running-daq-server" title="Permalink to this headline">¶</a></h2>
+<p>Once you have installed the <code class="docutils literal"><span class="pre">daqpower</span></code> package and the required dependencies as
+described above, you can start the server by executing <code class="docutils literal"><span class="pre">run-daq-server</span></code> from the
+command line. The server will start listening on the default port, 45677.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">There is a chance that pip will not add <code class="docutils literal"><span class="pre">run-daq-server</span></code> into your
+path. In that case, you can run daq server as such:
+<code class="docutils literal"><span class="pre">python</span> <span class="pre">C:\path</span> <span class="pre">to</span> <span class="pre">python\Scripts\run-daq-server</span></code></p>
+</div>
+<p>You can optionally specify flags to control the behaviour or the server:</p>
+<div class="highlight-python"><div class="highlight"><pre>usage: run-daq-server [-h] [-d DIR] [-p PORT] [--debug] [--verbose]
+
+optional arguments:
+-h, --help            show this help message and exit
+-d DIR, --directory DIR
+                        Working directory
+-p PORT, --port PORT  port the server will listen on.
+--debug               Run in debug mode (no DAQ connected).
+--verbose             Produce verobose output.
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The server will use a working directory (by default, the directory
+the run-daq-server command was executed in, or the location specified
+with -d flag) to store power traces before they are collected by the
+client. This directory must be read/write-able by the user running
+the server.</p>
+</div>
+</div>
+<div class="section" id="collecting-power-with-wa">
+<h2>Collecting Power with WA<a class="headerlink" href="#collecting-power-with-wa" title="Permalink to this headline">¶</a></h2>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">You do <em>not</em> need to install the <code class="docutils literal"><span class="pre">daqpower</span></code> package on the machine
+running WA, as it is already included in the WA install structure.
+However, you do need to make sure that <code class="docutils literal"><span class="pre">twisted</span></code> package is
+installed.</p>
+</div>
+<p>You can enable <code class="docutils literal"><span class="pre">daq</span></code> instrument your agenda/config.py in order to get WA to
+collect power measurements. At minimum, you will also need to specify the
+resistor values for each port in your configuration, e.g.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">resistor_values</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.005</span><span class="p">,</span> <span class="mf">0.005</span><span class="p">]</span>  <span class="c"># in Ohms</span>
+</pre></div>
+</div>
+<p>This also specifies the number of logical ports (measurement sites) you want to
+use, and, implicitly, the port numbers (ports 0 to N-1 will be used).</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">&#8220;ports&#8221; here refers to the logical ports wired on the DAQ (see <a class="reference internal" href="#daq-wiring"><span>DAQ Device Wiring</span></a>,
+not to be confused with the TCP port the server is listening on.</p>
+</div>
+<p>Unless you&#8217;re running the DAQ server and WA on the same machine (unlikely
+considering that WA is officially supported only on Linux and recent NI-DAQmx
+drivers are only available on Windows), you will also need to specify the IP
+address of the server:</p>
+<div class="highlight-python"><div class="highlight"><pre>daq_server =  127.0.0.1
+</pre></div>
+</div>
+<p>There are a number of other settings that can optionally be specified in the
+configuration (e.g. the labels to be used for DAQ ports). Please refer to the
+<a class="reference internal" href="api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq" title="wlauto.instrumentation.daq.Daq"><code class="xref py py-class docutils literal"><span class="pre">wlauto.instrumentation.daq.Daq</span></code></a> documentation for details.</p>
+</div>
+<div class="section" id="collecting-power-from-the-command-line">
+<h2>Collecting Power from the Command Line<a class="headerlink" href="#collecting-power-from-the-command-line" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal"><span class="pre">daqpower</span></code> package also comes with a client that may be used from the command
+line. Unlike when collecting power with WA, you <em>will</em> need to install the
+<code class="docutils literal"><span class="pre">daqpower</span></code> package. Once installed, you will be able to interract with a
+running DAQ server by invoking <code class="docutils literal"><span class="pre">send-daq-command</span></code>. The invocation syntax is</p>
+<div class="highlight-python"><div class="highlight"><pre>send-daq-command --host HOST [--port PORT] COMMAND [OPTIONS]
+</pre></div>
+</div>
+<p>Options are command-specific. COMMAND may be one of the following (and they
+should generally be inoked in that order):</p>
+<blockquote>
+<div><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">configure:</th><td class="field-body">Set up a new session, specifying the configuration values to
+be used. If there is already a configured session, it will
+be terminated. OPTIONS for this this command are the DAQ
+configuration parameters listed in the DAQ instrument
+documentation with all <code class="docutils literal"><span class="pre">_</span></code> replaced by <code class="docutils literal"><span class="pre">-</span></code> and prefixed
+with <code class="docutils literal"><span class="pre">--</span></code>, e.g. <code class="docutils literal"><span class="pre">--resistor-values</span></code>.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">start:</th><td class="field-body">Start collecting power measurments.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">stop:</th><td class="field-body">Stop collecting power measurments.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">get_data:</th><td class="field-body">Pull files containg power measurements from the server.
+There is one option  for this command:
+<code class="docutils literal"><span class="pre">--output-directory</span></code> which specifies where the files will
+be pulled to; if this is not specified, the will be in the
+current directory.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">close:</th><td class="field-body">Close the currently configured server session. This will get rid
+of  the data files and configuration on the server, so it would
+no longer be possible to use &#8220;start&#8221; or &#8220;get_data&#8221; commands
+before a new session is configured.</td>
+</tr>
+</tbody>
+</table>
+</div></blockquote>
+<p>A typical command line session would go like this:</p>
+<div class="highlight-bash"><div class="highlight"><pre>send-daq-command --host 127.0.0.1 configure --resistor-values 0.005 0.005
+<span class="c"># set up and kick off the use case you want to measure</span>
+send-daq-command --host 127.0.0.1 start
+<span class="c"># wait for the use case to complete</span>
+send-daq-command --host 127.0.0.1 stop
+send-daq-command --host 127.0.0.1 get_data
+<span class="c"># files called PORT_0.csv and PORT_1.csv will appear in the current directory</span>
+<span class="c"># containing measurements collected during use case execution</span>
+send-daq-command --host 127.0.0.1 close
+<span class="c"># the session is terminated and the csv files on the server have been</span>
+<span class="c"># deleted. A new session may now be configured.</span>
+</pre></div>
+</div>
+<p>In addtion to these &#8220;standard workflow&#8221; commands, the following commands are
+also available:</p>
+<blockquote>
+<div><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">list_devices:</th><td class="field-body">Returns a list of DAQ devices detected by the NI-DAQmx
+driver. In case mutiple devices are connected to the
+server host, you can specify the device you want to use
+with <code class="docutils literal"><span class="pre">--device-id</span></code> option when configuring a session.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">list_ports:</th><td class="field-body">Returns a list of ports tha have been configured for the
+current session, e.g. <code class="docutils literal"><span class="pre">['PORT_0',</span> <span class="pre">'PORT_1']</span></code>.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name" colspan="2">list_port_files:</th></tr>
+<tr class="field-odd field"><td>&nbsp;</td><td class="field-body">Returns a list of data files that have been geneted
+(unless something went wrong, there should be one for
+each port).</td>
+</tr>
+</tbody>
+</table>
+</div></blockquote>
+</div>
+<div class="section" id="collecting-power-from-another-python-script">
+<h2>Collecting Power from another Python Script<a class="headerlink" href="#collecting-power-from-another-python-script" title="Permalink to this headline">¶</a></h2>
+<p>You can invoke the above commands from a Python script using
+<code class="xref py py-func docutils literal"><span class="pre">daqpower.client.execute_command()</span></code> function, passing in
+<code class="xref py py-class docutils literal"><span class="pre">daqpower.config.ServerConfiguration</span></code> and, in case of the configure command,
+<code class="xref py py-class docutils literal"><span class="pre">daqpower.config.DeviceConfigruation</span></code>. Please see the implementation of
+the <code class="docutils literal"><span class="pre">daq</span></code> WA instrument for examples of how these APIs can be used.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">DAQ Server Guide</a><ul>
+<li><a class="reference internal" href="#daq-device-wiring">DAQ Device Wiring</a></li>
+<li><a class="reference internal" href="#setting-up-ni-daqmx-driver-on-a-windows-machine">Setting up NI-DAQmx driver on a Windows Machine</a></li>
+<li><a class="reference internal" href="#setting-up-daq-server">Setting up DAQ server</a></li>
+<li><a class="reference internal" href="#running-daq-server">Running DAQ server</a></li>
+<li><a class="reference internal" href="#collecting-power-with-wa">Collecting Power with WA</a></li>
+<li><a class="reference internal" href="#collecting-power-from-the-command-line">Collecting Power from the Command Line</a></li>
+<li><a class="reference internal" href="#collecting-power-from-another-python-script">Collecting Power from another Python Script</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="additional_topics.html"
+                        title="previous chapter">Additional Topics</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="revent.html"
+                        title="next chapter">revent</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/daq_device_setup.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="revent.html" title="revent"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="additional_topics.html" title="Additional Topics"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

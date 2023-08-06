@@ -1,0 +1,882 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.configuration &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.configuration</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">copy</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">merge_dicts</span><span class="p">,</span> <span class="n">merge_lists</span><span class="p">,</span> <span class="n">load_struct_from_file</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">regex_type</span><span class="p">,</span> <span class="n">identifier</span>
+
+
+<div class="viewcode-block" id="SharedConfiguration"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.SharedConfiguration">[docs]</a><span class="k">class</span> <span class="nc">SharedConfiguration</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">number_of_iterations</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workload_name</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">boot_parameters</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runtime_parameters</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workload_parameters</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span> <span class="o">=</span> <span class="p">[]</span>
+
+</div>
+<div class="viewcode-block" id="ConfigurationJSONEncoder"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.ConfigurationJSONEncoder">[docs]</a><span class="k">class</span> <span class="nc">ConfigurationJSONEncoder</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">JSONEncoder</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ConfigurationJSONEncoder.default"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.ConfigurationJSONEncoder.default">[docs]</a>    <span class="k">def</span> <span class="nf">default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>  <span class="c"># pylint: disable=E0202</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">WorkloadRunSpec</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">RunConfiguration</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">RebootPolicy</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">policy</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">regex_type</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">pattern</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONEncoder</span><span class="o">.</span><span class="n">default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="WorkloadRunSpec"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.WorkloadRunSpec">[docs]</a><span class="k">class</span> <span class="nc">WorkloadRunSpec</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Specifies execution of a workload, including things like the number of</span>
+<span class="sd">    iterations, device runtime_parameters configuration, etc.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># These should be handled by the framework if not explicitly specified</span>
+    <span class="c"># so it&#39;s a programming error if they&#39;re not</span>
+    <span class="n">framework_mandatory_parameters</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;id&#39;</span><span class="p">,</span> <span class="s">&#39;number_of_iterations&#39;</span><span class="p">]</span>
+
+    <span class="c"># These *must* be specified by the user (through one mechanism or another)</span>
+    <span class="c"># and it is a configuration error if they&#39;re not.</span>
+    <span class="n">mandatory_parameters</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;workload_name&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="nb">id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>  <span class="c"># pylint: disable=W0622</span>
+                 <span class="n">number_of_iterations</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">workload_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">boot_parameters</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">label</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">section_id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">workload_parameters</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">runtime_parameters</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">instrumentation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">flash</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">classifiers</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="p">):</span>  <span class="c"># pylint: disable=W0622</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="nb">id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">number_of_iterations</span> <span class="o">=</span> <span class="n">number_of_iterations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workload_name</span> <span class="o">=</span> <span class="n">workload_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">label</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">section_id</span> <span class="o">=</span> <span class="n">section_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">boot_parameters</span> <span class="o">=</span> <span class="n">boot_parameters</span> <span class="ow">or</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runtime_parameters</span> <span class="o">=</span> <span class="n">runtime_parameters</span> <span class="ow">or</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workload_parameters</span> <span class="o">=</span> <span class="n">workload_parameters</span> <span class="ow">or</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span> <span class="o">=</span> <span class="n">instrumentation</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flash</span> <span class="o">=</span> <span class="n">flash</span> <span class="ow">or</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">classifiers</span> <span class="o">=</span> <span class="n">classifiers</span> <span class="ow">or</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_workload</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_section</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span> <span class="o">=</span> <span class="bp">True</span>
+
+<div class="viewcode-block" id="WorkloadRunSpec.set"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.WorkloadRunSpec.set">[docs]</a>    <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">param</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;id&#39;</span><span class="p">,</span> <span class="s">&#39;section_id&#39;</span><span class="p">,</span> <span class="s">&#39;number_of_iterations&#39;</span><span class="p">,</span> <span class="s">&#39;workload_name&#39;</span><span class="p">,</span> <span class="s">&#39;label&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">param</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;boot_parameters&#39;</span><span class="p">,</span> <span class="s">&#39;runtime_parameters&#39;</span><span class="p">,</span> <span class="s">&#39;workload_parameters&#39;</span><span class="p">,</span> <span class="s">&#39;flash&#39;</span><span class="p">,</span> <span class="s">&#39;classifiers&#39;</span><span class="p">]:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">),</span> <span class="n">value</span><span class="p">,</span> <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">,</span>
+                                             <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">,</span> <span class="n">should_normalize</span><span class="o">=</span><span class="bp">False</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">param</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;instrumentation&#39;</span><span class="p">]:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">merge_lists</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">),</span> <span class="n">value</span><span class="p">,</span> <span class="n">duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Unexpected workload spec parameter: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="WorkloadRunSpec.validate"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.WorkloadRunSpec.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">param_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">framework_mandatory_parameters</span><span class="p">:</span>
+            <span class="n">param</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">param</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;{} not set for workload spec.&#39;</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param_name</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">param_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">mandatory_parameters</span><span class="p">:</span>
+            <span class="n">param</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">param</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;{} not set for workload spec for workload {}&#39;</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="WorkloadRunSpec.match_selectors"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.WorkloadRunSpec.match_selectors">[docs]</a>    <span class="k">def</span> <span class="nf">match_selectors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">selectors</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns ``True`` if this spec matches the specified selectors, and</span>
+<span class="sd">        ``False`` otherwise. ``selectors`` must be a dict-like object with</span>
+<span class="sd">        attribute names mapping onto selector values. At the moment, only equality</span>
+<span class="sd">        selection is supported; i.e. the value of the attribute of the spec must</span>
+<span class="sd">        match exactly the corresponding value specified in the ``selectors`` dict.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">selectors</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">selectors</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="o">!=</span> <span class="n">v</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">False</span>
+        <span class="k">return</span> <span class="bp">True</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">workload</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_workload</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;Workload for {} has not been loaded&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_workload</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">secition</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">section_id</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_section</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;Section for {} has not been loaded&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_section</span>
+
+<div class="viewcode-block" id="WorkloadRunSpec.load"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.WorkloadRunSpec.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">ext_loader</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Loads the workload for the specified device using the specified loader.</span>
+<span class="sd">        This must be done before attempting to execute the spec.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_workload</span> <span class="o">=</span> <span class="n">ext_loader</span><span class="o">.</span><span class="n">get_workload</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">workload_name</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">workload_parameters</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="WorkloadRunSpec.to_dict"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.WorkloadRunSpec.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">)</span>
+        <span class="k">del</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;_workload&#39;</span><span class="p">]</span>
+        <span class="k">del</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;_section&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">d</span>
+</div>
+<div class="viewcode-block" id="WorkloadRunSpec.copy"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.WorkloadRunSpec.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">other</span> <span class="o">=</span> <span class="n">WorkloadRunSpec</span><span class="p">()</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">number_of_iterations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">number_of_iterations</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">workload_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_name</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">label</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">section_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">section_id</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">boot_parameters</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">boot_parameters</span><span class="p">)</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">runtime_parameters</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">)</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">workload_parameters</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">workload_parameters</span><span class="p">)</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">instrumentation</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">)</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">flash</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flash</span><span class="p">)</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">classifiers</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">classifiers</span><span class="p">)</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">_section</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_section</span>  <span class="c"># pylint: disable=protected-access</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">enabled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span>
+        <span class="k">return</span> <span class="n">other</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;{} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__cmp__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">WorkloadRunSpec</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">cmp</span><span class="p">(</span><span class="s">&#39;WorkloadRunSpec&#39;</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">cmp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+
+</div>
+<span class="k">class</span> <span class="nc">_SpecConfig</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="c"># TODO: This is a bit of HACK for alias resolution. This formats Alias</span>
+    <span class="c">#       params as if they came from config.</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">params</span> <span class="ow">or</span> <span class="p">{})</span>
+
+
+<div class="viewcode-block" id="RebootPolicy"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RebootPolicy">[docs]</a><span class="k">class</span> <span class="nc">RebootPolicy</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Represents the reboot policy for the execution -- at what points the device</span>
+<span class="sd">    should be rebooted. This, in turn, is controlled by the policy value that is</span>
+<span class="sd">    passed in on construction and would typically be read from the user&#39;s settings.</span>
+<span class="sd">    Valid policy values are:</span>
+
+<span class="sd">    :never: The device will never be rebooted.</span>
+<span class="sd">    :as_needed: Only reboot the device if it becomes unresponsive, or needs to be flashed, etc.</span>
+<span class="sd">    :initial: The device will be rebooted when the execution first starts, just before</span>
+<span class="sd">              executing the first workload spec.</span>
+<span class="sd">    :each_spec: The device will be rebooted before running a new workload spec.</span>
+<span class="sd">    :each_iteration: The device will be rebooted before each new iteration.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">valid_policies</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;never&#39;</span><span class="p">,</span> <span class="s">&#39;as_needed&#39;</span><span class="p">,</span> <span class="s">&#39;initial&#39;</span><span class="p">,</span> <span class="s">&#39;each_spec&#39;</span><span class="p">,</span> <span class="s">&#39;each_iteration&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="s">&#39;_&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">policy</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_policies</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid reboot policy {}; must be one of {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">policy</span><span class="p">,</span> <span class="s">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">valid_policies</span><span class="p">))</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">can_reboot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">!=</span> <span class="s">&#39;never&#39;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">perform_initial_boot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;never&#39;</span><span class="p">,</span> <span class="s">&#39;as_needed&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">reboot_on_each_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;each_spec&#39;</span><span class="p">,</span> <span class="s">&#39;each_iteration&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">reboot_on_each_iteration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">==</span> <span class="s">&#39;each_iteration&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+    <span class="k">def</span> <span class="nf">__cmp__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">RebootPolicy</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">cmp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">policy</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">cmp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="RunConfigurationItem"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfigurationItem">[docs]</a><span class="k">class</span> <span class="nc">RunConfigurationItem</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This represents a predetermined &quot;configuration point&quot; (an individual setting)</span>
+<span class="sd">    and describes how it must be handled when encountered.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># Also defines the NULL value for each category</span>
+    <span class="n">valid_categories</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;scalar&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span>
+        <span class="s">&#39;list&#39;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="s">&#39;dict&#39;</span><span class="p">:</span> <span class="p">{},</span>
+    <span class="p">}</span>
+
+    <span class="c"># A callable that takes an arbitrary number of positional arguments</span>
+    <span class="c"># is also valid.</span>
+    <span class="n">valid_methods</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;keep&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">,</span> <span class="s">&#39;merge&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">category</span><span class="p">,</span> <span class="n">method</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">category</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_categories</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid category: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">category</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">method</span><span class="p">)</span> <span class="ow">and</span> <span class="n">method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_methods</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid method: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">method</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">category</span> <span class="o">==</span> <span class="s">&#39;scalar&#39;</span> <span class="ow">and</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&#39;merge&#39;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Method cannot be &quot;merge&quot; for a scalar&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">category</span> <span class="o">=</span> <span class="n">category</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">method</span> <span class="o">=</span> <span class="n">method</span>
+
+<div class="viewcode-block" id="RunConfigurationItem.combine"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfigurationItem.combine">[docs]</a>    <span class="k">def</span> <span class="nf">combine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Combine the provided values according to the method for this</span>
+<span class="sd">        configuration item. Order matters -- values are assumed to be</span>
+<span class="sd">        in the order they were specified by the user. The resulting value</span>
+<span class="sd">        is also checked to patch the specified type.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span> <span class="k">if</span> <span class="n">a</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_categories</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">category</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">method</span> <span class="o">==</span> <span class="s">&#39;keep&#39;</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">method</span> <span class="o">==</span> <span class="s">&#39;replace&#39;</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">method</span> <span class="o">==</span> <span class="s">&#39;merge&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s">&#39;list&#39;</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">merge_lists</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">,</span> <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s">&#39;dict&#39;</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span>
+                                    <span class="n">should_merge_lists</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                    <span class="n">should_normalize</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                    <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">,</span>
+                                    <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Unexpected category for merge : &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">category</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">callable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">method</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">method</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Unexpected method: &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">method</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">value</span>
+
+</div></div>
+<span class="k">def</span> <span class="nf">_combine_ids</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s">&#39;_&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="status_list"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.status_list">[docs]</a><span class="k">class</span> <span class="nc">status_list</span><span class="p">(</span><span class="nb">list</span><span class="p">):</span>
+
+<div class="viewcode-block" id="status_list.append"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.status_list.append">[docs]</a>    <span class="k">def</span> <span class="nf">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="nb">list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">())</span>
+
+</div></div>
+<div class="viewcode-block" id="RunConfiguration"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration">[docs]</a><span class="k">class</span> <span class="nc">RunConfiguration</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Loads and maintains the unified configuration for this run. This includes configuration</span>
+<span class="sd">    for WA execution as a whole, and parameters for specific specs.</span>
+
+<span class="sd">    WA configuration mechanism aims to be flexible and easy to use, while at the same</span>
+<span class="sd">    time providing storing validation and early failure on error. To meet these requirements,</span>
+<span class="sd">    the implementation gets rather complicated. This is going to be a quick overview of</span>
+<span class="sd">    the underlying mechanics.</span>
+
+<span class="sd">    .. note:: You don&#39;t need to know this to use WA, or to write extensions for it. From</span>
+<span class="sd">              the point of view of extension writers, configuration from various sources</span>
+<span class="sd">              &quot;magically&quot; appears as attributes of their classes. This explanation peels</span>
+<span class="sd">              back the curtain and is intended for those who, for one reason or another,</span>
+<span class="sd">              need to understand how the magic works.</span>
+
+<span class="sd">    **terminology**</span>
+
+<span class="sd">    run</span>
+
+<span class="sd">        A single execution of a WA agenda.</span>
+
+<span class="sd">    run config(uration) (object)</span>
+
+<span class="sd">        An instance of this class. There is one per run.</span>
+
+<span class="sd">    config(uration) item</span>
+
+<span class="sd">        A single configuration entry or &quot;setting&quot;, e.g. the device interface to use. These</span>
+<span class="sd">        can be for the run as a whole, or for a specific extension.</span>
+
+<span class="sd">    (workload) spec</span>
+
+<span class="sd">        A specification of a single workload execution. This combines workload configuration</span>
+<span class="sd">        with things like the number of iterations to run, which instruments to enable, etc.</span>
+<span class="sd">        More concretely, this is an instance of :class:`WorkloadRunSpec`.</span>
+
+<span class="sd">    **overview**</span>
+
+<span class="sd">    There are three types of WA configuration:</span>
+
+<span class="sd">        1. &quot;Meta&quot; configuration that determines how the rest of the configuration is</span>
+<span class="sd">           processed (e.g. where extensions get loaded from). Since this does not pertain</span>
+<span class="sd">           to *run* configuration, it will not be covered further.</span>
+<span class="sd">        2. Global run configuration, e.g. which workloads, result processors and instruments</span>
+<span class="sd">           will be enabled for a run.</span>
+<span class="sd">        3. Per-workload specification configuration, that determines how a particular workload</span>
+<span class="sd">           instance will get executed (e.g. what workload parameters will be used, how many</span>
+<span class="sd">           iterations.</span>
+
+<span class="sd">    **run configuration**</span>
+
+<span class="sd">    Run configuration may appear in a config file (usually ``~/.workload_automation/config.py``),</span>
+<span class="sd">    or in the ``config`` section of an agenda. Configuration is specified as a nested structure</span>
+<span class="sd">    of dictionaries (associative arrays, or maps) and lists in the syntax following the format</span>
+<span class="sd">    implied by the file extension (currently, YAML and Python are supported). If the same</span>
+<span class="sd">    configuration item appears in more than one source, they are merged with conflicting entries</span>
+<span class="sd">    taking the value from the last source that specified them.</span>
+
+<span class="sd">    In addition to a fixed set of global configuration items, configuration for any WA</span>
+<span class="sd">    Extension (instrument, result processor, etc) may also be specified, namespaced under</span>
+<span class="sd">    the extension&#39;s name (i.e. the extensions name is a key in the global config with value</span>
+<span class="sd">    being a dict of parameters and their values). Some Extension parameters also specify a</span>
+<span class="sd">    &quot;global alias&quot; that may appear at the top-level of the config rather than under the</span>
+<span class="sd">    Extension&#39;s name. It is *not* an error to specify configuration for an Extension that has</span>
+<span class="sd">    not been enabled for a particular run; such configuration will be ignored.</span>
+
+
+<span class="sd">    **per-workload configuration**</span>
+
+<span class="sd">    Per-workload configuration can be specified in three places in the agenda: the</span>
+<span class="sd">    workload entry in the ``workloads`` list, the ``global`` entry (configuration there</span>
+<span class="sd">    will be applied to every workload entry), and in a section entry in ``sections`` list</span>
+<span class="sd">    ( configuration in every section will be applied to every workload entry separately,</span>
+<span class="sd">    creating a &quot;cross-product&quot; of section and workload configurations; additionally,</span>
+<span class="sd">    sections may specify their own workload lists).</span>
+
+<span class="sd">    If they same configuration item appears in more than one of the above places, they will</span>
+<span class="sd">    be merged in the following order: ``global``, ``section``, ``workload``, with conflicting</span>
+<span class="sd">    scalar values in the later overriding those from previous locations.</span>
+
+
+<span class="sd">    **Global parameter aliases**</span>
+
+<span class="sd">    As mentioned above, an Extension&#39;s parameter may define a global alias, which will be</span>
+<span class="sd">    specified and picked up from the top-level config, rather than config for that specific</span>
+<span class="sd">    extension. It is an error to specify the value for a parameter both through a global</span>
+<span class="sd">    alias and through extension config dict in the same configuration file. It is, however,</span>
+<span class="sd">    possible to use a global alias in one file, and specify extension configuration for the</span>
+<span class="sd">    same parameter in another file, in which case, the usual merging rules would apply.</span>
+
+<span class="sd">    **Loading and validation of configuration**</span>
+
+<span class="sd">    Validation of user-specified configuration happens at several stages of run initialisation,</span>
+<span class="sd">    to ensure that appropriate context for that particular type of validation is available and</span>
+<span class="sd">    that meaningful errors can be reported, as early as is feasible.</span>
+
+<span class="sd">    - Syntactic validation is performed when configuration is first loaded.</span>
+<span class="sd">      This is done by the loading mechanism (e.g. YAML parser), rather than WA itself. WA</span>
+<span class="sd">      propagates any errors encountered as ``ConfigError``\ s.</span>
+<span class="sd">    - Once a config file is loaded into a Python structure, it scanned to</span>
+<span class="sd">      extract settings. Static configuration is validated and added to the config. Extension</span>
+<span class="sd">      configuration is collected into a collection of &quot;raw&quot; config, and merged as appropriate, but</span>
+<span class="sd">      is not processed further at this stage.</span>
+<span class="sd">    - Once all configuration sources have been processed, the configuration as a whole</span>
+<span class="sd">      is validated (to make sure there are no missing settings, etc).</span>
+<span class="sd">    - Extensions are loaded through the run config object, which instantiates</span>
+<span class="sd">      them with appropriate parameters based on the &quot;raw&quot; config collected earlier. When an</span>
+<span class="sd">      Extension is instantiated in such a way, it&#39;s config is &quot;officially&quot; added to run configuration</span>
+<span class="sd">      tracked by the run config object. Raw config is discarded at the end of the run, so</span>
+<span class="sd">      that any config that wasn&#39;t loaded in this way is not recoded (as it was not actually used).</span>
+<span class="sd">    - Extension parameters a validated individually (for type, value ranges, etc) as they are</span>
+<span class="sd">      loaded in the Extension&#39;s __init__.</span>
+<span class="sd">    - An extension&#39;s ``validate()`` method is invoked before it is used (exactly when this</span>
+<span class="sd">      happens depends on the extension&#39;s type) to perform any final validation *that does not</span>
+<span class="sd">      rely on the target being present* (i.e. this would happen before WA connects to the target).</span>
+<span class="sd">      This can be used perform inter-parameter validation for an extension (e.g. when valid range for</span>
+<span class="sd">      one parameter depends on another), and more general WA state assumptions (e.g. a result</span>
+<span class="sd">      processor can check that an instrument it depends on has been installed).</span>
+<span class="sd">    - Finally, it is the responsibility of individual extensions to validate any assumptions</span>
+<span class="sd">      they make about the target device (usually as part of their ``setup()``).</span>
+
+<span class="sd">    **Handling of Extension aliases.**</span>
+
+<span class="sd">    WA extensions can have zero or more aliases (not to be confused with global aliases for extension</span>
+<span class="sd">    *parameters*). An extension allows associating an alternative name for the extension with a set</span>
+<span class="sd">    of parameter values. In other words aliases associate common configurations for an extension with</span>
+<span class="sd">    a name, providing a shorthand for it. For example, &quot;t-rex_offscreen&quot; is an alias for &quot;glbenchmark&quot;</span>
+<span class="sd">    workload that specifies that &quot;use_case&quot; should be &quot;t-rex&quot; and &quot;variant&quot; should be &quot;offscreen&quot;.</span>
+
+<span class="sd">    **special loading rules**</span>
+
+<span class="sd">    Note that as a consequence of being able to specify configuration for *any* Extension namespaced</span>
+<span class="sd">    under the Extension&#39;s name in the top-level config, two distinct mechanisms exist form configuring</span>
+<span class="sd">    devices and workloads. This is valid, however due to their nature, they are handled in a special way.</span>
+<span class="sd">    This may be counter intuitive, so configuration of devices and workloads creating entries for their</span>
+<span class="sd">    names in the config is discouraged in favour of using the &quot;normal&quot; mechanisms of configuring them</span>
+<span class="sd">    (``device_config`` for devices and workload specs in the agenda for workloads).</span>
+
+<span class="sd">    In both cases (devices and workloads), &quot;normal&quot; config will always override named extension config</span>
+<span class="sd">    *irrespective of which file it was specified in*. So a ``adb_name`` name specified in ``device_config``</span>
+<span class="sd">    inside ``~/.workload_automation/config.py`` will override ``adb_name`` specified for ``juno`` in the</span>
+<span class="sd">    agenda (even when device is set to &quot;juno&quot;).</span>
+
+<span class="sd">    Again, this ignores normal loading rules, so the use of named extension configuration for devices</span>
+<span class="sd">    and workloads is discouraged. There maybe some situations where this behaviour is useful however</span>
+<span class="sd">    (e.g. maintaining configuration for different devices in one config file).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">default_reboot_policy</span> <span class="o">=</span> <span class="s">&#39;as_needed&#39;</span>
+    <span class="n">default_execution_order</span> <span class="o">=</span> <span class="s">&#39;by_iteration&#39;</span>
+
+    <span class="c"># This is generic top-level configuration.</span>
+    <span class="n">general_config</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;run_name&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;project&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;project_stage&#39;</span><span class="p">,</span> <span class="s">&#39;dict&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;execution_order&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;reboot_policy&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;device&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;flashing_config&#39;</span><span class="p">,</span> <span class="s">&#39;dict&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;retry_on_status&#39;</span><span class="p">,</span> <span class="s">&#39;list&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;max_retries&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="c"># Configuration specified for each workload spec. &quot;workload_parameters&quot;</span>
+    <span class="c"># aren&#39;t listed because they are handled separately.</span>
+    <span class="n">workload_config</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="n">_combine_ids</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;number_of_iterations&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;workload_name&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;label&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;section_id&#39;</span><span class="p">,</span> <span class="s">&#39;scalar&#39;</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;boot_parameters&#39;</span><span class="p">,</span> <span class="s">&#39;dict&#39;</span><span class="p">,</span> <span class="s">&#39;merge&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;runtime_parameters&#39;</span><span class="p">,</span> <span class="s">&#39;dict&#39;</span><span class="p">,</span> <span class="s">&#39;merge&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;instrumentation&#39;</span><span class="p">,</span> <span class="s">&#39;list&#39;</span><span class="p">,</span> <span class="s">&#39;merge&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;flash&#39;</span><span class="p">,</span> <span class="s">&#39;dict&#39;</span><span class="p">,</span> <span class="s">&#39;merge&#39;</span><span class="p">),</span>
+        <span class="n">RunConfigurationItem</span><span class="p">(</span><span class="s">&#39;classifiers&#39;</span><span class="p">,</span> <span class="s">&#39;dict&#39;</span><span class="p">,</span> <span class="s">&#39;merge&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="c"># List of names that may be present in configuration (and it is valid for</span>
+    <span class="c"># them to be there) but are not handled buy RunConfiguration.</span>
+    <span class="n">ignore_names</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;logging&#39;</span><span class="p">,</span> <span class="s">&#39;remote_assets_mount_point&#39;</span><span class="p">]</span>
+
+<div class="viewcode-block" id="RunConfiguration.get_reboot_policy"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration.get_reboot_policy">[docs]</a>    <span class="k">def</span> <span class="nf">get_reboot_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_policy</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_policy</span> <span class="o">=</span> <span class="n">RebootPolicy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_reboot_policy</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_policy</span>
+</div>
+<div class="viewcode-block" id="RunConfiguration.set_reboot_policy"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration.set_reboot_policy">[docs]</a>    <span class="k">def</span> <span class="nf">set_reboot_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">RebootPolicy</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_policy</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_policy</span> <span class="o">=</span> <span class="n">RebootPolicy</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</div>
+    <span class="n">reboot_policy</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">get_reboot_policy</span><span class="p">,</span> <span class="n">set_reboot_policy</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">all_instrumentation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ext_loader</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span> <span class="o">=</span> <span class="n">ext_loader</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_config</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execution_order</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project_stage</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_name</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result_processors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workload_specs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flashing_config</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">other_config</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c"># keeps track of used config for extensions other than of the four main kinds.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">retry_on_status</span> <span class="o">=</span> <span class="n">status_list</span><span class="p">([</span><span class="s">&#39;FAILED&#39;</span><span class="p">,</span> <span class="s">&#39;PARTIAL&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_retries</span> <span class="o">=</span> <span class="mi">3</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_used_config_items</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_global_instrumentation</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_policy</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_agenda</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalized</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_general_config_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">general_config</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_workload_config_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_config</span><span class="p">}</span>
+        <span class="c"># Config files may contains static configuration for extensions that</span>
+        <span class="c"># would not be part of this of this run (e.g. DB connection settings</span>
+        <span class="c"># for a result processor that has not been enabled). Such settings</span>
+        <span class="c"># should not be part of configuration for this run (as they will not</span>
+        <span class="c"># be affecting it), but we still need to keep track it in case a later</span>
+        <span class="c"># config (e.g. from the agenda) enables the extension.</span>
+        <span class="c"># For this reason, all extension config is first loaded into the</span>
+        <span class="c"># following dict and when an extension is identified as need for the</span>
+        <span class="c"># run, its config is picked up from this &quot;raw&quot; dict and it becomes part</span>
+        <span class="c"># of the run configuration.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;instrumentation&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s">&#39;result_processors&#39;</span><span class="p">:</span> <span class="p">[]}</span>
+
+<div class="viewcode-block" id="RunConfiguration.get_extension"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration.get_extension">[docs]</a>    <span class="k">def</span> <span class="nf">get_extension</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ext_name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_finalized</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_default_config_if_necessary</span><span class="p">(</span><span class="n">ext_name</span><span class="p">)</span>
+        <span class="n">ext_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="p">[</span><span class="n">ext_name</span><span class="p">]</span>
+        <span class="n">ext_cls</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_extension_class</span><span class="p">(</span><span class="n">ext_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ext_cls</span><span class="o">.</span><span class="n">kind</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;workload&#39;</span><span class="p">,</span> <span class="s">&#39;device&#39;</span><span class="p">,</span> <span class="s">&#39;instrument&#39;</span><span class="p">,</span> <span class="s">&#39;result_processor&#39;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">other_config</span><span class="p">[</span><span class="n">ext_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">ext_config</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_extension</span><span class="p">(</span><span class="n">ext_name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">ext_config</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="RunConfiguration.to_dict"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">)</span>
+        <span class="n">to_remove</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;ext_loader&#39;</span><span class="p">,</span> <span class="s">&#39;workload_specs&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;_&#39;</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">to_remove</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">d</span><span class="p">[</span><span class="n">attr</span><span class="p">]</span>
+        <span class="n">d</span><span class="p">[</span><span class="s">&#39;workload_specs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">]</span>
+        <span class="n">d</span><span class="p">[</span><span class="s">&#39;reboot_policy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">reboot_policy</span>  <span class="c"># this is a property so not in __dict__</span>
+        <span class="k">return</span> <span class="n">d</span>
+</div>
+<div class="viewcode-block" id="RunConfiguration.load_config"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration.load_config">[docs]</a>    <span class="k">def</span> <span class="nf">load_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Load configuration from the specified source. The source must be</span>
+<span class="sd">        either a path to a valid config file or a dict-like object. Currently,</span>
+<span class="sd">        config files can be either python modules (.py extension) or YAML documents</span>
+<span class="sd">        (.yaml extension).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_finalized</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attempting to load a config file after run configuration has been finalized.&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">config_struct</span> <span class="o">=</span> <span class="n">_load_raw_struct</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_merge_config</span><span class="p">(</span><span class="n">config_struct</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ConfigError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Error in {}:</span><span class="se">\n\t</span><span class="s">{}&#39;</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span> <span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="RunConfiguration.set_agenda"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration.set_agenda">[docs]</a>    <span class="k">def</span> <span class="nf">set_agenda</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agenda</span><span class="p">,</span> <span class="n">selectors</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Set the agenda for this run; Unlike with config files, there can only be one agenda.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_agenda</span><span class="p">:</span>
+            <span class="c"># note: this also guards against loading an agenda after finalized() has been called,</span>
+            <span class="c">#       as that would have required an agenda to be set.</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Attempting to set a second agenda {};</span><span class="se">\n\t</span><span class="s">already have agenda {} set&#39;</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">agenda</span><span class="o">.</span><span class="n">filepath</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_agenda</span><span class="o">.</span><span class="n">filepath</span><span class="p">))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_merge_config</span><span class="p">(</span><span class="n">agenda</span><span class="o">.</span><span class="n">config</span> <span class="ow">or</span> <span class="p">{})</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_load_specs_from_agenda</span><span class="p">(</span><span class="n">agenda</span><span class="p">,</span> <span class="n">selectors</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_agenda</span> <span class="o">=</span> <span class="n">agenda</span>
+        <span class="k">except</span> <span class="n">ConfigError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Error in {}:</span><span class="se">\n\t</span><span class="s">{}&#39;</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">agenda</span><span class="o">.</span><span class="n">filepath</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="RunConfiguration.finalize"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration.finalize">[docs]</a>    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;This must be invoked once all configuration sources have been loaded. This will</span>
+<span class="sd">        do the final processing, setting instrumentation and result processor configuration</span>
+<span class="sd">        for the run And making sure that all the mandatory config has been specified.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_finalized</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_agenda</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attempting to finalize run configuration before an agenda is loaded.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_config_list</span><span class="p">(</span><span class="s">&#39;instrumentation&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_config_list</span><span class="p">(</span><span class="s">&#39;result_processors&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Device not specified in the config.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_device_config</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">reboot_policy</span><span class="o">.</span><span class="n">reboot_on_each_spec</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">boot_parameters</span><span class="p">:</span>
+                    <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;spec {} specifies boot_parameters; reboot policy must be at least &quot;each_spec&quot;&#39;</span>
+                    <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">globinst</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_global_instrumentation</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">globinst</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">spec</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">:</span>
+                    <span class="n">spec</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">globinst</span><span class="p">)</span>
+            <span class="n">spec</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalized</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+<div class="viewcode-block" id="RunConfiguration.serialize"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.configuration.RunConfiguration.serialize">[docs]</a>    <span class="k">def</span> <span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wfh</span><span class="p">):</span>
+        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wfh</span><span class="p">,</span> <span class="n">cls</span><span class="o">=</span><span class="n">ConfigurationJSONEncoder</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_merge_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Merge the settings specified by the ``config`` dict-like object into current</span>
+<span class="sd">        configuration.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;config must be a dict; found {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">config</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="n">k</span> <span class="o">=</span> <span class="n">identifier</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">global_param_aliases</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_global_alias</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_general_config_map</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_set_run_config_item</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">has_extension</span><span class="p">(</span><span class="n">k</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_set_extension_config</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">k</span> <span class="o">==</span> <span class="s">&#39;device_config&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_set_raw_dict</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;instrumentation&#39;</span><span class="p">,</span> <span class="s">&#39;result_processors&#39;</span><span class="p">]:</span>
+                <span class="c"># Instrumentation can be enabled and disabled by individual</span>
+                <span class="c"># workloads, so we need to track it in two places: a list of</span>
+                <span class="c"># all instruments for the run (as they will all need to be</span>
+                <span class="c"># initialized and installed, and a list of only the &quot;global&quot;</span>
+                <span class="c"># instruments which can then be merged into instrumentation</span>
+                <span class="c"># lists of individual workload specs.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_set_raw_list</span><span class="p">(</span><span class="s">&#39;_global_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">),</span> <span class="n">v</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_set_raw_list</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ignore_names</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Unknown configuration option: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_resolve_global_alias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">ga</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">global_param_aliases</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">param</span><span class="p">,</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">ga</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">[</span><span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ext</span><span class="o">.</span><span class="n">aliases</span><span class="p">]:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_load_default_config_if_necessary</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="p">[</span><span class="n">identifier</span><span class="p">(</span><span class="n">name</span><span class="p">)][</span><span class="n">param</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="k">def</span> <span class="nf">_set_run_config_item</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_general_config_map</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="n">combined_value</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">combine</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span> <span class="n">value</span><span class="p">)</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">combined_value</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_set_extension_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">default_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_set_raw_dict</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">default_config</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_set_raw_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">default_config</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">existing_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default_config</span> <span class="ow">or</span> <span class="p">{})</span>
+        <span class="n">new_config</span> <span class="o">=</span> <span class="n">_merge_config_dicts</span><span class="p">(</span><span class="n">existing_config</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="p">[</span><span class="n">identifier</span><span class="p">(</span><span class="n">name</span><span class="p">)]</span> <span class="o">=</span> <span class="n">new_config</span>
+
+    <span class="k">def</span> <span class="nf">_set_raw_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">old_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">new_value</span> <span class="o">=</span> <span class="n">merge_lists</span><span class="p">(</span><span class="n">old_value</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="p">[</span><span class="n">identifier</span><span class="p">(</span><span class="n">name</span><span class="p">)]</span> <span class="o">=</span> <span class="n">new_value</span>
+
+    <span class="k">def</span> <span class="nf">_finalize_config_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Note: the name is somewhat misleading. This finalizes a list</span>
+<span class="sd">        form the specified configuration (e.g. &quot;instrumentation&quot;); internal</span>
+<span class="sd">        representation is actually a dict, not a list...&quot;&quot;&quot;</span>
+        <span class="n">ext_config</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">raw_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">for</span> <span class="n">extname</span> <span class="ow">in</span> <span class="n">raw_list</span><span class="p">:</span>
+            <span class="n">default_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">(</span><span class="n">extname</span><span class="p">)</span>
+            <span class="n">ext_config</span><span class="p">[</span><span class="n">extname</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">identifier</span><span class="p">(</span><span class="n">extname</span><span class="p">),</span> <span class="n">default_config</span><span class="p">)</span>
+        <span class="n">list_name</span> <span class="o">=</span> <span class="s">&#39;_global_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">attr_name</span><span class="p">)</span>
+        <span class="n">global_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">list_name</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">list_name</span><span class="p">,</span> <span class="n">global_list</span><span class="p">)</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">ext_config</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_finalize_device_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_default_config_if_necessary</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">_merge_config_dicts</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="p">{}),</span>
+                                     <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;device_config&#39;</span><span class="p">,</span> <span class="p">{}),</span>
+                                     <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;all&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_config</span> <span class="o">=</span> <span class="n">config</span>
+
+    <span class="k">def</span> <span class="nf">_load_default_config_if_necessary</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">identifier</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_load_specs_from_agenda</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agenda</span><span class="p">,</span> <span class="n">selectors</span><span class="p">):</span>
+        <span class="n">global_dict</span> <span class="o">=</span> <span class="n">agenda</span><span class="o">.</span><span class="n">global_</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">if</span> <span class="n">agenda</span><span class="o">.</span><span class="n">global_</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">agenda</span><span class="o">.</span><span class="n">sections</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">section_entry</span> <span class="ow">in</span> <span class="n">agenda</span><span class="o">.</span><span class="n">sections</span><span class="p">:</span>
+                <span class="n">section_dict</span> <span class="o">=</span> <span class="n">section_entry</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">workload_entry</span> <span class="ow">in</span> <span class="n">agenda</span><span class="o">.</span><span class="n">workloads</span> <span class="o">+</span> <span class="n">section_entry</span><span class="o">.</span><span class="n">workloads</span><span class="p">:</span>
+                    <span class="n">workload_dict</span> <span class="o">=</span> <span class="n">workload_entry</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_load_workload_spec</span><span class="p">(</span><span class="n">global_dict</span><span class="p">,</span> <span class="n">section_dict</span><span class="p">,</span> <span class="n">workload_dict</span><span class="p">,</span> <span class="n">selectors</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c"># no sections were specified</span>
+            <span class="k">for</span> <span class="n">workload_entry</span> <span class="ow">in</span> <span class="n">agenda</span><span class="o">.</span><span class="n">workloads</span><span class="p">:</span>
+                <span class="n">workload_dict</span> <span class="o">=</span> <span class="n">workload_entry</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_load_workload_spec</span><span class="p">(</span><span class="n">global_dict</span><span class="p">,</span> <span class="p">{},</span> <span class="n">workload_dict</span><span class="p">,</span> <span class="n">selectors</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_load_workload_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">global_dict</span><span class="p">,</span> <span class="n">section_dict</span><span class="p">,</span> <span class="n">workload_dict</span><span class="p">,</span> <span class="n">selectors</span><span class="p">):</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="n">WorkloadRunSpec</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">config</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_workload_config_map</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">combine</span><span class="p">(</span><span class="n">global_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="n">section_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="n">workload_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+            <span class="n">spec</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">section_dict</span><span class="p">:</span>
+            <span class="n">spec</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;section_id&#39;</span><span class="p">,</span> <span class="n">section_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">))</span>
+
+        <span class="n">realname</span><span class="p">,</span> <span class="n">alias_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">resolve_alias</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">workload_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">spec</span><span class="o">.</span><span class="n">label</span><span class="p">:</span>
+            <span class="n">spec</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">workload_name</span>
+        <span class="n">spec</span><span class="o">.</span><span class="n">workload_name</span> <span class="o">=</span> <span class="n">realname</span>
+        <span class="n">dicts</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">(</span><span class="n">realname</span><span class="p">),</span>
+                 <span class="n">alias_config</span><span class="p">,</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">workload_name</span><span class="p">),</span>
+                 <span class="n">global_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;workload_parameters&#39;</span><span class="p">),</span>
+                 <span class="n">section_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;workload_parameters&#39;</span><span class="p">),</span>
+                 <span class="n">workload_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;workload_parameters&#39;</span><span class="p">)]</span>
+        <span class="n">dicts</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dicts</span> <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">]</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">_merge_config_dicts</span><span class="p">(</span><span class="o">*</span><span class="n">dicts</span><span class="p">)</span>
+        <span class="n">spec</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;workload_parameters&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">spec</span><span class="o">.</span><span class="n">number_of_iterations</span><span class="p">:</span>
+            <span class="n">spec</span><span class="o">.</span><span class="n">number_of_iterations</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">match_selectors</span><span class="p">(</span><span class="n">selectors</span><span class="p">):</span>
+            <span class="n">instrumentation_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_config</span><span class="p">[</span><span class="s">&#39;instrumentation&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">instname</span> <span class="ow">in</span> <span class="n">spec</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">instname</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">instrumentation_config</span><span class="p">:</span>
+                    <span class="n">instrumentation_config</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instname</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">workload_specs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_check_finalized</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_finalized</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attempting to access configuration before it has been finalized.&#39;</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_load_raw_struct</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Load a raw dict config structure from the specified source.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
+            <span class="n">raw</span> <span class="o">=</span> <span class="n">load_struct_from_file</span><span class="p">(</span><span class="n">filepath</span><span class="o">=</span><span class="n">source</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;File &quot;{}&quot; does not exit&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">source</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Unknown config source: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">raw</span>
+
+
+<span class="k">def</span> <span class="nf">_merge_config_dicts</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Provides a different set of default settings for ```merge_dicts`` &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span>
+                       <span class="n">should_merge_lists</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;should_merge_lists&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span>
+                       <span class="n">should_normalize</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;should_normalize&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span>
+                       <span class="n">list_duplicates</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;list_duplicates&#39;</span><span class="p">,</span> <span class="s">&#39;last&#39;</span><span class="p">),</span>
+                       <span class="n">dict_type</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dict_type&#39;</span><span class="p">,</span> <span class="n">OrderedDict</span><span class="p">))</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

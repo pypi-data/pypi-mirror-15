@@ -1,0 +1,222 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.peacekeeper &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.peacekeeper</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101,W0201,E0203</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">urllib2</span>
+<span class="kn">from</span> <span class="nn">HTMLParser</span> <span class="kn">import</span> <span class="n">HTMLParser</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">AndroidUiAutoBenchmark</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">WorkloadError</span>
+
+
+<span class="n">BROWSER_MAP</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;firefox&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;package&#39;</span><span class="p">:</span> <span class="s">&#39;org.mozilla.firefox&#39;</span><span class="p">,</span>
+        <span class="s">&#39;activity&#39;</span><span class="p">:</span> <span class="s">&#39;.App&#39;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s">&#39;chrome&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;package&#39;</span><span class="p">:</span> <span class="s">&#39;com.android.chrome&#39;</span><span class="p">,</span>
+        <span class="s">&#39;activity&#39;</span><span class="p">:</span> <span class="s">&#39;com.google.android.apps.chrome.Main&#39;</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="Peacekeeper"><a class="viewcode-back" href="../../../api/wlauto.workloads.peacekeeper.html#wlauto.workloads.peacekeeper.Peacekeeper">[docs]</a><span class="k">class</span> <span class="nc">Peacekeeper</span><span class="p">(</span><span class="n">AndroidUiAutoBenchmark</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;peacekeeper&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Peacekeeper is a free and fast browser test that measures a browser&#39;s speed.</span>
+
+<span class="s">    .. note::</span>
+
+<span class="s">       This workload requires a network connection as well as support for</span>
+<span class="s">       one of the two currently-supported browsers. Moreover, TC2 has</span>
+<span class="s">       compatibility issue with chrome</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">run_timeout</span> <span class="o">=</span> <span class="mi">15</span> <span class="o">*</span> <span class="mi">60</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;browser&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;firefox&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;firefox&#39;</span><span class="p">,</span> <span class="s">&#39;chrome&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The browser to be benchmarked.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;output_file&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;The result URL of peacekeeper benchmark will be written</span>
+<span class="s">                                 into this file on device after completion of peacekeeper benchmark.</span>
+<span class="s">                                 Defaults to peacekeeper.txt in the device&#39;s ``working_directory``.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;peacekeeper_url&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;http://peacekeeper.futuremark.com/run.action&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The URL to run the peacekeeper benchmark.&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Peacekeeper</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">browser</span>
+
+<div class="viewcode-block" id="Peacekeeper.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.peacekeeper.html#wlauto.workloads.peacekeeper.Peacekeeper.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Peacekeeper</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update_result</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c"># Pull the result page url, which contains the results, from the</span>
+        <span class="c"># peacekeeper.txt file and process it</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_file</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">)</span>
+        <span class="n">result_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;peacekeeper.txt&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">result_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">url</span> <span class="o">=</span> <span class="n">line</span>
+
+        <span class="c"># Fetch the html page containing the results</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">url</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;The url is empty, error while running peacekeeper benchmark&#39;</span><span class="p">)</span>
+
+        <span class="n">req</span> <span class="o">=</span> <span class="n">urllib2</span><span class="o">.</span><span class="n">Request</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">urllib2</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">req</span><span class="p">)</span>
+        <span class="n">result_page</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+        <span class="c"># Parse the HTML content using HTML parser</span>
+        <span class="n">parser</span> <span class="o">=</span> <span class="n">PeacekeeperParser</span><span class="p">()</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">feed</span><span class="p">(</span><span class="n">result_page</span><span class="p">)</span>
+
+        <span class="c"># Add peacekeeper_score into results file</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;peacekeeper_score&#39;</span><span class="p">,</span> <span class="n">parser</span><span class="o">.</span><span class="n">peacekeeper_score</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_file</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="s">&#39;peacekeeper.txt&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">browser</span> <span class="o">==</span> <span class="s">&#39;chrome&#39;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="s">&#39;TC2&#39;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;Chrome not supported on TC2&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;output_file&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;browser&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">browser</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;peacekeeper_url&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">peacekeeper_url</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">package</span> <span class="o">=</span> <span class="n">BROWSER_MAP</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">browser</span><span class="p">][</span><span class="s">&#39;package&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">activity</span> <span class="o">=</span> <span class="n">BROWSER_MAP</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">browser</span><span class="p">][</span><span class="s">&#39;activity&#39;</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="PeacekeeperParser"><a class="viewcode-back" href="../../../api/wlauto.workloads.peacekeeper.html#wlauto.workloads.peacekeeper.PeacekeeperParser">[docs]</a><span class="k">class</span> <span class="nc">PeacekeeperParser</span><span class="p">(</span><span class="n">HTMLParser</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">HTMLParser</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flag</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">peacekeeper_score</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+
+<div class="viewcode-block" id="PeacekeeperParser.handle_starttag"><a class="viewcode-back" href="../../../api/wlauto.workloads.peacekeeper.html#wlauto.workloads.peacekeeper.PeacekeeperParser.handle_starttag">[docs]</a>    <span class="k">def</span> <span class="nf">handle_starttag</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tag</span><span class="p">,</span> <span class="n">attrs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">tag</span> <span class="o">==</span> <span class="s">&#39;div&#39;</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s">&#39;class&#39;</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">==</span> <span class="s">&#39;resultBarContainer clearfix resultBarSelected&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">flag</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">flag</span> <span class="ow">and</span> <span class="n">name</span> <span class="o">==</span> <span class="s">&#39;class&#39;</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">==</span> <span class="s">&#39;resultBarComment&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">flag</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">peacekeeper_score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">peacekeeper_score</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;details&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="PeacekeeperParser.handle_endtag"><a class="viewcode-back" href="../../../api/wlauto.workloads.peacekeeper.html#wlauto.workloads.peacekeeper.PeacekeeperParser.handle_endtag">[docs]</a>    <span class="k">def</span> <span class="nf">handle_endtag</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tag</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="PeacekeeperParser.handle_data"><a class="viewcode-back" href="../../../api/wlauto.workloads.peacekeeper.html#wlauto.workloads.peacekeeper.PeacekeeperParser.handle_data">[docs]</a>    <span class="k">def</span> <span class="nf">handle_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">flag</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">peacekeeper_score</span> <span class="o">+=</span> <span class="n">data</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

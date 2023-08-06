@@ -1,0 +1,262 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.applaunch &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.applaunch</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">jinja2</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">jinja2</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Workload</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">WorkloadError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.hwmon</span> <span class="kn">import</span> <span class="n">discover_sensors</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">get_meansd</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span><span class="p">,</span> <span class="n">identifier</span><span class="p">,</span> <span class="n">list_of_strs</span>
+
+
+<span class="n">THIS_DIR</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+<span class="n">TEMPLATE_NAME</span> <span class="o">=</span> <span class="s">&#39;device_script.template&#39;</span>
+<span class="n">SCRIPT_TEMPLATE</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">THIS_DIR</span><span class="p">,</span> <span class="n">TEMPLATE_NAME</span><span class="p">)</span>
+
+<span class="n">APP_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;browser&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;package&#39;</span><span class="p">:</span> <span class="s">&#39;com.android.browser&#39;</span><span class="p">,</span>
+        <span class="s">&#39;activity&#39;</span><span class="p">:</span> <span class="s">&#39;.BrowserActivity&#39;</span><span class="p">,</span>
+        <span class="s">&#39;options&#39;</span><span class="p">:</span> <span class="s">&#39;-d about:blank&#39;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s">&#39;calculator&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;package&#39;</span><span class="p">:</span> <span class="s">&#39;com.android.calculator2&#39;</span><span class="p">,</span>
+        <span class="s">&#39;activity&#39;</span><span class="p">:</span> <span class="s">&#39;.Calculator&#39;</span><span class="p">,</span>
+        <span class="s">&#39;options&#39;</span><span class="p">:</span> <span class="s">&#39;&#39;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s">&#39;calendar&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&#39;package&#39;</span><span class="p">:</span> <span class="s">&#39;com.android.calendar&#39;</span><span class="p">,</span>
+        <span class="s">&#39;activity&#39;</span><span class="p">:</span> <span class="s">&#39;.LaunchActivity&#39;</span><span class="p">,</span>
+        <span class="s">&#39;options&#39;</span><span class="p">:</span> <span class="s">&#39;&#39;</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="ApplaunchWorkload"><a class="viewcode-back" href="../../../api/wlauto.workloads.applaunch.html#wlauto.workloads.applaunch.ApplaunchWorkload">[docs]</a><span class="k">class</span> <span class="nc">ApplaunchWorkload</span><span class="p">(</span><span class="n">Workload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;applaunch&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Measures the time and energy used in launching an application.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">supported_platforms</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;android&#39;</span><span class="p">]</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;app&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;browser&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;calculator&#39;</span><span class="p">,</span> <span class="s">&#39;browser&#39;</span><span class="p">,</span> <span class="s">&#39;calendar&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The name of the application to measure.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;set_launcher_affinity&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;If ``True``, this will explicitly set the affinity of the launcher &#39;</span>
+                               <span class="s">&#39;process to the A15 cluster.&#39;</span><span class="p">)),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;times&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Number of app launches to do on the device.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;measure_energy&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specfies wether energy measurments should be taken during the run.</span>
+
+<span class="s">                  .. note:: This depends on appropriate sensors to be exposed through HWMON.</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;cleanup&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Specifies whether to clean up temporary files on the device.&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ApplaunchWorkload</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">jinja2</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;Please install jinja2 Python package: &quot;sudo pip install jinja2&quot;&#39;</span><span class="p">)</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="s">&#39;{}-{}.sh&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">host_script_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">meta_directory</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_script_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_launcher_pid</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_old_launcher_affinity</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="ApplaunchWorkload.on_run_init"><a class="viewcode-back" href="../../../api/wlauto.workloads.applaunch.html#wlauto.workloads.applaunch.ApplaunchWorkload.on_run_init">[docs]</a>    <span class="k">def</span> <span class="nf">on_run_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=W0613</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">measure_energy</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span> <span class="o">=</span> <span class="n">discover_sensors</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;energy&#39;</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">sensor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">:</span>
+                <span class="n">sensor</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">identifier</span><span class="p">(</span><span class="n">sensor</span><span class="o">.</span><span class="n">label</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="ApplaunchWorkload.setup"><a class="viewcode-back" href="../../../api/wlauto.workloads.applaunch.html#wlauto.workloads.applaunch.ApplaunchWorkload.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Creating script {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_script_file</span><span class="p">))</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_script_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">env</span> <span class="o">=</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Environment</span><span class="p">(</span><span class="n">loader</span><span class="o">=</span><span class="n">jinja2</span><span class="o">.</span><span class="n">FileSystemLoader</span><span class="p">(</span><span class="n">THIS_DIR</span><span class="p">))</span>
+            <span class="n">template</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">get_template</span><span class="p">(</span><span class="n">TEMPLATE_NAME</span><span class="p">)</span>
+            <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>  <span class="c"># pylint: disable=maybe-no-member</span>
+                                      <span class="n">sensors</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">,</span>
+                                      <span class="n">iterations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">times</span><span class="p">,</span>
+                                      <span class="n">package</span><span class="o">=</span><span class="n">APP_CONFIG</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="p">][</span><span class="s">&#39;package&#39;</span><span class="p">],</span>
+                                      <span class="n">activity</span><span class="o">=</span><span class="n">APP_CONFIG</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="p">][</span><span class="s">&#39;activity&#39;</span><span class="p">],</span>
+                                      <span class="n">options</span><span class="o">=</span><span class="n">APP_CONFIG</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="p">][</span><span class="s">&#39;options&#39;</span><span class="p">],</span>
+                                      <span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_script_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_script_file</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_launcher_affinity</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_set_launcher_affinity</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">clear_logcat</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="ApplaunchWorkload.run"><a class="viewcode-back" href="../../../api/wlauto.workloads.applaunch.html#wlauto.workloads.applaunch.ApplaunchWorkload.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;sh {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device_script_file</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ApplaunchWorkload.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.applaunch.html#wlauto.workloads.applaunch.ApplaunchWorkload.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">result_files</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;time.result&#39;</span><span class="p">]</span>
+        <span class="n">result_files</span> <span class="o">+=</span> <span class="p">[</span><span class="s">&#39;{}.result&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sensor</span><span class="o">.</span><span class="n">label</span><span class="p">)</span> <span class="k">for</span> <span class="n">sensor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">result_files</span><span class="p">:</span>
+            <span class="n">host_result_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+            <span class="n">device_result_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="n">device_result_file</span><span class="p">,</span> <span class="n">host_result_file</span><span class="p">)</span>
+
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">host_result_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">filename</span> <span class="o">==</span> <span class="s">&#39;time.result&#39;</span><span class="p">:</span>
+                    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span> <span class="o">/</span> <span class="mi">1000</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">())]</span>
+                    <span class="n">_add_metric</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;time&#39;</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="s">&#39;Seconds&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">metric</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;.result&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                    <span class="n">numbers</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()))</span>
+                    <span class="n">deltas</span> <span class="o">=</span> <span class="p">[(</span><span class="n">after</span> <span class="o">-</span> <span class="n">before</span><span class="p">)</span> <span class="o">/</span> <span class="mi">1000000</span> <span class="k">for</span> <span class="n">before</span><span class="p">,</span> <span class="n">after</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">numbers</span><span class="p">,</span> <span class="n">numbers</span><span class="p">)]</span>
+                    <span class="n">_add_metric</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">metric</span><span class="p">,</span> <span class="n">deltas</span><span class="p">,</span> <span class="s">&#39;Joules&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ApplaunchWorkload.teardown"><a class="viewcode-back" href="../../../api/wlauto.workloads.applaunch.html#wlauto.workloads.applaunch.ApplaunchWorkload.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_launcher_affinity</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_reset_launcher_affinity</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cleanup</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device_script_file</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_set_launcher_affinity</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_launcher_pid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_pids_of</span><span class="p">(</span><span class="s">&#39;com.android.launcher&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;taskset -p {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_launcher_pid</span><span class="p">),</span> <span class="n">busybox</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_old_launcher_affinity</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;:&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span> <span class="mi">16</span><span class="p">)</span>
+
+            <span class="n">cpu_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="s">&#39;a15&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cpu_ids</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">cpu_ids</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Cannot set affinity.&#39;</span><span class="p">)</span>
+                <span class="k">return</span>
+
+            <span class="n">new_mask</span> <span class="o">=</span> <span class="nb">reduce</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">x</span> <span class="o">|</span> <span class="n">y</span><span class="p">,</span> <span class="n">cpu_ids</span><span class="p">,</span> <span class="mh">0x0</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;taskset -p 0x{:X} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">new_mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_launcher_pid</span><span class="p">),</span> <span class="n">busybox</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">IndexError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;Could not set affinity of launcher: PID not found.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_reset_launcher_affinity</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;taskset -p 0x{:X} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_old_launcher_affinity</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_launcher_pid</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">busybox</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_add_metric</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">metric</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">units</span><span class="p">):</span>
+    <span class="n">mean</span><span class="p">,</span> <span class="n">sd</span> <span class="o">=</span> <span class="n">get_meansd</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">mean</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">metric</span> <span class="o">+</span> <span class="s">&#39; sd&#39;</span><span class="p">,</span> <span class="n">sd</span><span class="p">,</span> <span class="n">units</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

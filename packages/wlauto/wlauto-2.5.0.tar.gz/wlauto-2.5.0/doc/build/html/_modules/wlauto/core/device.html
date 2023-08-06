@@ -1,0 +1,542 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.device &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.device</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Base classes for device interfaces.</span>
+
+<span class="sd">    :Device: The base class for all devices. This defines the interface that must be</span>
+<span class="sd">             implemented by all devices and therefore any workload and instrumentation</span>
+<span class="sd">             can always rely on.</span>
+<span class="sd">    :AndroidDevice: Implements most of the :class:`Device` interface, and extends it</span>
+<span class="sd">                    with a number of Android-specific methods.</span>
+<span class="sd">    :BigLittleDevice: Subclasses :class:`AndroidDevice` to implement big.LITTLE-specific</span>
+<span class="sd">                      runtime parameters.</span>
+<span class="sd">    :SimpleMulticoreDevice: Subclasses :class:`AndroidDevice` to implement homogeneous cores</span>
+<span class="sd">                          device runtime parameters.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">imp</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+<span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">contextmanager</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.core.extension</span> <span class="kn">import</span> <span class="n">Extension</span><span class="p">,</span> <span class="n">ExtensionMeta</span><span class="p">,</span> <span class="n">AttributeCollection</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.extension_loader</span> <span class="kn">import</span> <span class="n">ExtensionLoader</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">DeviceError</span><span class="p">,</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">list_of_integers</span><span class="p">,</span> <span class="n">list_of</span><span class="p">,</span> <span class="n">caseless_string</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;RuntimeParameter&#39;</span><span class="p">,</span> <span class="s">&#39;CoreParameter&#39;</span><span class="p">,</span> <span class="s">&#39;Device&#39;</span><span class="p">,</span> <span class="s">&#39;DeviceMeta&#39;</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="RuntimeParameter"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.RuntimeParameter">[docs]</a><span class="k">class</span> <span class="nc">RuntimeParameter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A runtime parameter which has its getter and setter methods associated it</span>
+<span class="sd">    with it.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">getter</span><span class="p">,</span> <span class="n">setter</span><span class="p">,</span>
+                 <span class="n">getter_args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">setter_args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">value_name</span><span class="o">=</span><span class="s">&#39;value&#39;</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param name: the name of the parameter.</span>
+<span class="sd">        :param getter: the getter method which returns the value of this parameter.</span>
+<span class="sd">        :param setter: the setter method which sets the value of this parameter. The setter</span>
+<span class="sd">                       always expects to be passed one argument when it is called.</span>
+<span class="sd">        :param getter_args: keyword arguments to be used when invoking the getter.</span>
+<span class="sd">        :param setter_args: keyword arguments to be used when invoking the setter.</span>
+<span class="sd">        :param override: A ``bool`` that specifies whether a parameter of the same name further up the</span>
+<span class="sd">                            hierarchy should be overridden. If this is ``False`` (the default), an exception</span>
+<span class="sd">                            will be raised by the ``AttributeCollection`` instead.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">getter</span> <span class="o">=</span> <span class="n">getter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setter</span> <span class="o">=</span> <span class="n">setter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">getter_args</span> <span class="o">=</span> <span class="n">getter_args</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setter_args</span> <span class="o">=</span> <span class="n">setter_args</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value_name</span> <span class="o">=</span> <span class="n">value_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">override</span> <span class="o">=</span> <span class="n">override</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+</div>
+<div class="viewcode-block" id="CoreParameter"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.CoreParameter">[docs]</a><span class="k">class</span> <span class="nc">CoreParameter</span><span class="p">(</span><span class="n">RuntimeParameter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A runtime parameter that will get expanded into a RuntimeParameter for each core type.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="CoreParameter.get_runtime_parameters"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.CoreParameter.get_runtime_parameters">[docs]</a>    <span class="k">def</span> <span class="nf">get_runtime_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core_names</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">core</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">core_names</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span><span class="n">core</span><span class="o">=</span><span class="n">core</span><span class="p">)</span>
+            <span class="n">getter</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getter</span><span class="p">)</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span><span class="n">core</span><span class="o">=</span><span class="n">core</span><span class="p">)</span>
+            <span class="n">setter</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">setter</span><span class="p">)</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span><span class="n">core</span><span class="o">=</span><span class="n">core</span><span class="p">)</span>
+            <span class="n">getargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getter_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="o">+</span> <span class="p">[(</span><span class="s">&#39;core&#39;</span><span class="p">,</span> <span class="n">core</span><span class="p">)])</span>
+            <span class="n">setargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">setter_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="o">+</span> <span class="p">[(</span><span class="s">&#39;core&#39;</span><span class="p">,</span> <span class="n">core</span><span class="p">)])</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RuntimeParameter</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">getter</span><span class="p">,</span> <span class="n">setter</span><span class="p">,</span> <span class="n">getargs</span><span class="p">,</span> <span class="n">setargs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">value_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">override</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">params</span>
+
+</div></div>
+<span class="k">class</span> <span class="nc">DynamicModuleSpec</span><span class="p">(</span><span class="nb">dict</span><span class="p">):</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">dict</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+            <span class="bp">self</span><span class="p">[</span><span class="n">value</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                <span class="bp">self</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="DeviceMeta"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.DeviceMeta">[docs]</a><span class="k">class</span> <span class="nc">DeviceMeta</span><span class="p">(</span><span class="n">ExtensionMeta</span><span class="p">):</span>
+
+    <span class="n">to_propagate</span> <span class="o">=</span> <span class="n">ExtensionMeta</span><span class="o">.</span><span class="n">to_propagate</span> <span class="o">+</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s">&#39;runtime_parameters&#39;</span><span class="p">,</span> <span class="n">RuntimeParameter</span><span class="p">,</span> <span class="n">AttributeCollection</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;dynamic_modules&#39;</span><span class="p">,</span> <span class="n">DynamicModuleSpec</span><span class="p">,</span> <span class="n">AttributeCollection</span><span class="p">),</span>
+    <span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="Device"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device">[docs]</a><span class="k">class</span> <span class="nc">Device</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for all devices supported by Workload Automation. Defines</span>
+<span class="sd">    the interface the rest of WA uses to interact with devices.</span>
+
+<span class="sd">        :name: Unique name used to identify the device.</span>
+<span class="sd">        :platform: The name of the device&#39;s platform (e.g. ``Android``) this may</span>
+<span class="sd">                   be used by workloads and instrumentation to assess whether they</span>
+<span class="sd">                   can run on the device.</span>
+<span class="sd">        :working_directory: a string of the directory which is</span>
+<span class="sd">                            going to be used by the workloads on the device.</span>
+<span class="sd">        :binaries_directory: a string of the binary directory for</span>
+<span class="sd">                             the device.</span>
+<span class="sd">        :has_gpu:     Should be ``True`` if the device as a separate GPU, and</span>
+<span class="sd">                    ``False`` if graphics processing is done on a CPU.</span>
+
+<span class="sd">                    .. note:: Pretty much all devices currently on the market</span>
+<span class="sd">                                have GPUs, however this may not be the case for some</span>
+<span class="sd">                                development boards.</span>
+
+<span class="sd">        :path_module: The name of one of the modules implementing the os.path</span>
+<span class="sd">                      interface, e.g. ``posixpath`` or ``ntpath``. You can provide</span>
+<span class="sd">                      your own implementation rather than relying on one of the</span>
+<span class="sd">                      standard library modules, in which case you need to specify</span>
+<span class="sd">                      the *full* path to you module. e.g. &#39;/home/joebloggs/mypathimp.py&#39;</span>
+<span class="sd">        :parameters: A list of RuntimeParameter objects. The order of the objects</span>
+<span class="sd">                     is very important as the setters and getters will be called</span>
+<span class="sd">                     in the order the RuntimeParameter objects inserted.</span>
+<span class="sd">        :active_cores: This should be a list of all the currently active cpus in</span>
+<span class="sd">                      the device in ``&#39;/sys/devices/system/cpu/online&#39;``. The</span>
+<span class="sd">                      returned list should be read from the device at the time</span>
+<span class="sd">                      of read request.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">__metaclass__</span> <span class="o">=</span> <span class="n">DeviceMeta</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;core_names&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">list_of</span><span class="p">(</span><span class="n">caseless_string</span><span class="p">),</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  This is a list of all cpu cores on the device with each</span>
+<span class="s">                  element being the core type, e.g. ``[&#39;a7&#39;, &#39;a7&#39;, &#39;a15&#39;]``. The</span>
+<span class="s">                  order of the cores must match the order they are listed in</span>
+<span class="s">                  ``&#39;/sys/devices/system/cpu&#39;``. So in this case, ``&#39;cpu0&#39;`` must</span>
+<span class="s">                  be an A7 core, and ``&#39;cpu2&#39;`` an A15.&#39;</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;core_clusters&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">list_of_integers</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  This is a list indicating the cluster affinity of the CPU cores,</span>
+<span class="s">                  each element correponding to the cluster ID of the core coresponding</span>
+<span class="s">                  to it&#39;s index. E.g. ``[0, 0, 1]`` indicates that cpu0 and cpu1 are on</span>
+<span class="s">                  cluster 0, while cpu2 is on cluster 1. If this is not specified, this</span>
+<span class="s">                  will be inferred from ``core_names`` if possible (assuming all cores with</span>
+<span class="s">                  the same name are on the same cluster).</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">runtime_parameters</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c"># dynamic modules are loaded or not based on whether the device supports</span>
+    <span class="c"># them (established at runtime by module probling the device).</span>
+    <span class="n">dynamic_modules</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c"># These must be overwritten by subclasses.</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">platform</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">default_working_directory</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">has_gpu</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">path_module</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">active_cores</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>  <span class="c"># pylint: disable=W0613</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Device</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_module</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s">&#39;path_module must be specified by the deriving classes.&#39;</span><span class="p">)</span>
+        <span class="n">libpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">__file__</span><span class="p">)</span>
+        <span class="n">modpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libpath</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_module</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">modpath</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;.py&#39;</span><span class="p">):</span>
+            <span class="n">modpath</span> <span class="o">+=</span> <span class="s">&#39;.py&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">path</span> <span class="o">=</span> <span class="n">imp</span><span class="o">.</span><span class="n">load_source</span><span class="p">(</span><span class="s">&#39;device_path&#39;</span><span class="p">,</span> <span class="n">modpath</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">IOError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Unsupported path module: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path_module</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># pylint: disable=access-member-before-definition,attribute-defined-outside-init</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">core_names</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">core_clusters</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">core_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">clusters</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">cn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">core_names</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">cn</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
+                    <span class="n">clusters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cn</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">core_clusters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">clusters</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">cn</span><span class="p">))</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">core_names</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">core_clusters</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;core_names and core_clusters are of different lengths.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialization that is performed at the begining of the run (after the device has</span>
+<span class="sd">        been connecte).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">loader</span> <span class="o">=</span> <span class="n">ExtensionLoader</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">module_spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dynamic_modules</span><span class="p">:</span>
+            <span class="n">module</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_module</span><span class="p">(</span><span class="n">loader</span><span class="p">,</span> <span class="n">module_spec</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="s">&#39;probe&#39;</span><span class="p">):</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Module {} does not have &quot;probe&quot; attribute; cannot be loaded dynamically&#39;</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">probe</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Installing module &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_install_module</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Module &quot;{}&quot; is not supported by the device&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+<div class="viewcode-block" id="Device.reset"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initiate rebooting of the device.</span>
+
+<span class="sd">        Added in version 2.1.3.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.boot"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.boot">[docs]</a>    <span class="k">def</span> <span class="nf">boot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform the seteps necessary to boot the device to the point where it is ready</span>
+<span class="sd">        to accept other commands.</span>
+
+<span class="sd">        Changed in version 2.1.3: no longer expected to wait until boot completes.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.connect"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.connect">[docs]</a>    <span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Establish a connection to the device that will be used for subsequent commands.</span>
+
+<span class="sd">        Added in version 2.1.3.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.disconnect"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.disconnect">[docs]</a>    <span class="k">def</span> <span class="nf">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Close the established connection to the device. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.ping"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.ping">[docs]</a>    <span class="k">def</span> <span class="nf">ping</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This must return successfully if the device is able to receive commands, or must</span>
+<span class="sd">        raise :class:`wlauto.exceptions.DeviceUnresponsiveError` if the device cannot respond.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.get_runtime_parameter_names"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.get_runtime_parameter_names">[docs]</a>    <span class="k">def</span> <span class="nf">get_runtime_parameter_names</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expand_runtime_parameters</span><span class="p">()]</span>
+</div>
+<div class="viewcode-block" id="Device.get_runtime_parameters"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.get_runtime_parameters">[docs]</a>    <span class="k">def</span> <span class="nf">get_runtime_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; returns the runtime parameters that have been set. &quot;&quot;&quot;</span>
+        <span class="c"># pylint: disable=cell-var-from-loop</span>
+        <span class="n">runtime_parameters</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">rtp</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expand_runtime_parameters</span><span class="p">():</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rtp</span><span class="o">.</span><span class="n">getter</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">getter</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rtp</span><span class="o">.</span><span class="n">getter</span><span class="p">)</span>
+            <span class="n">rtp_value</span> <span class="o">=</span> <span class="n">getter</span><span class="p">(</span><span class="o">**</span><span class="n">rtp</span><span class="o">.</span><span class="n">getter_args</span><span class="p">)</span>
+            <span class="n">runtime_parameters</span><span class="p">[</span><span class="n">rtp</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">rtp_value</span>
+        <span class="k">return</span> <span class="n">runtime_parameters</span>
+</div>
+<div class="viewcode-block" id="Device.set_runtime_parameters"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.set_runtime_parameters">[docs]</a>    <span class="k">def</span> <span class="nf">set_runtime_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        The parameters are taken from the keyword arguments and are specific to</span>
+<span class="sd">        a particular device. See the device documentation.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">runtime_parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expand_runtime_parameters</span><span class="p">()</span>
+        <span class="n">rtp_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">rtp</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span> <span class="n">rtp</span> <span class="k">for</span> <span class="n">rtp</span> <span class="ow">in</span> <span class="n">runtime_parameters</span><span class="p">}</span>
+
+        <span class="n">params</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">((</span><span class="n">k</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span>
+
+        <span class="n">expected_keys</span> <span class="o">=</span> <span class="n">rtp_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">set</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">&lt;=</span> <span class="nb">set</span><span class="p">(</span><span class="n">expected_keys</span><span class="p">):</span>
+            <span class="n">unknown_params</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">expected_keys</span><span class="p">)))</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Unknown runtime parameter(s): {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">unknown_params</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Setting runtime parameter &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param</span><span class="p">))</span>
+            <span class="n">rtp</span> <span class="o">=</span> <span class="n">rtp_map</span><span class="p">[</span><span class="n">param</span><span class="p">]</span>
+            <span class="n">setter</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rtp</span><span class="o">.</span><span class="n">setter</span><span class="p">)</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">rtp</span><span class="o">.</span><span class="n">setter_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="o">+</span> <span class="p">[(</span><span class="n">rtp</span><span class="o">.</span><span class="n">value_name</span><span class="p">,</span> <span class="n">params</span><span class="p">[</span><span class="n">rtp</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()])])</span>
+            <span class="n">setter</span><span class="p">(</span><span class="o">**</span><span class="n">args</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Device.capture_screen"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.capture_screen">[docs]</a>    <span class="k">def</span> <span class="nf">capture_screen</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Captures the current device screen into the specified file in a PNG format.&quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.get_properties"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.get_properties">[docs]</a>    <span class="k">def</span> <span class="nf">get_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_path</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Captures and saves the device configuration properties version and</span>
+<span class="sd">         any other relevant information. Return them in a dict&quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.listdir"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.listdir">[docs]</a>    <span class="k">def</span> <span class="nf">listdir</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; List the contents of the specified directory. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.push_file"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.push_file">[docs]</a>    <span class="k">def</span> <span class="nf">push_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Push a file from the host file system onto the device. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.pull_file"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.pull_file">[docs]</a>    <span class="k">def</span> <span class="nf">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Pull a file from device system onto the host file system. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.delete_file"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.delete_file">[docs]</a>    <span class="k">def</span> <span class="nf">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Delete the specified file on the device. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.file_exists"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.file_exists">[docs]</a>    <span class="k">def</span> <span class="nf">file_exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Check if the specified file or directory exist on the device. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.get_pids_of"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.get_pids_of">[docs]</a>    <span class="k">def</span> <span class="nf">get_pids_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">process_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns a list of PIDs of the specified process name. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.kill"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.kill">[docs]</a>    <span class="k">def</span> <span class="nf">kill</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Kill the  process with the specified PID. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.killall"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.killall">[docs]</a>    <span class="k">def</span> <span class="nf">killall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">process_name</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Kill all running processes with the specified name. &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.install"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.install">[docs]</a>    <span class="k">def</span> <span class="nf">install</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Install the specified file on the device. What &quot;install&quot; means is device-specific</span>
+<span class="sd">        and may possibly also depend on the type of file.&quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.uninstall"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.uninstall">[docs]</a>    <span class="k">def</span> <span class="nf">uninstall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Uninstall the specified file on the device. What &quot;uninstall&quot; means is device-specific</span>
+<span class="sd">        and may possibly also depend on the type of file.&quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.execute"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.execute">[docs]</a>    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute the specified command command on the device and return the output.</span>
+
+<span class="sd">        :param command: Command to be executed on the device.</span>
+<span class="sd">        :param timeout: If the command does not return after the specified time,</span>
+<span class="sd">                        execute() will abort with an error. If there is no timeout for</span>
+<span class="sd">                        the command, this should be set to 0 or None.</span>
+
+<span class="sd">        Other device-specific keyword arguments may also be specified.</span>
+
+<span class="sd">        :returns: The stdout output from the command.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.set_sysfile_value"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.set_sysfile_value">[docs]</a>    <span class="k">def</span> <span class="nf">set_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write the specified value to the specified file on the device</span>
+<span class="sd">        and verify that the value has actually been written.</span>
+
+<span class="sd">        :param file: The file to be modified.</span>
+<span class="sd">        :param value: The value to be written to the file. Must be</span>
+<span class="sd">                      an int or a string convertable to an int.</span>
+<span class="sd">        :param verify: Specifies whether the value should be verified, once written.</span>
+
+<span class="sd">        Should raise DeviceError if could write value.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.get_sysfile_value"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.get_sysfile_value">[docs]</a>    <span class="k">def</span> <span class="nf">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sysfile</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the contents of the specified sysfile.</span>
+
+<span class="sd">        :param sysfile: The file who&#39;s contents will be returned.</span>
+
+<span class="sd">        :param kind: The type of value to be expected in the sysfile. This can</span>
+<span class="sd">                     be any Python callable that takes a single str argument.</span>
+<span class="sd">                     If not specified or is None, the contents will be returned</span>
+<span class="sd">                     as a string.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Device.start"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This gets invoked before an iteration is started and is endented to help the</span>
+<span class="sd">        device manange any internal supporting functions.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="Device.stop"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.device.Device.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This gets invoked after iteration execution has completed and is endented to help the</span>
+<span class="sd">        device manange any internal supporting functions.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;Device&lt;{}&gt;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+    <span class="k">def</span> <span class="nf">_expand_runtime_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">expanded_params</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">CoreParameter</span><span class="p">):</span>
+                <span class="n">expanded_params</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">get_runtime_parameters</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">core_names</span><span class="p">))</span>  <span class="c"># pylint: disable=no-member</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">expanded_params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">param</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">expanded_params</span>
+
+    <span class="nd">@contextmanager</span>
+    <span class="k">def</span> <span class="nf">_check_alive</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">yield</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ping</span><span class="p">()</span>
+            <span class="k">raise</span> <span class="n">e</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

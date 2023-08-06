@@ -1,0 +1,910 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.utils.misc &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.utils.misc</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Miscellaneous functions that don&#39;t fit anywhere else.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">imp</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">signal</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">pkgutil</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">hashlib</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">from</span> <span class="nn">operator</span> <span class="kn">import</span> <span class="n">mul</span><span class="p">,</span> <span class="n">itemgetter</span>
+<span class="kn">from</span> <span class="nn">StringIO</span> <span class="kn">import</span> <span class="n">StringIO</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">cycle</span><span class="p">,</span> <span class="n">groupby</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span> <span class="nn">distutils.spawn</span> <span class="kn">import</span> <span class="n">find_executable</span>
+
+<span class="kn">import</span> <span class="nn">yaml</span>
+<span class="kn">from</span> <span class="nn">dateutil</span> <span class="kn">import</span> <span class="n">tz</span>
+
+
+<span class="c"># ABI --&gt; architectures list</span>
+<span class="n">ABI_MAP</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;armeabi&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;armeabi&#39;</span><span class="p">,</span> <span class="s">&#39;armv7&#39;</span><span class="p">,</span> <span class="s">&#39;armv7l&#39;</span><span class="p">,</span> <span class="s">&#39;armv7el&#39;</span><span class="p">,</span> <span class="s">&#39;armv7lh&#39;</span><span class="p">],</span>
+    <span class="s">&#39;arm64&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;arm64&#39;</span><span class="p">,</span> <span class="s">&#39;armv8&#39;</span><span class="p">,</span> <span class="s">&#39;arm64-v8a&#39;</span><span class="p">],</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="preexec_function"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.preexec_function">[docs]</a><span class="k">def</span> <span class="nf">preexec_function</span><span class="p">():</span>
+    <span class="c"># Ignore the SIGINT signal by setting the handler to the standard</span>
+    <span class="c"># signal handler SIG_IGN.</span>
+    <span class="n">signal</span><span class="o">.</span><span class="n">signal</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SIGINT</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SIG_IGN</span><span class="p">)</span>
+    <span class="c"># Change process group in case we have to kill the subprocess and all of</span>
+    <span class="c"># its children later.</span>
+    <span class="c"># TODO: this is Unix-specific; would be good to find an OS-agnostic way</span>
+    <span class="c">#       to do this in case we wanna port WA to Windows.</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">setpgrp</span><span class="p">()</span>
+
+</div>
+<span class="n">check_output_logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;check_output&#39;</span><span class="p">)</span>
+
+
+<span class="c"># Defined here rather than in wlauto.exceptions due to module load dependencies</span>
+<div class="viewcode-block" id="TimeoutError"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.TimeoutError">[docs]</a><span class="k">class</span> <span class="nc">TimeoutError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Raised when a subprocess command times out. This is basically a ``WAError``-derived version</span>
+<span class="sd">    of ``subprocess.CalledProcessError``, the thinking being that while a timeout could be due to</span>
+<span class="sd">    programming error (e.g. not setting long enough timers), it is often due to some failure in the</span>
+<span class="sd">    environment, and there fore should be classed as a &quot;user error&quot;.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">TimeoutError</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="s">&#39;Timed out: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="n">command</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="n">output</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="p">,</span> <span class="s">&#39;OUTPUT:&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="ow">or</span> <span class="s">&#39;&#39;</span><span class="p">])</span>
+
+</div>
+<div class="viewcode-block" id="check_output"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.check_output">[docs]</a><span class="k">def</span> <span class="nf">check_output</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">ignore</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;This is a version of subprocess.check_output that adds a timeout parameter to kill</span>
+<span class="sd">    the subprocess if it does not return within the specified time.&quot;&quot;&quot;</span>
+    <span class="c"># pylint: disable=too-many-branches</span>
+    <span class="k">if</span> <span class="n">ignore</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">ignore</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ignore</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="n">ignore</span> <span class="o">=</span> <span class="p">[</span><span class="n">ignore</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ignore</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="n">ignore</span> <span class="o">!=</span> <span class="s">&#39;all&#39;</span><span class="p">:</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid value for ignore parameter: &quot;{}&quot;; must be an int or a list&#39;</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ignore</span><span class="p">))</span>
+    <span class="k">if</span> <span class="s">&#39;stdout&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;stdout argument not allowed, it will be overridden.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">callback</span><span class="p">(</span><span class="n">pid</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">check_output_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;{} timed out; sending SIGKILL&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">pid</span><span class="p">))</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">killpg</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SIGKILL</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+            <span class="k">pass</span>  <span class="c"># process may have already terminated.</span>
+
+    <span class="n">process</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span> <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                               <span class="n">preexec_fn</span><span class="o">=</span><span class="n">preexec_function</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">timeout</span><span class="p">:</span>
+        <span class="n">timer</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Timer</span><span class="p">(</span><span class="n">timeout</span><span class="p">,</span> <span class="n">callback</span><span class="p">,</span> <span class="p">[</span><span class="n">process</span><span class="o">.</span><span class="n">pid</span><span class="p">,</span> <span class="p">])</span>
+        <span class="n">timer</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">output</span><span class="p">,</span> <span class="n">error</span> <span class="o">=</span> <span class="n">process</span><span class="o">.</span><span class="n">communicate</span><span class="p">()</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">timeout</span><span class="p">:</span>
+            <span class="n">timer</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+
+    <span class="n">retcode</span> <span class="o">=</span> <span class="n">process</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">retcode</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">retcode</span> <span class="o">==</span> <span class="o">-</span><span class="mi">9</span><span class="p">:</span>  <span class="c"># killed, assume due to timeout callback</span>
+            <span class="k">raise</span> <span class="n">TimeoutError</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">output</span><span class="p">,</span> <span class="n">error</span><span class="p">]))</span>
+        <span class="k">elif</span> <span class="n">ignore</span> <span class="o">!=</span> <span class="s">&#39;all&#39;</span> <span class="ow">and</span> <span class="n">retcode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignore</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span><span class="p">(</span><span class="n">retcode</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">output</span><span class="p">,</span> <span class="n">error</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">output</span><span class="p">,</span> <span class="n">error</span>
+
+</div>
+<div class="viewcode-block" id="walk_modules"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.walk_modules">[docs]</a><span class="k">def</span> <span class="nf">walk_modules</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given package name, return a list of all modules (including submodules, etc)</span>
+<span class="sd">    in that package.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">root_mod</span> <span class="o">=</span> <span class="nb">__import__</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="p">{},</span> <span class="p">{},</span> <span class="p">[</span><span class="s">&#39;&#39;</span><span class="p">])</span>
+    <span class="n">mods</span> <span class="o">=</span> <span class="p">[</span><span class="n">root_mod</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">ispkg</span> <span class="ow">in</span> <span class="n">pkgutil</span><span class="o">.</span><span class="n">iter_modules</span><span class="p">(</span><span class="n">root_mod</span><span class="o">.</span><span class="n">__path__</span><span class="p">):</span>
+        <span class="n">submod_path</span> <span class="o">=</span> <span class="s">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">path</span><span class="p">,</span> <span class="n">name</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">ispkg</span><span class="p">:</span>
+            <span class="n">mods</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">walk_modules</span><span class="p">(</span><span class="n">submod_path</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">submod</span> <span class="o">=</span> <span class="nb">__import__</span><span class="p">(</span><span class="n">submod_path</span><span class="p">,</span> <span class="p">{},</span> <span class="p">{},</span> <span class="p">[</span><span class="s">&#39;&#39;</span><span class="p">])</span>
+            <span class="n">mods</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">submod</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">mods</span>
+
+</div>
+<div class="viewcode-block" id="ensure_directory_exists"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.ensure_directory_exists">[docs]</a><span class="k">def</span> <span class="nf">ensure_directory_exists</span><span class="p">(</span><span class="n">dirpath</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A filter for directory paths to ensure they exist.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">dirpath</span><span class="p">):</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">dirpath</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">dirpath</span>
+
+</div>
+<div class="viewcode-block" id="ensure_file_directory_exists"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.ensure_file_directory_exists">[docs]</a><span class="k">def</span> <span class="nf">ensure_file_directory_exists</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A filter for file paths to ensure the directory of the</span>
+<span class="sd">    file exists and the file can be created there. The file</span>
+<span class="sd">    itself is *not* going to be created if it doesn&#39;t already</span>
+<span class="sd">    exist.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ensure_directory_exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">filepath</span>
+
+</div>
+<div class="viewcode-block" id="diff_tokens"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.diff_tokens">[docs]</a><span class="k">def</span> <span class="nf">diff_tokens</span><span class="p">(</span><span class="n">before_token</span><span class="p">,</span> <span class="n">after_token</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Creates a diff of two tokens.</span>
+
+<span class="sd">    If the two tokens are the same it just returns returns the token</span>
+<span class="sd">    (whitespace tokens are considered the same irrespective of type/number</span>
+<span class="sd">    of whitespace characters in the token).</span>
+
+<span class="sd">    If the tokens are numeric, the difference between the two values</span>
+<span class="sd">    is returned.</span>
+
+<span class="sd">    Otherwise, a string in the form [before -&gt; after] is returned.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">before_token</span><span class="o">.</span><span class="n">isspace</span><span class="p">()</span> <span class="ow">and</span> <span class="n">after_token</span><span class="o">.</span><span class="n">isspace</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">after_token</span>
+    <span class="k">elif</span> <span class="n">before_token</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span> <span class="ow">and</span> <span class="n">after_token</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">diff</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">after_token</span><span class="p">)</span> <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="n">before_token</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&quot;[</span><span class="si">%s</span><span class="s"> -&gt; </span><span class="si">%s</span><span class="s">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">before_token</span><span class="p">,</span> <span class="n">after_token</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">before_token</span> <span class="o">==</span> <span class="n">after_token</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">after_token</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s">&quot;[</span><span class="si">%s</span><span class="s"> -&gt; </span><span class="si">%s</span><span class="s">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">before_token</span><span class="p">,</span> <span class="n">after_token</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="prepare_table_rows"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.prepare_table_rows">[docs]</a><span class="k">def</span> <span class="nf">prepare_table_rows</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Given a list of lists, make sure they are prepared to be formatted into a table</span>
+<span class="sd">    by making sure each row has the same number of columns and stringifying all values.&quot;&quot;&quot;</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+    <span class="n">max_cols</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">len</span><span class="p">,</span> <span class="n">rows</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+        <span class="n">pad</span> <span class="o">=</span> <span class="n">max_cols</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">pad</span><span class="p">):</span>
+            <span class="n">row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">rows</span>
+
+</div>
+<div class="viewcode-block" id="write_table"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.write_table">[docs]</a><span class="k">def</span> <span class="nf">write_table</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">wfh</span><span class="p">,</span> <span class="n">align</span><span class="o">=</span><span class="s">&#39;&gt;&#39;</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>  <span class="c"># pylint: disable=R0914</span>
+    <span class="sd">&quot;&quot;&quot;Write a column-aligned table to the specified file object.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">prepare_table_rows</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
+    <span class="n">num_cols</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="c"># cycle specified alignments until we have max_cols of them. This is</span>
+    <span class="c"># consitent with how such cases are handled in R, pandas, etc.</span>
+    <span class="n">it</span> <span class="o">=</span> <span class="n">cycle</span><span class="p">(</span><span class="n">align</span><span class="p">)</span>
+    <span class="n">align</span> <span class="o">=</span> <span class="p">[</span><span class="n">it</span><span class="o">.</span><span class="n">next</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">num_cols</span><span class="p">)]</span>
+
+    <span class="n">cols</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">rows</span><span class="p">)</span>
+    <span class="n">col_widths</span> <span class="o">=</span> <span class="p">[</span><span class="nb">max</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">len</span><span class="p">,</span> <span class="n">c</span><span class="p">))</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cols</span><span class="p">]</span>
+    <span class="n">row_format</span> <span class="o">=</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&#39;{:</span><span class="si">%s%s</span><span class="s">}&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">align</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">w</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">w</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">col_widths</span><span class="p">)])</span>
+    <span class="n">row_format</span> <span class="o">+=</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span>
+
+    <span class="k">if</span> <span class="n">headers</span><span class="p">:</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">row_format</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">headers</span><span class="p">))</span>
+        <span class="n">underlines</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;-&#39;</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">headers</span><span class="p">]</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">row_format</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">underlines</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">row_format</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">row</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="get_null"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.get_null">[docs]</a><span class="k">def</span> <span class="nf">get_null</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Returns the correct null sink based on the OS.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s">&#39;NUL&#39;</span> <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s">&#39;nt&#39;</span> <span class="k">else</span> <span class="s">&#39;/dev/null&#39;</span>
+
+</div>
+<div class="viewcode-block" id="get_traceback"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.get_traceback">[docs]</a><span class="k">def</span> <span class="nf">get_traceback</span><span class="p">(</span><span class="n">exc</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the string with the traceback for the specifiec exc</span>
+<span class="sd">    object, or for the current exception exc is not specified.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">exc</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">exc</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="n">tb</span> <span class="o">=</span> <span class="n">exc</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">sio</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">()</span>
+    <span class="n">traceback</span><span class="o">.</span><span class="n">print_tb</span><span class="p">(</span><span class="n">tb</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sio</span><span class="p">)</span>
+    <span class="k">del</span> <span class="n">tb</span>  <span class="c"># needs to be done explicitly see: http://docs.python.org/2/library/sys.html#sys.exc_info</span>
+    <span class="k">return</span> <span class="n">sio</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="merge_dicts"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.merge_dicts">[docs]</a><span class="k">def</span> <span class="nf">merge_dicts</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Must specify at least two dicts to merge.&#39;</span><span class="p">)</span>
+    <span class="n">func</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">_merge_two_dicts</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">reduce</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_merge_two_dicts</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;all&#39;</span><span class="p">,</span> <span class="n">match_types</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>  <span class="c"># pylint: disable=R0912,R0914</span>
+                     <span class="n">dict_type</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="n">should_normalize</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">should_merge_lists</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Merge dicts normalizing their keys.&quot;&quot;&quot;</span>
+    <span class="n">merged</span> <span class="o">=</span> <span class="n">dict_type</span><span class="p">()</span>
+    <span class="n">base_keys</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+    <span class="n">other_keys</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+    <span class="n">norm</span> <span class="o">=</span> <span class="n">normalize</span> <span class="k">if</span> <span class="n">should_normalize</span> <span class="k">else</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">x</span>
+
+    <span class="n">base_only</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">other_only</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">both</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">union</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">base_keys</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">other_keys</span><span class="p">:</span>
+            <span class="n">both</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">base_only</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+            <span class="n">union</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">other_keys</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">base_keys</span><span class="p">:</span>
+            <span class="n">union</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">union</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+            <span class="n">other_only</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">union</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">base_only</span><span class="p">:</span>
+            <span class="n">merged</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">norm</span><span class="p">(</span><span class="n">base</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">dict_type</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">other_only</span><span class="p">:</span>
+            <span class="n">merged</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">norm</span><span class="p">(</span><span class="n">other</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">dict_type</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">both</span><span class="p">:</span>
+            <span class="n">base_value</span> <span class="o">=</span> <span class="n">base</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+            <span class="n">other_value</span> <span class="o">=</span> <span class="n">other</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+            <span class="n">base_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">base_value</span><span class="p">)</span>
+            <span class="n">other_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">other_value</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">match_types</span> <span class="ow">and</span> <span class="p">(</span><span class="n">base_type</span> <span class="o">!=</span> <span class="n">other_type</span><span class="p">)</span> <span class="ow">and</span>
+                    <span class="p">(</span><span class="n">base_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">other_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Type mismatch for {} got {} ({}) and {} ({})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">base_value</span><span class="p">,</span> <span class="n">base_type</span><span class="p">,</span>
+                                                                                       <span class="n">other_value</span><span class="p">,</span> <span class="n">other_type</span><span class="p">))</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">base_value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">merged</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">_merge_two_dicts</span><span class="p">(</span><span class="n">base_value</span><span class="p">,</span> <span class="n">other_value</span><span class="p">,</span> <span class="n">list_duplicates</span><span class="p">,</span> <span class="n">match_types</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">base_value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">should_merge_lists</span><span class="p">:</span>
+                    <span class="n">merged</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">_merge_two_lists</span><span class="p">(</span><span class="n">base_value</span><span class="p">,</span> <span class="n">other_value</span><span class="p">,</span> <span class="n">list_duplicates</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">merged</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">_merge_two_lists</span><span class="p">([],</span> <span class="n">other_value</span><span class="p">,</span> <span class="n">list_duplicates</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span>
+
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">base_value</span><span class="p">,</span> <span class="nb">set</span><span class="p">):</span>
+                <span class="n">merged</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">norm</span><span class="p">(</span><span class="n">base_value</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">other_value</span><span class="p">),</span> <span class="n">dict_type</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">merged</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">norm</span><span class="p">(</span><span class="n">other_value</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c"># Should never get here</span>
+            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s">&#39;Unexpected merge key: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">merged</span>
+
+
+<div class="viewcode-block" id="merge_lists"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.merge_lists">[docs]</a><span class="k">def</span> <span class="nf">merge_lists</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Must specify at least two lists to merge.&#39;</span><span class="p">)</span>
+    <span class="n">func</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">_merge_two_lists</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">reduce</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_merge_two_lists</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">duplicates</span><span class="o">=</span><span class="s">&#39;all&#39;</span><span class="p">,</span> <span class="n">dict_type</span><span class="o">=</span><span class="nb">dict</span><span class="p">):</span>  <span class="c"># pylint: disable=R0912</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Merge lists, normalizing their entries.</span>
+
+<span class="sd">    parameters:</span>
+
+<span class="sd">        :base, other: the two lists to be merged. ``other`` will be merged on</span>
+<span class="sd">                      top of base.</span>
+<span class="sd">        :duplicates: Indicates the strategy of handling entries that appear</span>
+<span class="sd">                     in both lists. ``all`` will keep occurrences from both</span>
+<span class="sd">                     lists; ``first`` will only keep occurrences from</span>
+<span class="sd">                     ``base``; ``last`` will only keep occurrences from</span>
+<span class="sd">                     ``other``;</span>
+
+<span class="sd">                     .. note:: duplicate entries that appear in the *same* list</span>
+<span class="sd">                               will never be removed.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">base</span><span class="p">):</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="p">[</span><span class="n">base</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+        <span class="n">other</span> <span class="o">=</span> <span class="p">[</span><span class="n">other</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">duplicates</span> <span class="o">==</span> <span class="s">&#39;all&#39;</span><span class="p">:</span>
+        <span class="n">merged_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">normalize</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span> <span class="o">+</span> <span class="n">normalize</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">_check_remove_item</span><span class="p">(</span><span class="n">merged_list</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+                <span class="n">merged_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">merged_list</span>
+    <span class="k">elif</span> <span class="n">duplicates</span> <span class="o">==</span> <span class="s">&#39;first&#39;</span><span class="p">:</span>
+        <span class="n">base_norm</span> <span class="o">=</span> <span class="n">normalize</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span>
+        <span class="n">merged_list</span> <span class="o">=</span> <span class="n">normalize</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">base_norm</span><span class="p">:</span>
+            <span class="n">_check_remove_item</span><span class="p">(</span><span class="n">merged_list</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">normalize</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">_check_remove_item</span><span class="p">(</span><span class="n">merged_list</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">v</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">base_norm</span><span class="p">:</span>
+                    <span class="n">merged_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>  <span class="c"># pylint: disable=no-member</span>
+        <span class="k">return</span> <span class="n">merged_list</span>
+    <span class="k">elif</span> <span class="n">duplicates</span> <span class="o">==</span> <span class="s">&#39;last&#39;</span><span class="p">:</span>
+        <span class="n">other_norm</span> <span class="o">=</span> <span class="n">normalize</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span>
+        <span class="n">merged_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">normalize</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">_check_remove_item</span><span class="p">(</span><span class="n">merged_list</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">v</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">other_norm</span><span class="p">:</span>
+                    <span class="n">merged_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">other_norm</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">_check_remove_item</span><span class="p">(</span><span class="n">merged_list</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+                <span class="n">merged_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">merged_list</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Unexpected value for list duplicates argument: {}. &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">duplicates</span><span class="p">)</span> <span class="o">+</span>
+                         <span class="s">&#39;Must be in {&quot;all&quot;, &quot;first&quot;, &quot;last&quot;}.&#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_check_remove_item</span><span class="p">(</span><span class="n">the_list</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Helper function for merge_lists that implements checking wether an items</span>
+<span class="sd">    should be removed from the list and doing so if needed. Returns ``True`` if</span>
+<span class="sd">    the item has been removed and ``False`` otherwise.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">False</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">item</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;~&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">False</span>
+    <span class="n">actual_item</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+    <span class="k">if</span> <span class="n">actual_item</span> <span class="ow">in</span> <span class="n">the_list</span><span class="p">:</span>
+        <span class="k">del</span> <span class="n">the_list</span><span class="p">[</span><span class="n">the_list</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">actual_item</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="bp">True</span>
+
+
+<div class="viewcode-block" id="normalize"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.normalize">[docs]</a><span class="k">def</span> <span class="nf">normalize</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">dict_type</span><span class="o">=</span><span class="nb">dict</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Normalize values. Recursively normalizes dict keys to be lower case,</span>
+<span class="sd">    no surrounding whitespace, underscore-delimited strings.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="n">normalized</span> <span class="o">=</span> <span class="n">dict_type</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+                <span class="n">k</span> <span class="o">=</span> <span class="n">k</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="s">&#39;_&#39;</span><span class="p">)</span>
+            <span class="n">normalized</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">normalize</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">normalized</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">normalize</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">normalize</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">dict_type</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">value</span>
+
+</div>
+<span class="n">VALUE_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;(\d+(?:\.\d+)?)\s*(\w*)&#39;</span><span class="p">)</span>
+
+<span class="n">UNITS_MAP</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;s&#39;</span><span class="p">:</span> <span class="s">&#39;seconds&#39;</span><span class="p">,</span>
+    <span class="s">&#39;ms&#39;</span><span class="p">:</span> <span class="s">&#39;milliseconds&#39;</span><span class="p">,</span>
+    <span class="s">&#39;us&#39;</span><span class="p">:</span> <span class="s">&#39;microseconds&#39;</span><span class="p">,</span>
+    <span class="s">&#39;ns&#39;</span><span class="p">:</span> <span class="s">&#39;nanoseconds&#39;</span><span class="p">,</span>
+    <span class="s">&#39;V&#39;</span><span class="p">:</span> <span class="s">&#39;volts&#39;</span><span class="p">,</span>
+    <span class="s">&#39;A&#39;</span><span class="p">:</span> <span class="s">&#39;amps&#39;</span><span class="p">,</span>
+    <span class="s">&#39;mA&#39;</span><span class="p">:</span> <span class="s">&#39;milliamps&#39;</span><span class="p">,</span>
+    <span class="s">&#39;J&#39;</span><span class="p">:</span> <span class="s">&#39;joules&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="parse_value"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.parse_value">[docs]</a><span class="k">def</span> <span class="nf">parse_value</span><span class="p">(</span><span class="n">value_string</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;parses a string representing a numerical value and returns</span>
+<span class="sd">    a tuple (value, units), where value will be either int or float,</span>
+<span class="sd">    and units will be a string representing the units or None.&quot;&quot;&quot;</span>
+    <span class="n">match</span> <span class="o">=</span> <span class="n">VALUE_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">value_string</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+        <span class="n">vs</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">vs</span><span class="p">)</span> <span class="k">if</span> <span class="s">&#39;.&#39;</span> <span class="ow">in</span> <span class="n">vs</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">vs</span><span class="p">)</span>
+        <span class="n">us</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">units</span> <span class="o">=</span> <span class="n">UNITS_MAP</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">us</span><span class="p">,</span> <span class="n">us</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">value_string</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="get_meansd"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.get_meansd">[docs]</a><span class="k">def</span> <span class="nf">get_meansd</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns mean and standard deviation of the specified values.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">values</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;nan&#39;</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;nan&#39;</span><span class="p">)</span>
+    <span class="n">mean</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+    <span class="n">sd</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="nb">sum</span><span class="p">([(</span><span class="n">v</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">])</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">mean</span><span class="p">,</span> <span class="n">sd</span>
+
+</div>
+<div class="viewcode-block" id="geomean"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.geomean">[docs]</a><span class="k">def</span> <span class="nf">geomean</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns the geometric mean of the values.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="capitalize"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.capitalize">[docs]</a><span class="k">def</span> <span class="nf">capitalize</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Capitalises the specified text: first letter upper case,</span>
+<span class="sd">    all subsequent letters lower case.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s">&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">text</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">+</span> <span class="n">text</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="convert_new_lines"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.convert_new_lines">[docs]</a><span class="k">def</span> <span class="nf">convert_new_lines</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Convert new lines to a common format.  &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\r\n</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\r</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="escape_quotes"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.escape_quotes">[docs]</a><span class="k">def</span> <span class="nf">escape_quotes</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Escape quotes, and escaped quotes, in the specified text.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;</span><span class="se">\\</span><span class="s">(&quot;|</span><span class="se">\&#39;</span><span class="s">)&#39;</span><span class="p">,</span> <span class="s">r&#39;</span><span class="se">\\\\</span><span class="s">\1&#39;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\&#39;</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\\\&#39;</span><span class="s">&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\&quot;</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\\\&quot;</span><span class="s">&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="escape_single_quotes"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.escape_single_quotes">[docs]</a><span class="k">def</span> <span class="nf">escape_single_quotes</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Escape single quotes, and escaped single quotes, in the specified text.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;</span><span class="se">\\</span><span class="s">(&quot;|</span><span class="se">\&#39;</span><span class="s">)&#39;</span><span class="p">,</span> <span class="s">r&#39;</span><span class="se">\\\\</span><span class="s">\1&#39;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\&#39;</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\&#39;\\\&#39;\&#39;</span><span class="s">&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="escape_double_quotes"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.escape_double_quotes">[docs]</a><span class="k">def</span> <span class="nf">escape_double_quotes</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Escape double quotes, and escaped double quotes, in the specified text.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;</span><span class="se">\\</span><span class="s">(&quot;|</span><span class="se">\&#39;</span><span class="s">)&#39;</span><span class="p">,</span> <span class="s">r&#39;</span><span class="se">\\\\</span><span class="s">\1&#39;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\&quot;</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="se">\\\&quot;</span><span class="s">&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="getch"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.getch">[docs]</a><span class="k">def</span> <span class="nf">getch</span><span class="p">(</span><span class="n">count</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Read ``count`` characters from standard input.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s">&#39;nt&#39;</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">msvcrt</span>  <span class="c"># pylint: disable=F0401</span>
+        <span class="k">return</span> <span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">msvcrt</span><span class="o">.</span><span class="n">getch</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">count</span><span class="p">)])</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c"># assume Unix</span>
+        <span class="kn">import</span> <span class="nn">tty</span>  <span class="c"># NOQA</span>
+        <span class="kn">import</span> <span class="nn">termios</span>  <span class="c"># NOQA</span>
+        <span class="n">fd</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">fileno</span><span class="p">()</span>
+        <span class="n">old_settings</span> <span class="o">=</span> <span class="n">termios</span><span class="o">.</span><span class="n">tcgetattr</span><span class="p">(</span><span class="n">fd</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">tty</span><span class="o">.</span><span class="n">setraw</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">fileno</span><span class="p">())</span>
+            <span class="n">ch</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">count</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">termios</span><span class="o">.</span><span class="n">tcsetattr</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="n">termios</span><span class="o">.</span><span class="n">TCSADRAIN</span><span class="p">,</span> <span class="n">old_settings</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ch</span>
+
+</div>
+<div class="viewcode-block" id="isiterable"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.isiterable">[docs]</a><span class="k">def</span> <span class="nf">isiterable</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns ``True`` if the specified object is iterable and</span>
+<span class="sd">    *is not a string type*, ``False`` otherwise.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s">&#39;__iter__&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="utc_to_local"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.utc_to_local">[docs]</a><span class="k">def</span> <span class="nf">utc_to_local</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Convert naive datetime to local time zone, assuming UTC.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">dt</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">tz</span><span class="o">.</span><span class="n">tzutc</span><span class="p">())</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span><span class="n">tz</span><span class="o">.</span><span class="n">tzlocal</span><span class="p">())</span>
+
+</div>
+<div class="viewcode-block" id="local_to_utc"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.local_to_utc">[docs]</a><span class="k">def</span> <span class="nf">local_to_utc</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Convert naive datetime to UTC, assuming local time zone.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">dt</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">tz</span><span class="o">.</span><span class="n">tzlocal</span><span class="p">())</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span><span class="n">tz</span><span class="o">.</span><span class="n">tzutc</span><span class="p">())</span>
+
+</div>
+<div class="viewcode-block" id="as_relative"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.as_relative">[docs]</a><span class="k">def</span> <span class="nf">as_relative</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Convert path to relative by stripping away the leading &#39;/&#39; on UNIX or</span>
+<span class="sd">    the equivant on other platforms.&quot;&quot;&quot;</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitdrive</span><span class="p">(</span><span class="n">path</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">path</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="get_cpu_mask"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.get_cpu_mask">[docs]</a><span class="k">def</span> <span class="nf">get_cpu_mask</span><span class="p">(</span><span class="n">cores</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a string with the hex for the cpu mask for the specified core numbers.&quot;&quot;&quot;</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">cores</span><span class="p">:</span>
+        <span class="n">mask</span> <span class="o">|=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span>
+    <span class="k">return</span> <span class="s">&#39;0x{0:x}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="load_class"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.load_class">[docs]</a><span class="k">def</span> <span class="nf">load_class</span><span class="p">(</span><span class="n">classpath</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Loads the specified Python class. ``classpath`` must be a fully-qualified</span>
+<span class="sd">    class name (i.e. namspaced under module/package).&quot;&quot;&quot;</span>
+    <span class="n">modname</span><span class="p">,</span> <span class="n">clsname</span> <span class="o">=</span> <span class="n">classpath</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">__import__</span><span class="p">(</span><span class="n">modname</span><span class="p">),</span> <span class="n">clsname</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="get_pager"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.get_pager">[docs]</a><span class="k">def</span> <span class="nf">get_pager</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Returns the name of the system pager program.&quot;&quot;&quot;</span>
+    <span class="n">pager</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;PAGER&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">pager</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">pager</span> <span class="o">=</span> <span class="n">find_executable</span><span class="p">(</span><span class="s">&#39;less&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">pager</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">pager</span> <span class="o">=</span> <span class="n">find_executable</span><span class="p">(</span><span class="s">&#39;more&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pager</span>
+
+</div>
+<div class="viewcode-block" id="enum_metaclass"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.enum_metaclass">[docs]</a><span class="k">def</span> <span class="nf">enum_metaclass</span><span class="p">(</span><span class="n">enum_param</span><span class="p">,</span> <span class="n">return_name</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a ``type`` subclass that may be used as a metaclass for</span>
+<span class="sd">    an enum.</span>
+
+<span class="sd">    Paremeters:</span>
+
+<span class="sd">        :enum_param: the name of class attribute that defines enum values.</span>
+<span class="sd">                     The metaclass will add a class attribute for each value in</span>
+<span class="sd">                     ``enum_param``. The value of the attribute depends on the type</span>
+<span class="sd">                     of ``enum_param`` and on the values of ``return_name``. If</span>
+<span class="sd">                     ``return_name`` is ``True``, then the value of the new attribute is</span>
+<span class="sd">                     the name of that attribute; otherwise, if ``enum_param`` is a ``list``</span>
+<span class="sd">                     or a ``tuple``, the value will be the index of that param in</span>
+<span class="sd">                     ``enum_param``, optionally offset by ``start``, otherwise, it will</span>
+<span class="sd">                     be assumed that ``enum_param`` implementa a dict-like inteface and</span>
+<span class="sd">                     the value will be ``enum_param[attr_name]``.</span>
+<span class="sd">        :return_name: If ``True``, the enum values will the names of enum attributes. If</span>
+<span class="sd">                      ``False``, the default, the values will depend on the type of</span>
+<span class="sd">                      ``enum_param`` (see above).</span>
+<span class="sd">        :start: If ``enum_param`` is a list or a tuple, and ``return_name`` is ``False``,</span>
+<span class="sd">                this specifies an &quot;offset&quot; that will be added to the index of the attribute</span>
+<span class="sd">                within ``enum_param`` to form the value.</span>
+
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">class</span> <span class="nc">__EnumMeta</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">__new__</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">clsname</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">):</span>
+            <span class="n">cls</span> <span class="o">=</span> <span class="nb">type</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">clsname</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">enum_param</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="k">if</span> <span class="n">return_name</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+                    <span class="nb">setattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
+                        <span class="nb">setattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">i</span> <span class="o">+</span> <span class="n">start</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>  <span class="c"># assume dict-like</span>
+                    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+                        <span class="nb">setattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+            <span class="k">return</span> <span class="n">cls</span>
+    <span class="k">return</span> <span class="n">__EnumMeta</span>
+
+</div>
+<div class="viewcode-block" id="which"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.which">[docs]</a><span class="k">def</span> <span class="nf">which</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Platform-independent version of UNIX which utility.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s">&#39;nt&#39;</span><span class="p">:</span>
+        <span class="n">paths</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;PATH&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">pathsep</span><span class="p">)</span>
+        <span class="n">exts</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;PATHEXT&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">pathsep</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">:</span>
+            <span class="n">testpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">testpath</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">testpath</span>
+            <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">exts</span><span class="p">:</span>
+                <span class="n">testpathext</span> <span class="o">=</span> <span class="n">testpath</span> <span class="o">+</span> <span class="n">ext</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">testpathext</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="n">testpathext</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c"># assume UNIX-like</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">check_output</span><span class="p">([</span><span class="s">&#39;which&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+</div>
+<span class="n">_bash_color_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\x1b</span><span class="s">\[[0-9;]+m&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="strip_bash_colors"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.strip_bash_colors">[docs]</a><span class="k">def</span> <span class="nf">strip_bash_colors</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_bash_color_regex</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="format_duration"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.format_duration">[docs]</a><span class="k">def</span> <span class="nf">format_duration</span><span class="p">(</span><span class="n">seconds</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;day&#39;</span><span class="p">,</span> <span class="s">&#39;hour&#39;</span><span class="p">,</span> <span class="s">&#39;minute&#39;</span><span class="p">,</span> <span class="s">&#39;second&#39;</span><span class="p">]):</span>  <span class="c"># pylint: disable=dangerous-default-value</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Formats the specified number of seconds into human-readable duration.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">seconds</span><span class="p">,</span> <span class="n">timedelta</span><span class="p">):</span>
+        <span class="n">td</span> <span class="o">=</span> <span class="n">seconds</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">td</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">seconds</span><span class="p">)</span>
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">td</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">item</span> <span class="ow">is</span> <span class="s">&#39;day&#39;</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">suffix</span> <span class="o">=</span> <span class="s">&#39;&#39;</span> <span class="k">if</span> <span class="n">value</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="s">&#39;s&#39;</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;{} {}{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">suffix</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">sep</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="get_article"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.get_article">[docs]</a><span class="k">def</span> <span class="nf">get_article</span><span class="p">(</span><span class="n">word</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the appropriate indefinite article for the word (ish).</span>
+
+<span class="sd">    .. note:: Indefinite article assignment in English is based on</span>
+<span class="sd">              sound rather than spelling, so this will not work correctly</span>
+<span class="sd">              in all case; e.g. this will return ``&quot;a hour&quot;``.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span><span class="s">&#39;an&#39;</span> <span class="k">if</span> <span class="n">word</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="s">&#39;aoeiu&#39;</span> <span class="k">else</span> <span class="s">&#39;a&#39;</span>
+
+</div>
+<div class="viewcode-block" id="get_random_string"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.get_random_string">[docs]</a><span class="k">def</span> <span class="nf">get_random_string</span><span class="p">(</span><span class="n">length</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns a random ASCII string of the specified length).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">string</span><span class="o">.</span><span class="n">ascii_letters</span> <span class="o">+</span> <span class="n">string</span><span class="o">.</span><span class="n">digits</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">length</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="LoadSyntaxError"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.LoadSyntaxError">[docs]</a><span class="k">class</span> <span class="nc">LoadSyntaxError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">lineno</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">LoadSyntaxError</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filepath</span> <span class="o">=</span> <span class="n">filepath</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lineno</span> <span class="o">=</span> <span class="n">lineno</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Syntax Error in {}, line {}:</span><span class="se">\n\t</span><span class="s">{}&#39;</span>
+        <span class="k">return</span> <span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filepath</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="p">)</span>
+
+</div>
+<span class="n">RAND_MOD_NAME_LEN</span> <span class="o">=</span> <span class="mi">30</span>
+<span class="n">BAD_CHARS</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">punctuation</span> <span class="o">+</span> <span class="n">string</span><span class="o">.</span><span class="n">whitespace</span>
+<span class="n">TRANS_TABLE</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">maketrans</span><span class="p">(</span><span class="n">BAD_CHARS</span><span class="p">,</span> <span class="s">&#39;_&#39;</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">BAD_CHARS</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="to_identifier"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.to_identifier">[docs]</a><span class="k">def</span> <span class="nf">to_identifier</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts text to a valid Python identifier by replacing all</span>
+<span class="sd">    whitespace and punctuation.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">&#39;_+&#39;</span><span class="p">,</span> <span class="s">&#39;_&#39;</span><span class="p">,</span> <span class="n">text</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="n">TRANS_TABLE</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="load_struct_from_python"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.load_struct_from_python">[docs]</a><span class="k">def</span> <span class="nf">load_struct_from_python</span><span class="p">(</span><span class="n">filepath</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Parses a config structure from a .py file. The structure should be composed</span>
+<span class="sd">    of basic Python types (strings, ints, lists, dicts, etc.).&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">filepath</span> <span class="ow">or</span> <span class="n">text</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">filepath</span> <span class="ow">and</span> <span class="n">text</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Exactly one of filepath or text must be specified.&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">filepath</span><span class="p">:</span>
+            <span class="n">modname</span> <span class="o">=</span> <span class="n">to_identifier</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+            <span class="n">mod</span> <span class="o">=</span> <span class="n">imp</span><span class="o">.</span><span class="n">load_source</span><span class="p">(</span><span class="n">modname</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">modname</span> <span class="o">=</span> <span class="n">get_random_string</span><span class="p">(</span><span class="n">RAND_MOD_NAME_LEN</span><span class="p">)</span>
+            <span class="k">while</span> <span class="n">modname</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">:</span>  <span class="c"># highly unlikely, but...</span>
+                <span class="n">modname</span> <span class="o">=</span> <span class="n">get_random_string</span><span class="p">(</span><span class="n">RAND_MOD_NAME_LEN</span><span class="p">)</span>
+            <span class="n">mod</span> <span class="o">=</span> <span class="n">imp</span><span class="o">.</span><span class="n">new_module</span><span class="p">(</span><span class="n">modname</span><span class="p">)</span>
+            <span class="k">exec</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">mod</span><span class="o">.</span><span class="n">__dict__</span>  <span class="c"># pylint: disable=exec-used</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">((</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">mod</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;_&#39;</span><span class="p">))</span>
+    <span class="k">except</span> <span class="ne">SyntaxError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">LoadSyntaxError</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">filepath</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">lineno</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="load_struct_from_yaml"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.load_struct_from_yaml">[docs]</a><span class="k">def</span> <span class="nf">load_struct_from_yaml</span><span class="p">(</span><span class="n">filepath</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Parses a config structure from a .yaml file. The structure should be composed</span>
+<span class="sd">    of basic Python types (strings, ints, lists, dicts, etc.).&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">filepath</span> <span class="ow">or</span> <span class="n">text</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">filepath</span> <span class="ow">and</span> <span class="n">text</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Exactly one of filepath or text must be specified.&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">filepath</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">yaml</span><span class="o">.</span><span class="n">YAMLError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">lineno</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s">&#39;problem_mark&#39;</span><span class="p">):</span>
+            <span class="n">lineno</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">problem_mark</span><span class="o">.</span><span class="n">line</span>
+        <span class="k">raise</span> <span class="n">LoadSyntaxError</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">,</span> <span class="n">filepath</span><span class="o">=</span><span class="n">filepath</span><span class="p">,</span> <span class="n">lineno</span><span class="o">=</span><span class="n">lineno</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="load_struct_from_file"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.load_struct_from_file">[docs]</a><span class="k">def</span> <span class="nf">load_struct_from_file</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Attempts to parse a Python structure consisting of basic types from the specified file.</span>
+<span class="sd">    Raises a ``ValueError`` if the specified file is of unkown format; ``LoadSyntaxError`` if</span>
+<span class="sd">    there is an issue parsing the file.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">extn</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filepath</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">extn</span> <span class="o">==</span> <span class="s">&#39;.py&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">extn</span> <span class="o">==</span> <span class="s">&#39;.pyc&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">extn</span> <span class="o">==</span> <span class="s">&#39;.pyo&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">load_struct_from_python</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">extn</span> <span class="o">==</span> <span class="s">&#39;.yaml&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">load_struct_from_yaml</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Unknown format &quot;{}&quot;: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">extn</span><span class="p">,</span> <span class="n">filepath</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="unique"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.unique">[docs]</a><span class="k">def</span> <span class="nf">unique</span><span class="p">(</span><span class="n">alist</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a list containing only unique elements from the input list (but preserves</span>
+<span class="sd">    order, unlike sets).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">alist</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">item</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+</div>
+<div class="viewcode-block" id="open_file"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.open_file">[docs]</a><span class="k">def</span> <span class="nf">open_file</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Open the specified file path with the associated launcher in an OS-agnostic way.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s">&#39;nt&#39;</span><span class="p">:</span>  <span class="c"># Windows</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">startfile</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>  <span class="c"># pylint: disable=no-member</span>
+    <span class="k">elif</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s">&#39;darwin&#39;</span><span class="p">:</span>  <span class="c"># Mac OSX</span>
+        <span class="k">return</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">call</span><span class="p">([</span><span class="s">&#39;open&#39;</span><span class="p">,</span> <span class="n">filepath</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c"># assume Linux or similar running a freedesktop-compliant GUI</span>
+        <span class="k">return</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">call</span><span class="p">([</span><span class="s">&#39;xdg-open&#39;</span><span class="p">,</span> <span class="n">filepath</span><span class="p">])</span>
+
+</div>
+<div class="viewcode-block" id="ranges_to_list"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.ranges_to_list">[docs]</a><span class="k">def</span> <span class="nf">ranges_to_list</span><span class="p">(</span><span class="n">ranges_string</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts a sysfs-style ranges string, e.g. ``&quot;0,2-4&quot;``, into a list ,e.g ``[0,2,3,4]``&quot;&quot;&quot;</span>
+    <span class="n">values</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">rg</span> <span class="ow">in</span> <span class="n">ranges_string</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s">&#39;-&#39;</span> <span class="ow">in</span> <span class="n">rg</span><span class="p">:</span>
+            <span class="n">first</span><span class="p">,</span> <span class="n">last</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">rg</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;-&#39;</span><span class="p">))</span>
+            <span class="n">values</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">xrange</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">last</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">rg</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">values</span>
+
+</div>
+<div class="viewcode-block" id="list_to_ranges"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.list_to_ranges">[docs]</a><span class="k">def</span> <span class="nf">list_to_ranges</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts a list, e.g ``[0,2,3,4]``, into a sysfs-style ranges string, e.g. ``&quot;0,2-4&quot;``&quot;&quot;&quot;</span>
+    <span class="n">range_groups</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groupby</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">values</span><span class="p">),</span> <span class="k">lambda</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span> <span class="n">i</span> <span class="o">-</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">range_groups</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">g</span><span class="p">))</span>
+    <span class="n">range_strings</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">range_groups</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">group</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">range_strings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">range_strings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;{}-{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">group</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="s">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">range_strings</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="list_to_mask"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.list_to_mask">[docs]</a><span class="k">def</span> <span class="nf">list_to_mask</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="mh">0x0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts the specified list of integer values into</span>
+<span class="sd">    a bit mask for those values. Optinally, the list can be</span>
+<span class="sd">    applied to an existing mask.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+        <span class="n">base</span> <span class="o">|=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">base</span>
+
+</div>
+<div class="viewcode-block" id="mask_to_list"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.mask_to_list">[docs]</a><span class="k">def</span> <span class="nf">mask_to_list</span><span class="p">(</span><span class="n">mask</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts the specfied integer bitmask into a list of</span>
+<span class="sd">    indexes of bits that are set in the mask.&quot;&quot;&quot;</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">bin</span><span class="p">(</span><span class="n">mask</span><span class="p">))</span> <span class="o">-</span> <span class="mi">2</span>  <span class="c"># because of &quot;0b&quot;</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">size</span> <span class="o">-</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">mask</span> <span class="o">&amp;</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">size</span> <span class="o">-</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span>
+
+</div>
+<div class="viewcode-block" id="sha256"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.sha256">[docs]</a><span class="k">def</span> <span class="nf">sha256</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">chunk</span><span class="o">=</span><span class="mi">2048</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Calculates SHA256 hexdigest of the file at the specified path.&quot;&quot;&quot;</span>
+    <span class="n">h</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">()</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="n">buf</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">buf</span><span class="p">:</span>
+            <span class="n">h</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span>
+            <span class="n">buf</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">h</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="urljoin"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.misc.urljoin">[docs]</a><span class="k">def</span> <span class="nf">urljoin</span><span class="p">(</span><span class="o">*</span><span class="n">parts</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s">&#39;/&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s">&#39;/&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parts</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

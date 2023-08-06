@@ -1,0 +1,1144 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Writing Extensions &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="index.html" />
+    <link rel="next" title="Framework Overview" href="execution_model.html" />
+    <link rel="prev" title="Conventions" href="conventions.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="execution_model.html" title="Framework Overview"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="conventions.html" title="Conventions"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="writing-extensions">
+<span id="id1"></span><h1>Writing Extensions<a class="headerlink" href="#writing-extensions" title="Permalink to this headline">¶</a></h1>
+<p>Workload Automation offers several extension points (or plugin types).The most
+interesting of these are</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">workloads:</th><td class="field-body">These are the tasks that get executed and measured on the device. These
+can be benchmarks, high-level use cases, or pretty much anything else.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">devices:</th><td class="field-body">These are interfaces to the physical devices (development boards or end-user
+devices, such as smartphones) that use cases run on. Typically each model of a
+physical device would require it&#8217;s own interface class (though some functionality
+may be reused by subclassing from an existing base).</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">instruments:</th><td class="field-body">Instruments allow collecting additional data from workload execution (e.g.
+system traces). Instruments are not specific to a particular Workload. Instruments
+can hook into any stage of workload execution.</td>
+</tr>
+<tr class="field-even field"><th class="field-name" colspan="2">result processors:</th></tr>
+<tr class="field-even field"><td>&nbsp;</td><td class="field-body">These are used to format the results of workload execution once they have been
+collected. Depending on the callback used, these will run either after each
+iteration or at the end of the run, after all of the results have been
+collected.</td>
+</tr>
+</tbody>
+</table>
+<p>You create an extension by subclassing the appropriate base class, defining
+appropriate methods and attributes, and putting the .py file with the class into
+an appropriate subdirectory under <code class="docutils literal"><span class="pre">~/.workload_automation</span></code> (there is one for
+each extension type).</p>
+<div class="section" id="extension-basics">
+<h2>Extension Basics<a class="headerlink" href="#extension-basics" title="Permalink to this headline">¶</a></h2>
+<p>This sub-section covers things common to implementing extensions of all types.
+It is recommended you familiarize  yourself with the information here before
+proceeding onto guidance for specific extension types.</p>
+<p>To create an extension, you basically subclass an appropriate base class and them
+implement the appropriate methods</p>
+<div class="section" id="the-context">
+<h3>The Context<a class="headerlink" href="#the-context" title="Permalink to this headline">¶</a></h3>
+<p>The majority of methods in extensions accept a context argument. This is an
+instance of <a class="reference internal" href="api/wlauto.core.html#wlauto.core.execution.ExecutionContext" title="wlauto.core.execution.ExecutionContext"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.execution.ExecutionContext</span></code></a>. If contains
+of information about current state of execution of WA and keeps track of things
+like which workload is currently running and the current iteration.</p>
+<p>Notable attributes of the context are</p>
+<dl class="docutils">
+<dt>context.spec</dt>
+<dd>the current workload specification being executed. This is an
+instance of <a class="reference internal" href="api/wlauto.core.html#wlauto.core.configuration.WorkloadRunSpec" title="wlauto.core.configuration.WorkloadRunSpec"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.configuration.WorkloadRunSpec</span></code></a>
+and defines the workload and the parameters under which it is
+being executed.</dd>
+<dt>context.workload</dt>
+<dd><code class="docutils literal"><span class="pre">Workload</span></code> object that is currently being executed.</dd>
+<dt>context.current_iteration</dt>
+<dd>The current iteration of the spec that is being executed. Note that this
+is the iteration for that spec, i.e. the number of times that spec has
+been run, <em>not</em> the total number of all iterations have been executed so
+far.</dd>
+<dt>context.result</dt>
+<dd>This is the result object for the current iteration. This is an instance
+of <a class="reference internal" href="api/wlauto.core.html#wlauto.core.result.IterationResult" title="wlauto.core.result.IterationResult"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.result.IterationResult</span></code></a>. It contains the status
+of the iteration as well as the metrics and artifacts generated by the
+workload and enable instrumentation.</dd>
+<dt>context.device</dt>
+<dd>The device interface object that can be used to interact with the
+device. Note that workloads and instruments have their own device
+attribute and they should be using that instead.</dd>
+</dl>
+<p>In addition to these, context also defines a few useful paths (see below).</p>
+</div>
+<div class="section" id="paths">
+<h3>Paths<a class="headerlink" href="#paths" title="Permalink to this headline">¶</a></h3>
+<p>You should avoid using hard-coded absolute paths in your extensions whenever
+possible, as they make your code too dependent on a particular environment and
+may mean having to make adjustments when moving to new (host and/or device)
+platforms. To help avoid hard-coded absolute paths, WA automation defines
+a number of standard locations. You should strive to define your paths relative
+to one of those.</p>
+<div class="section" id="on-the-host">
+<h4>On the host<a class="headerlink" href="#on-the-host" title="Permalink to this headline">¶</a></h4>
+<p>Host paths are available through the context object, which is passed to most
+extension methods.</p>
+<dl class="docutils">
+<dt>context.run_output_directory</dt>
+<dd>This is the top-level output directory for all WA results (by default,
+this will be &#8220;wa_output&#8221; in the directory in which WA was invoked.</dd>
+<dt>context.output_directory</dt>
+<dd>This is the output directory for the current iteration. This will an
+iteration-specific subdirectory under the main results location. If
+there is no current iteration (e.g. when processing overall run results)
+this will point to the same location as <code class="docutils literal"><span class="pre">root_output_directory</span></code>.</dd>
+<dt>context.host_working_directory</dt>
+<dd>This an addition location that may be used by extensions to store
+non-iteration specific intermediate files (e.g. configuration).</dd>
+</dl>
+<p>Additionally, the global <code class="docutils literal"><span class="pre">wlauto.settings</span></code> object exposes on other location:</p>
+<dl class="docutils">
+<dt>settings.dependency_directory</dt>
+<dd>this is the root directory for all extension dependencies (e.g. media
+files, assets etc) that are not included within the extension itself.</dd>
+</dl>
+<p>As per Python best practice, it is recommended that methods and values in
+<code class="docutils literal"><span class="pre">os.path</span></code> standard library module are used for host path manipulation.</p>
+</div>
+<div class="section" id="on-the-device">
+<h4>On the device<a class="headerlink" href="#on-the-device" title="Permalink to this headline">¶</a></h4>
+<p>Workloads and instruments have a <code class="docutils literal"><span class="pre">device</span></code> attribute, which is an interface to
+the device used by WA. It defines the following location:</p>
+<dl class="docutils">
+<dt>device.working_directory</dt>
+<dd>This is the directory for all WA-related files on the device. All files
+deployed to the device should be pushed to somewhere under this location
+(the only exception being executables installed with <code class="docutils literal"><span class="pre">device.install</span></code>
+method).</dd>
+</dl>
+<p>Since there could be a mismatch between path notation used by the host and the
+device, the <code class="docutils literal"><span class="pre">os.path</span></code> modules should <em>not</em> be used for on-device path
+manipulation. Instead device has an equipment module exposed through
+<code class="docutils literal"><span class="pre">device.path</span></code> attribute. This has all the same attributes and behaves the
+same way as <code class="docutils literal"><span class="pre">os.path</span></code>, but is guaranteed to produce valid paths for the device,
+irrespective of the host&#8217;s path notation.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">result processors, unlike workloads and instruments, do not have their
+own device attribute; however they can access the device through the
+context.</p>
+</div>
+</div>
+</div>
+<div class="section" id="parameters">
+<h3>Parameters<a class="headerlink" href="#parameters" title="Permalink to this headline">¶</a></h3>
+<p>All extensions can be parameterized. Parameters are specified using
+<code class="docutils literal"><span class="pre">parameters</span></code> class attribute. This should be a list of
+<code class="xref py py-class docutils literal"><span class="pre">wlauto.core.Parameter</span></code> instances. The following attributes can be
+specified on parameter creation:</p>
+<dl class="docutils">
+<dt>name</dt>
+<dd>This is the only mandatory argument. The name will be used to create a
+corresponding attribute in the extension instance, so it must be a valid
+Python identifier.</dd>
+<dt>kind</dt>
+<dd><p class="first">This is the type of the value of the parameter. This could be an
+callable. Normally this should  be a standard Python type, e.g. <code class="docutils literal"><span class="pre">int`</span>
+<span class="pre">or</span> <span class="pre">``float</span></code>, or one the types defined in <a class="reference internal" href="api/wlauto.utils.html#module-wlauto.utils.types" title="wlauto.utils.types"><code class="xref py py-mod docutils literal"><span class="pre">wlauto.utils.types</span></code></a>.
+If not explicitly specified, this will default to <code class="docutils literal"><span class="pre">str</span></code>.</p>
+<div class="last admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Irrespective of the <code class="docutils literal"><span class="pre">kind</span></code> specified, <code class="docutils literal"><span class="pre">None</span></code> is always a
+valid value for a parameter. If you don&#8217;t want to allow
+<code class="docutils literal"><span class="pre">None</span></code>, then set <code class="docutils literal"><span class="pre">mandatory</span></code> (see below) to <code class="docutils literal"><span class="pre">True</span></code>.</p>
+</div>
+</dd>
+<dt>allowed_values</dt>
+<dd><p class="first">A list of the only allowed values for this parameter.</p>
+<div class="last admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">For composite types, such as <code class="docutils literal"><span class="pre">list_of_strings</span></code> or
+<code class="docutils literal"><span class="pre">list_of_ints</span></code> in <a class="reference internal" href="api/wlauto.utils.html#module-wlauto.utils.types" title="wlauto.utils.types"><code class="xref py py-mod docutils literal"><span class="pre">wlauto.utils.types</span></code></a>, each element of
+the value  will be checked against <code class="docutils literal"><span class="pre">allowed_values</span></code> rather
+than the composite value itself.</p>
+</div>
+</dd>
+<dt>default</dt>
+<dd>The default value to be used for this parameter if one has not been
+specified by the user. Defaults to <code class="docutils literal"><span class="pre">None</span></code>.</dd>
+<dt>mandatory</dt>
+<dd><p class="first">A <code class="docutils literal"><span class="pre">bool</span></code> indicating whether this parameter is mandatory. Setting this
+to <code class="docutils literal"><span class="pre">True</span></code> will make <code class="docutils literal"><span class="pre">None</span></code> an illegal value for the parameter.
+Defaults to <code class="docutils literal"><span class="pre">False</span></code>.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Specifying a <code class="docutils literal"><span class="pre">default</span></code> will mean that this parameter will,
+effectively, be ignored (unless the user sets the param to <code class="docutils literal"><span class="pre">None</span></code>).</p>
+</div>
+<div class="last admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Mandatory parameters are <em>bad</em>. If at all possible, you should
+strive to provide a sensible <code class="docutils literal"><span class="pre">default</span></code> or to make do without
+the parameter. Only when the param is absolutely necessary,
+and there really is no sensible default that could be given
+(e.g. something like login credentials), should you consider
+making it mandatory.</p>
+</div>
+</dd>
+<dt>constraint</dt>
+<dd>This is an additional constraint to be enforced on the parameter beyond
+its type or fixed allowed values set. This should be a predicate (a function
+that takes a single argument &#8211; the user-supplied value &#8211; and returns
+a <code class="docutils literal"><span class="pre">bool</span></code> indicating whether the constraint has been satisfied).</dd>
+<dt>override</dt>
+<dd><p class="first">A parameter name must be unique not only within an extension but also
+with that extension&#8217;s class hierarchy. If you try to declare a parameter
+with the same name as already exists, you will get an error. If you do
+want to override a parameter from further up in the inheritance
+hierarchy, you can indicate that by setting <code class="docutils literal"><span class="pre">override</span></code> attribute to
+<code class="docutils literal"><span class="pre">True</span></code>.</p>
+<p class="last">When overriding, you do not need to specify every other attribute of the
+parameter, just the ones you what to override. Values for the rest will
+be taken from the parameter in the base class.</p>
+</dd>
+</dl>
+</div>
+<div class="section" id="validation-and-cross-parameter-constraints">
+<h3>Validation and cross-parameter constraints<a class="headerlink" href="#validation-and-cross-parameter-constraints" title="Permalink to this headline">¶</a></h3>
+<p>An extension will get validated at some point after constructions. When exactly
+this occurs depends on the extension type, but it <em>will</em> be validated before it
+is used.</p>
+<p>You can implement <code class="docutils literal"><span class="pre">validate</span></code> method in your extension (that takes no arguments
+beyond the <code class="docutils literal"><span class="pre">self</span></code>) to perform any additions <em>internal</em> validation in your
+extension. By &#8220;internal&#8221;, I mean that you cannot make assumptions about the
+surrounding environment (e.g. that the device has been initialized).</p>
+<p>The contract for <code class="docutils literal"><span class="pre">validate</span></code> method is that it should raise an exception
+(either <code class="docutils literal"><span class="pre">wlauto.exceptions.ConfigError</span></code> or extension-specific exception type &#8211; see
+further on this page) if some validation condition has not, and cannot, been met.
+If the method returns without raising an exception, then the extension is in a
+valid internal state.</p>
+<p>Note that <code class="docutils literal"><span class="pre">validate</span></code> can be used not only to verify, but also to impose a
+valid internal state. In particular, this where cross-parameter constraints can
+be resolved. If the <code class="docutils literal"><span class="pre">default</span></code> or <code class="docutils literal"><span class="pre">allowed_values</span></code> of one parameter depend on
+another parameter, there is no way to express that declaratively when specifying
+the parameters. In that case the dependent attribute should be left unspecified
+on creation and should instead be set inside <code class="docutils literal"><span class="pre">validate</span></code>.</p>
+</div>
+<div class="section" id="logging">
+<h3>Logging<a class="headerlink" href="#logging" title="Permalink to this headline">¶</a></h3>
+<p>Every extension class has it&#8217;s own logger that you can access through
+<code class="docutils literal"><span class="pre">self.logger</span></code> inside the extension&#8217;s methods. Generally, a <code class="xref py py-class docutils literal"><span class="pre">Device</span></code> will log
+everything it is doing, so you shouldn&#8217;t need to add much additional logging in
+your expansion&#8217;s. But you might what to log additional information,  e.g.
+what settings your extension is using, what it is doing on the host, etc.
+Operations on the host will not normally be logged, so your extension should
+definitely log what it is doing on the host. One situation in particular where
+you should add logging is before doing something that might take a significant amount
+of time, such as downloading a file.</p>
+</div>
+<div class="section" id="documenting">
+<h3>Documenting<a class="headerlink" href="#documenting" title="Permalink to this headline">¶</a></h3>
+<p>All extensions and their parameter should be documented. For extensions
+themselves, this is done through <code class="docutils literal"><span class="pre">description</span></code> class attribute. The convention
+for an extension description is that the first paragraph should be a short
+summary description of what the extension does and why one would want to use it
+(among other things, this will get extracted and used by <code class="docutils literal"><span class="pre">wa</span> <span class="pre">list</span></code> command).
+Subsequent paragraphs (separated by blank lines) can then provide  a more
+detailed description, including any limitations and setup instructions.</p>
+<p>For parameters, the description is passed as an argument on creation. Please
+note that if <code class="docutils literal"><span class="pre">default</span></code>, <code class="docutils literal"><span class="pre">allowed_values</span></code>, or <code class="docutils literal"><span class="pre">constraint</span></code>, are set in the
+parameter, they do not need to be explicitly mentioned in the description (wa
+documentation utilities will automatically pull those). If the <code class="docutils literal"><span class="pre">default</span></code> is set
+in <code class="docutils literal"><span class="pre">validate</span></code> or additional cross-parameter constraints exist, this <em>should</em>
+be documented in the parameter description.</p>
+<p>Both extensions and their parameters should be documented using reStructureText
+markup (standard markup for Python documentation). See:</p>
+<p><a class="reference external" href="http://docutils.sourceforge.net/rst.html">http://docutils.sourceforge.net/rst.html</a></p>
+<p>Aside from that, it is up to you how you document your extension. You should try
+to provide enough information so that someone unfamiliar with your extension is
+able to use it, e.g. you should document all settings and parameters your
+extension expects (including what the valid value are).</p>
+</div>
+<div class="section" id="error-notification">
+<h3>Error Notification<a class="headerlink" href="#error-notification" title="Permalink to this headline">¶</a></h3>
+<p>When you detect an error condition, you should raise an appropriate exception to
+notify the user. The exception would typically be <code class="xref py py-class docutils literal"><span class="pre">ConfigError</span></code> or
+(depending the type of the extension)
+<code class="xref py py-class docutils literal"><span class="pre">WorkloadError</span></code>/<code class="xref py py-class docutils literal"><span class="pre">DeviceError</span></code>/<code class="xref py py-class docutils literal"><span class="pre">InstrumentError</span></code>/<code class="xref py py-class docutils literal"><span class="pre">ResultProcessorError</span></code>.
+All these errors are defined in <code class="xref py py-mod docutils literal"><span class="pre">wlauto.exception</span></code> module.</p>
+<p><code class="xref py py-class docutils literal"><span class="pre">ConfigError</span></code> should be raised where there is a problem in configuration
+specified by the user (either through the agenda or config files). These errors
+are meant to be resolvable by simple adjustments to the configuration (and the
+error message should suggest what adjustments need to be made. For all other
+errors, such as missing dependencies, mis-configured environment, problems
+performing operations, etc., the extension type-specific exceptions should be
+used.</p>
+<p>If the extension itself is capable of recovering from the error and carrying
+on, it may make more sense to log an ERROR or WARNING level message using the
+extension&#8217;s logger and to continue operation.</p>
+</div>
+<div class="section" id="utils">
+<h3>Utils<a class="headerlink" href="#utils" title="Permalink to this headline">¶</a></h3>
+<p>Workload Automation defines a number of utilities collected under
+<a class="reference internal" href="api/wlauto.utils.html#module-wlauto.utils" title="wlauto.utils"><code class="xref py py-mod docutils literal"><span class="pre">wlauto.utils</span></code></a> subpackage. These utilities were created to help with the
+implementation of the framework itself, but may be also be useful when
+implementing extensions.</p>
+</div>
+</div>
+<div class="section" id="adding-a-workload">
+<h2>Adding a Workload<a class="headerlink" href="#adding-a-workload" title="Permalink to this headline">¶</a></h2>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">You can use <code class="docutils literal"><span class="pre">wa</span> <span class="pre">create</span> <span class="pre">workload</span> <span class="pre">[name]</span></code> script to generate a new workload
+structure for you. This script can also create the boilerplate for
+UI automation, if your workload needs it. See <code class="docutils literal"><span class="pre">wa</span> <span class="pre">create</span> <span class="pre">-h</span></code> for more
+details.</p>
+</div>
+<p>New workloads can be added by subclassing <a class="reference internal" href="api/wlauto.core.html#wlauto.core.workload.Workload" title="wlauto.core.workload.Workload"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.workload.Workload</span></code></a></p>
+<p>The Workload class defines the following interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Workload</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">init_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Please see <a class="reference internal" href="conventions.html"><em>Conventions</em></a> section for notes on how to interpret
+this.</p>
+</div>
+<p>The interface should be implemented as follows</p>
+<blockquote>
+<div><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">name:</th><td class="field-body"><p class="first">This identifies the workload (e.g. it used to specify it in the
+<a class="reference external" href="agenda.html">agenda</a>.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">init_resources:</th><td class="field-body"><p class="first">This method may be optionally override to implement dynamic
+resource discovery for the workload. This method executes
+early on, before the device has been initialized, so it
+should only be used to initialize resources that do not
+depend on the device to resolve. This method is executed
+once per run for each workload instance.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">validate:</th><td class="field-body"><p class="first">This method can be used to validate any assumptions your workload
+makes about the environment (e.g. that required files are
+present, environment variables are set, etc) and should raise
+a <a class="reference internal" href="api/wlauto.html#wlauto.exceptions.WorkloadError" title="wlauto.exceptions.WorkloadError"><code class="xref py py-class docutils literal"><span class="pre">wlauto.exceptions.WorkloadError</span></code></a> if that is not the
+case. The base class implementation only makes sure sure that
+the name attribute has been set.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">initialize:</th><td class="field-body"><p class="first">This method will be executed exactly once per run (no matter
+how many instances of the workload there are). It will run
+after the device has been initialized, so it may be used to
+perform device-dependent initialization that does not need to
+be repeated on each iteration (e.g. as installing executables
+required by the workload on the device).</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">setup:</th><td class="field-body"><p class="first">Everything that needs to be in place for workload execution should
+be done in this method. This includes copying files to the device,
+starting up an application, configuring communications channels,
+etc.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">run:</th><td class="field-body"><p class="first">This method should perform the actual task that is being measured.
+When this method exits, the task is assumed to be complete.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Instrumentation is kicked off just before calling this
+method and is disabled right after, so everything in this
+method is being measured. Therefore this method should
+contain the least code possible to perform the operations
+you are interested in measuring. Specifically, things like
+installing or starting applications, processing results, or
+copying files to/from the device should be done elsewhere if
+possible.</p>
+</div>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">update_result:</th><td class="field-body"><p class="first">This method gets invoked after the task execution has
+finished and should be used to extract metrics and add them
+to the result (see below).</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">teardown:</th><td class="field-body"><p class="first">This could be used to perform any cleanup you may wish to do,
+e.g. Uninstalling applications, deleting file on the device, etc.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">finalize:</th><td class="field-body"><p class="first last">This is the complement to <code class="docutils literal"><span class="pre">initialize</span></code>. This will be executed
+exactly once at the end of the run. This should be used to
+perform any final clean up (e.g. uninstalling binaries installed
+in the <code class="docutils literal"><span class="pre">initialize</span></code>).</p>
+</td>
+</tr>
+</tbody>
+</table>
+</div></blockquote>
+<p>Workload methods (except for <code class="docutils literal"><span class="pre">validate</span></code>) take a single argument that is a
+<a class="reference internal" href="api/wlauto.core.html#wlauto.core.execution.ExecutionContext" title="wlauto.core.execution.ExecutionContext"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.execution.ExecutionContext</span></code></a> instance. This object keeps
+track of the current execution state (such as the current workload, iteration
+number, etc), and contains, among other things, a
+<code class="xref py py-class docutils literal"><span class="pre">wlauto.core.workload.WorkloadResult</span></code> instance that should be populated
+from the <code class="docutils literal"><span class="pre">update_result</span></code> method with the results of the execution.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># ...</span>
+
+<span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+   <span class="c"># ...</span>
+   <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;energy&#39;</span><span class="p">,</span> <span class="mf">23.6</span><span class="p">,</span> <span class="s">&#39;Joules&#39;</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+<span class="c"># ...</span>
+</pre></div>
+</div>
+<div class="section" id="example">
+<h3>Example<a class="headerlink" href="#example" title="Permalink to this headline">¶</a></h3>
+<p>This example shows a simple workload that times how long it takes to compress a
+file of a particular size on the device.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This is intended as an example of how to implement the Workload
+interface. The methodology used to perform the actual measurement is
+not necessarily sound, and this Workload should not be used to collect
+real measurements.</p>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Workload</span><span class="p">,</span> <span class="n">Parameter</span>
+
+<span class="k">class</span> <span class="nc">ZiptestWorkload</span><span class="p">(</span><span class="n">Workload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;ziptest&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&#39;&#39;&#39;</span>
+<span class="s">                  Times how long it takes to gzip a file of a particular size on a device.</span>
+
+<span class="s">                  This workload was created for illustration purposes only. It should not be</span>
+<span class="s">                  used to collect actual measurements.</span>
+
+<span class="s">                  &#39;&#39;&#39;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;file_size&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2000000</span><span class="p">,</span>
+                      <span class="n">description</span><span class="o">=</span><span class="s">&#39;Size of the file (in bytes) to be gzipped.&#39;</span><span class="p">)</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="c"># Generate a file of the specified size containing random garbage.</span>
+            <span class="n">host_infile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;infile&#39;</span><span class="p">)</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;openssl rand -base64 {} &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_size</span><span class="p">,</span> <span class="n">host_infile</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+            <span class="c"># Set up on-device paths</span>
+            <span class="n">devpath</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span>  <span class="c"># os.path equivalent for the device</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device_infile</span> <span class="o">=</span> <span class="n">devpath</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="s">&#39;infile&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device_outfile</span> <span class="o">=</span> <span class="n">devpath</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="s">&#39;outfile&#39;</span><span class="p">)</span>
+            <span class="c"># Push the file to the device</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">push_file</span><span class="p">(</span><span class="n">host_infile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device_infile</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;cd {} &amp;&amp; (time gzip {}) &amp;&gt;&gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span>
+                                                                    <span class="bp">self</span><span class="o">.</span><span class="n">device_infile</span><span class="p">,</span>
+                                                                    <span class="bp">self</span><span class="o">.</span><span class="n">device_outfile</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="c"># Pull the results file to the host</span>
+            <span class="n">host_outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;outfile&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device_outfile</span><span class="p">,</span> <span class="n">host_outfile</span><span class="p">)</span>
+            <span class="c"># Extract metrics form the file&#39;s contents and update the result</span>
+            <span class="c"># with them.</span>
+            <span class="n">content</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">host_outfile</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+            <span class="k">for</span> <span class="n">value</span><span class="p">,</span> <span class="n">metric</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">content</span><span class="p">):</span>
+            <span class="n">mins</span><span class="p">,</span> <span class="n">secs</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">value</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;m&#39;</span><span class="p">))</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">secs</span> <span class="o">+</span> <span class="mi">60</span> <span class="o">*</span> <span class="n">mins</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="c"># Clean up on-device file.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device_infile</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device_outfile</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="adding-revent-dependent-workload">
+<span id="gameworkload"></span><h3>Adding revent-dependent Workload:<a class="headerlink" href="#adding-revent-dependent-workload" title="Permalink to this headline">¶</a></h3>
+<p><code class="xref py py-class docutils literal"><span class="pre">wlauto.common.game.GameWorkload</span></code> is the base class for all the workloads
+that depend on <a class="reference internal" href="revent.html#revent-files-creation"><span>revent</span></a> files. It implements all the methods
+needed to push the files to the device and run them. New GameWorkload can be
+added by subclassing <code class="xref py py-class docutils literal"><span class="pre">wlauto.common.game.GameWorkload</span></code>:</p>
+<p>The GameWorkload class defines the following interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">GameWorkload</span><span class="p">(</span><span class="n">Workload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">package</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">activity</span> <span class="o">=</span> <span class="bp">None</span>
+</pre></div>
+</div>
+<p>The interface should be implemented as follows</p>
+<blockquote>
+<div><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">name:</th><td class="field-body">This identifies the workload (e.g. it used to specify it in the
+<a class="reference external" href="agenda.html">agenda</a>.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">package:</th><td class="field-body">This is the name of the &#8216;.apk&#8217; package without its file extension.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">activity:</th><td class="field-body">The name of the main activity that runs the package.</td>
+</tr>
+</tbody>
+</table>
+</div></blockquote>
+</div>
+<div class="section" id="id2">
+<h3>Example:<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
+<p>This example shows a simple GameWorkload that plays a game.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">wlauto.common.game</span> <span class="kn">import</span> <span class="n">GameWorkload</span>
+
+<span class="k">class</span> <span class="nc">MyGame</span><span class="p">(</span><span class="n">GameWorkload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;mygame&#39;</span>
+    <span class="n">package</span> <span class="o">=</span> <span class="s">&#39;com.mylogo.mygame&#39;</span>
+    <span class="n">activity</span> <span class="o">=</span> <span class="s">&#39;myActivity.myGame&#39;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="convention-for-naming-revent-files-for-wlauto-common-game-gameworkload">
+<h3>Convention for Naming revent Files for <code class="xref py py-class docutils literal"><span class="pre">wlauto.common.game.GameWorkload</span></code><a class="headerlink" href="#convention-for-naming-revent-files-for-wlauto-common-game-gameworkload" title="Permalink to this headline">¶</a></h3>
+<p>There is a convention for naming revent files which you should follow if you
+want to record your own revent files. Each revent file must start with the
+device name(case sensitive) then followed by a dot &#8216;.&#8217; then the stage name
+then &#8216;.revent&#8217;. All your custom revent files should reside at
+&#8216;~/.workload_automation/dependencies/WORKLOAD NAME/&#8217;. These are the current
+supported stages:</p>
+<blockquote>
+<div><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">setup:</th><td class="field-body">This stage is where the game is loaded. It is a good place to
+record revent here to modify the game settings and get it ready
+to start.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">run:</th><td class="field-body">This stage is where the game actually starts. This will allow for
+more accurate results if the revent file for this stage only
+records the game being played.</td>
+</tr>
+</tbody>
+</table>
+</div></blockquote>
+<p>For instance, to add a custom revent files for a device named mydevice and
+a workload name mygame, you create a new directory called mygame in
+&#8216;~/.workload_automation/dependencies/&#8217;. Then you add the revent files for
+the stages you want in ~/.workload_automation/dependencies/mygame/:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">mydevice</span><span class="o">.</span><span class="n">setup</span><span class="o">.</span><span class="n">revent</span>
+<span class="n">mydevice</span><span class="o">.</span><span class="n">run</span><span class="o">.</span><span class="n">revent</span>
+</pre></div>
+</div>
+<p>Any revent file in the dependencies will always overwrite the revent file in the
+workload directory. So it is possible for example to just provide one revent for
+setup in the dependencies and use the run.revent that is in the workload directory.</p>
+</div>
+</div>
+<div class="section" id="adding-an-instrument">
+<h2>Adding an Instrument<a class="headerlink" href="#adding-an-instrument" title="Permalink to this headline">¶</a></h2>
+<p>Instruments can be used to collect additional measurements during workload
+execution (e.g. collect power readings). An instrument can hook into almost any
+stage of workload execution. A typical instrument would implement a subset of
+the following interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Instrument</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+<p>This is similar to a Workload, except all methods are optional. In addition to
+the workload-like methods, instruments can define a number of other methods that
+will get invoked at various points during run execution. The most useful of
+which is perhaps <code class="docutils literal"><span class="pre">initialize</span></code> that gets invoked after the device has been
+initialised for the first time, and can be used to perform one-time setup (e.g.
+copying files to the device &#8211; there is no point in doing that for each
+iteration). The full list of available methods can be found in
+<a class="reference internal" href="instrumentation_method_map.html#instrumentation-method-map"><span>Signals Documentation</span></a>.</p>
+<div class="section" id="prioritization">
+<h3>Prioritization<a class="headerlink" href="#prioritization" title="Permalink to this headline">¶</a></h3>
+<p>Callbacks (e.g. <code class="docutils literal"><span class="pre">setup()</span></code> methods) for all instrumentation get executed at the
+same point during workload execution, one after another. The order in which the
+callbacks get invoked should be considered arbitrary and should not be relied
+on (e.g. you cannot expect that just because instrument A is listed before
+instrument B in the config, instrument A&#8217;s callbacks will run first).</p>
+<p>In some cases (e.g. in <code class="docutils literal"><span class="pre">start()</span></code> and <code class="docutils literal"><span class="pre">stop()</span></code> methods), it is important to
+ensure that a particular instrument&#8217;s callbacks run a closely as possible to the
+workload&#8217;s invocations in order to maintain accuracy of readings; or,
+conversely, that a callback is executed after the others, because it takes a
+long time and may throw off the accuracy of other instrumentation. You can do
+this by prepending <code class="docutils literal"><span class="pre">fast_</span></code> or <code class="docutils literal"><span class="pre">slow_</span></code> to your callbacks&#8217; names. For
+example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">PreciseInstrument</span><span class="p">(</span><span class="n">Instument</span><span class="p">):</span>
+
+    <span class="c"># ...</span>
+
+    <span class="k">def</span> <span class="nf">fast_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">fast_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="c"># ...</span>
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">PreciseInstrument</span></code> will be started after all other instrumentation (i.e.
+<em>just</em> before the workload runs), and it will stopped before all other
+instrumentation (i.e. <em>just</em> after the workload runs). It is also possible to
+use <code class="docutils literal"><span class="pre">very_fast_</span></code> and <code class="docutils literal"><span class="pre">very_slow_</span></code> prefixes when you want to be really
+sure that your callback will be the last/first to run.</p>
+<p>If more than one active instrument have specified fast (or slow) callbacks, then
+their execution order with respect to each other is not guaranteed. In general,
+having a lot of instrumentation enabled is going to necessarily affect the
+readings. The best way to ensure accuracy of measurements is to minimize the
+number of active instruments (perhaps doing several identical runs with
+different instruments enabled).</p>
+</div>
+<div class="section" id="id3">
+<h3>Example<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h3>
+<p>Below is a simple instrument that measures the execution time of a workload:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">ExecutionTimeInstrument</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Measure how long it took to execute the run() methods of a Workload.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;execution_time&#39;</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">end_time</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">fast_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">fast_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">execution_time</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_time</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;execution_time&#39;</span><span class="p">,</span> <span class="n">execution_time</span><span class="p">,</span> <span class="s">&#39;seconds&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="adding-a-result-processor">
+<h2>Adding a Result Processor<a class="headerlink" href="#adding-a-result-processor" title="Permalink to this headline">¶</a></h2>
+<p>A result processor is responsible for processing the results. This may
+involve formatting and writing them to a file, uploading them to a database,
+generating plots, etc. WA comes with a few result processors that output
+results in a few common formats (such as csv or JSON).</p>
+<p>You can add your own result processors by creating a Python file in
+<code class="docutils literal"><span class="pre">~/.workload_automation/result_processors</span></code> with a class that derives from
+<a class="reference internal" href="api/wlauto.core.html#wlauto.core.result.ResultProcessor" title="wlauto.core.result.ResultProcessor"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.result.ResultProcessor</span></code></a>, which has the following interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">ResultProcessor</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">process_iteration_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">export_iteration_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">process_run_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">export_run_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="k">pass</span>
+</pre></div>
+</div>
+<p>The method names should be fairly self-explanatory. The difference between
+&#8220;process&#8221; and &#8220;export&#8221; methods is that export methods will be invoke after
+process methods for all result processors have been generated. Process methods
+may generated additional artifacts (metrics, files, etc), while export methods
+should not &#8211; the should only handle existing results (upload them to  a
+database, archive on a filer, etc).</p>
+<p>The result object passed to iteration methods is an instance of
+<a class="reference internal" href="api/wlauto.core.html#wlauto.core.result.IterationResult" title="wlauto.core.result.IterationResult"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.result.IterationResult</span></code></a>, the result object passed to run
+methods is an instance of <a class="reference internal" href="api/wlauto.core.html#wlauto.core.result.RunResult" title="wlauto.core.result.RunResult"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.result.RunResult</span></code></a>. Please refer to
+their API documentation for details.</p>
+<div class="section" id="id4">
+<h3>Example<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h3>
+<p>Here is an example result processor that formats the results as a column-aligned
+table:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">ResultProcessor</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">write_table</span>
+
+
+<span class="k">class</span> <span class="nc">Table</span><span class="p">(</span><span class="n">ResultProcessor</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;table&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&#39;Gerates a text file containing a column-aligned table with run results.&#39;</span>
+
+    <span class="k">def</span> <span class="nf">process_run_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">iteration_result</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">iteration_results</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">metric</span> <span class="ow">in</span> <span class="n">iteration_result</span><span class="o">.</span><span class="n">metrics</span><span class="p">:</span>
+                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">metric</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">metric</span><span class="o">.</span><span class="n">value</span><span class="p">),</span> <span class="n">metric</span><span class="o">.</span><span class="n">units</span> <span class="ow">or</span> <span class="s">&#39;&#39;</span><span class="p">,</span>
+                            <span class="n">metric</span><span class="o">.</span><span class="n">lower_is_better</span>  <span class="ow">and</span> <span class="s">&#39;-&#39;</span> <span class="ow">or</span> <span class="s">&#39;+&#39;</span><span class="p">])</span>
+
+        <span class="n">outfile</span> <span class="o">=</span>  <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;table.txt&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">outfile</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">write_table</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">wfh</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="adding-a-resource-getter">
+<h2>Adding a Resource Getter<a class="headerlink" href="#adding-a-resource-getter" title="Permalink to this headline">¶</a></h2>
+<p>A resource getter is a new extension type added in version 2.1.3. A resource
+getter implement a method of acquiring resources of a particular type (such as
+APK files or additional workload assets). Resource getters are invoked in
+priority order until one returns the desired resource.</p>
+<p>If you want WA to look for resources somewhere it doesn&#8217;t by default (e.g. you
+have a repository of APK files), you can implement a getter for the resource and
+register it with a higher priority than the standard WA getters, so that it gets
+invoked first.</p>
+<p>Instances of a resource getter should implement the following interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">ResourceGetter</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">priority</span> <span class="o">=</span> <span class="n">GetterPriority</span><span class="o">.</span><span class="n">environment</span>
+
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The getter should define a name (as with all extensions), a resource
+type, which should be a string, e.g. <code class="docutils literal"><span class="pre">'jar'</span></code>, and a priority (see <a class="reference internal" href="#getter-prioritization">Getter
+Prioritization</a> below). In addition, <code class="docutils literal"><span class="pre">get</span></code> method should be implemented. The
+first argument is an instance of <a class="reference internal" href="api/wlauto.core.html#wlauto.core.resource.Resource" title="wlauto.core.resource.Resource"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.resource.Resource</span></code></a>
+representing the resource that should be obtained. Additional keyword
+arguments may be used by the invoker to provide additional information about
+the resource. This method should return an instance of the resource that
+has been discovered (what &#8220;instance&#8221; means depends on the resource, e.g. it
+could be a file path), or <code class="docutils literal"><span class="pre">None</span></code> if this getter was unable to discover
+that resource.</p>
+<div class="section" id="getter-prioritization">
+<h3>Getter Prioritization<a class="headerlink" href="#getter-prioritization" title="Permalink to this headline">¶</a></h3>
+<p>A priority is an integer with higher numeric values indicating a higher
+priority. The following standard priority aliases are defined for getters:</p>
+<blockquote>
+<div><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">cached:</th><td class="field-body">The cached version of the resource. Look here first. This priority also implies
+that the resource at this location is a &#8220;cache&#8221; and is not the only version of the
+resource, so it may be cleared without losing access to the resource.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">preferred:</th><td class="field-body">Take this resource in favour of the environment resource.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">environment:</th><td class="field-body">Found somewhere under ~/.workload_automation/ or equivalent, or
+from environment variables, external configuration files, etc.
+These will override resource supplied with the package.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">package:</th><td class="field-body">Resource provided with the package.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">remote:</th><td class="field-body">Resource will be downloaded from a remote location (such as an HTTP server
+or a samba share). Try this only if no other getter was successful.</td>
+</tr>
+</tbody>
+</table>
+</div></blockquote>
+<p>These priorities are defined as class members of
+<a class="reference internal" href="api/wlauto.core.html#wlauto.core.resource.GetterPriority" title="wlauto.core.resource.GetterPriority"><code class="xref py py-class docutils literal"><span class="pre">wlauto.core.resource.GetterPriority</span></code></a>, e.g. <code class="docutils literal"><span class="pre">GetterPriority.cached</span></code>.</p>
+<p>Most getters in WA will be registered with either <code class="docutils literal"><span class="pre">environment</span></code> or
+<code class="docutils literal"><span class="pre">package</span></code> priorities. So if you want your getter to override the default, it
+should typically be registered as <code class="docutils literal"><span class="pre">preferred</span></code>.</p>
+<p>You don&#8217;t have to stick to standard priority levels (though you should, unless
+there is a good reason). Any integer is a valid priority. The standard priorities
+range from -20 to 20 in increments of 10.</p>
+</div>
+<div class="section" id="id5">
+<h3>Example<a class="headerlink" href="#id5" title="Permalink to this headline">¶</a></h3>
+<p>The following is an implementation of a getter for a workload APK file that
+looks for the file under
+<code class="docutils literal"><span class="pre">~/.workload_automation/dependencies/&lt;workload_name&gt;</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">glob</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">ResourceGetter</span><span class="p">,</span> <span class="n">GetterPriority</span><span class="p">,</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ResourceError</span>
+
+
+<span class="k">class</span> <span class="nc">EnvironmentApkGetter</span><span class="p">(</span><span class="n">ResourceGetter</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span>  <span class="s">&#39;environment_apk&#39;</span>
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="s">&#39;apk&#39;</span>
+    <span class="n">priority</span> <span class="o">=</span> <span class="n">GetterPriority</span><span class="o">.</span><span class="n">environment</span>
+
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">resource_dir</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">dependency_directory</span><span class="p">,</span> <span class="n">resource</span><span class="o">.</span><span class="n">owner</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="n">version</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;version&#39;</span><span class="p">)</span>
+        <span class="n">found_files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">resource_dir</span><span class="p">,</span> <span class="s">&#39;*.apk&#39;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">version</span><span class="p">:</span>
+            <span class="n">found_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">ff</span> <span class="k">for</span> <span class="n">ff</span> <span class="ow">in</span> <span class="n">found_files</span> <span class="k">if</span> <span class="n">version</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">ff</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">found_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">found_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">found_files</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ResourceError</span><span class="p">(</span><span class="s">&#39;More than one .apk found in {} for {}.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">resource_dir</span><span class="p">,</span>
+                                                                                <span class="n">resource</span><span class="o">.</span><span class="n">owner</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="adding-a-device">
+<span id="id6"></span><h2>Adding a Device<a class="headerlink" href="#adding-a-device" title="Permalink to this headline">¶</a></h2>
+<p>At the moment, only Android devices are supported. Most of the functionality for
+interacting with a device is implemented in
+<code class="xref py py-class docutils literal"><span class="pre">wlauto.common.AndroidDevice</span></code> and is exposed through <code class="docutils literal"><span class="pre">generic_android</span></code>
+device interface, which should suffice for most purposes. The most common area
+where custom functionality may need to be implemented is during device
+initialization. Usually, once the device gets to the Android home screen, it&#8217;s
+just like any other Android device (modulo things like differences between
+Android versions).</p>
+<p>If your device doesn&#8217;t not work with <code class="docutils literal"><span class="pre">generic_device</span></code> interface and you need
+to write a custom interface to handle it, you would do that by subclassing
+<code class="docutils literal"><span class="pre">AndroidDevice</span></code> and then just overriding the methods you need. Typically you
+will want to override one or more of the following:</p>
+<dl class="docutils">
+<dt>reset</dt>
+<dd>Trigger a device reboot. The default implementation just sends <code class="docutils literal"><span class="pre">adb</span>
+<span class="pre">reboot</span></code> to the device. If this command does not work, an alternative
+implementation may need to be provided.</dd>
+<dt>hard_reset</dt>
+<dd>This is a harsher reset that involves cutting the power to a device
+(e.g. holding down power button or removing battery from a phone). The
+default implementation is a no-op that just sets some internal flags. If
+you&#8217;re dealing with unreliable prototype hardware that can crash and
+become unresponsive, you may want to implement this in order for WA to
+be able to recover automatically.</dd>
+<dt>connect</dt>
+<dd>When this method returns, adb connection to the device has been
+established. This gets invoked after a reset. The default implementation
+just waits for the device to appear in the adb list of connected
+devices. If this is not enough (e.g. your device is connected via
+Ethernet and requires an explicit <code class="docutils literal"><span class="pre">adb</span> <span class="pre">connect</span></code> call), you may wish to
+override this to perform the necessary actions before invoking the
+<code class="docutils literal"><span class="pre">AndroidDevice</span></code>s version.</dd>
+<dt>init</dt>
+<dd>This gets called once at the beginning of the run once the connection to
+the device has been established. There is no default implementation.
+It&#8217;s there to allow whatever custom initialisation may need to be
+performed for the device (setting properties, configuring services,
+etc).</dd>
+</dl>
+<p>Please refer to the API documentation for <code class="xref py py-class docutils literal"><span class="pre">wlauto.common.AndroidDevice</span></code>
+for the full list of its methods and their functionality.</p>
+</div>
+<div class="section" id="other-extension-types">
+<h2>Other Extension Types<a class="headerlink" href="#other-extension-types" title="Permalink to this headline">¶</a></h2>
+<p>In addition to extension types covered above, there are few other, more
+specialized ones. They will not be covered in as much detail. Most of them
+expose relatively simple interfaces with only a couple of methods and it is
+expected that if the need arises to extend them, the API-level documentation
+that accompanies them, in addition to what has been outlined here, should
+provide enough guidance.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">commands:</th><td class="field-body">This allows extending WA with additional sub-commands (to supplement
+exiting ones outlined in the <a class="reference internal" href="invocation.html#invocation"><span>Commands</span></a> section).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">modules:</th><td class="field-body">Modules are &#8220;extensions for extensions&#8221;. They can be loaded by other
+extensions to expand their functionality (for example, a flashing
+module maybe loaded by a device in order to support flashing).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="packaging-your-extensions">
+<h2>Packaging Your Extensions<a class="headerlink" href="#packaging-your-extensions" title="Permalink to this headline">¶</a></h2>
+<p>If your have written a bunch of extensions, and you want to make it easy to
+deploy them to new systems and/or to update them on existing systems, you can
+wrap them in a Python package. You can use <code class="docutils literal"><span class="pre">wa</span> <span class="pre">create</span> <span class="pre">package</span></code> command to
+generate appropriate boiler plate. This will create a <code class="docutils literal"><span class="pre">setup.py</span></code> and a
+directory for your package that you can place your extensions into.</p>
+<p>For example, if you have a workload inside <code class="docutils literal"><span class="pre">my_workload.py</span></code> and a result
+processor in <code class="docutils literal"><span class="pre">my_result_processor.py</span></code>, and you want to package them as
+<code class="docutils literal"><span class="pre">my_wa_exts</span></code> package, first run the create command</p>
+<div class="highlight-python"><div class="highlight"><pre>wa create package my_wa_exts
+</pre></div>
+</div>
+<p>This will create a <code class="docutils literal"><span class="pre">my_wa_exts</span></code> directory which contains a
+<code class="docutils literal"><span class="pre">my_wa_exts/setup.py</span></code> and a subdirectory <code class="docutils literal"><span class="pre">my_wa_exts/my_wa_exts</span></code> which is
+the package directory for your extensions (you can rename the top-level
+<code class="docutils literal"><span class="pre">my_wa_exts</span></code> directory to anything you like &#8211; it&#8217;s just a &#8220;container&#8221; for the
+setup.py and the package directory). Once you have that, you can then copy your
+extensions into the package directory, creating
+<code class="docutils literal"><span class="pre">my_wa_exts/my_wa_exts/my_workload.py</span></code> and
+<code class="docutils literal"><span class="pre">my_wa_exts/my_wa_exts/my_result_processor.py</span></code>. If you have a lot of
+extensions, you might want to organize them into subpackages, but only the
+top-level package directory is created by default, and it is OK to have
+everything in there.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">When discovering extensions thorugh this mechanism, WA traveries the
+Python module/submodule tree, not the directory strucuter, therefore,
+if you are going to create subdirectories under the top level dictory
+created for you, it is important that your make sure they are valid
+Python packages; i.e.  each subdirectory must contain a __init__.py
+(even if blank) in order for the code in that directory and its
+subdirectories to be discoverable.</p>
+</div>
+<p>At this stage, you may want to edit <code class="docutils literal"><span class="pre">params</span></code> structure near the bottom of
+the <code class="docutils literal"><span class="pre">setup.py</span></code> to add correct author, license and contact information (see
+&#8220;Writing the Setup Script&#8221; section in standard Python documentation for
+details). You may also want to add a README and/or a COPYING file at the same
+level as the setup.py.  Once you have the contents of your package sorted,
+you can generate the package by running</p>
+<div class="highlight-python"><div class="highlight"><pre>cd my_wa_exts
+python setup.py sdist
+</pre></div>
+</div>
+<p>This  will generate <code class="docutils literal"><span class="pre">my_wa_exts/dist/my_wa_exts-0.0.1.tar.gz</span></code> package which
+can then be deployed on the target system with standard Python package
+management tools, e.g.</p>
+<div class="highlight-python"><div class="highlight"><pre>sudo pip  install my_wa_exts-0.0.1.tar.gz
+</pre></div>
+</div>
+<p>As part of the installation process, the setup.py in the package, will write the
+package&#8217;s name into <code class="docutils literal"><span class="pre">~/.workoad_automoation/packages</span></code>. This will tell WA that
+the package contains extension and it will load them next time it runs.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">There are no unistall hooks in <code class="docutils literal"><span class="pre">setuputils</span></code>,  so if you ever
+uninstall your WA extensions package, you will have to manually remove
+it from <code class="docutils literal"><span class="pre">~/.workload_automation/packages</span></code> otherwise WA will complain
+abou a missing package next time you try to run it.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Writing Extensions</a><ul>
+<li><a class="reference internal" href="#extension-basics">Extension Basics</a><ul>
+<li><a class="reference internal" href="#the-context">The Context</a></li>
+<li><a class="reference internal" href="#paths">Paths</a><ul>
+<li><a class="reference internal" href="#on-the-host">On the host</a></li>
+<li><a class="reference internal" href="#on-the-device">On the device</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#validation-and-cross-parameter-constraints">Validation and cross-parameter constraints</a></li>
+<li><a class="reference internal" href="#logging">Logging</a></li>
+<li><a class="reference internal" href="#documenting">Documenting</a></li>
+<li><a class="reference internal" href="#error-notification">Error Notification</a></li>
+<li><a class="reference internal" href="#utils">Utils</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#adding-a-workload">Adding a Workload</a><ul>
+<li><a class="reference internal" href="#example">Example</a></li>
+<li><a class="reference internal" href="#adding-revent-dependent-workload">Adding revent-dependent Workload:</a></li>
+<li><a class="reference internal" href="#id2">Example:</a></li>
+<li><a class="reference internal" href="#convention-for-naming-revent-files-for-wlauto-common-game-gameworkload">Convention for Naming revent Files for <code class="docutils literal"><span class="pre">wlauto.common.game.GameWorkload</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#adding-an-instrument">Adding an Instrument</a><ul>
+<li><a class="reference internal" href="#prioritization">Prioritization</a></li>
+<li><a class="reference internal" href="#id3">Example</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#adding-a-result-processor">Adding a Result Processor</a><ul>
+<li><a class="reference internal" href="#id4">Example</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#adding-a-resource-getter">Adding a Resource Getter</a><ul>
+<li><a class="reference internal" href="#getter-prioritization">Getter Prioritization</a></li>
+<li><a class="reference internal" href="#id5">Example</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#adding-a-device">Adding a Device</a></li>
+<li><a class="reference internal" href="#other-extension-types">Other Extension Types</a></li>
+<li><a class="reference internal" href="#packaging-your-extensions">Packaging Your Extensions</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="conventions.html"
+                        title="previous chapter">Conventions</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="execution_model.html"
+                        title="next chapter">Framework Overview</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/writing_extensions.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="execution_model.html" title="Framework Overview"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="conventions.html" title="Conventions"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

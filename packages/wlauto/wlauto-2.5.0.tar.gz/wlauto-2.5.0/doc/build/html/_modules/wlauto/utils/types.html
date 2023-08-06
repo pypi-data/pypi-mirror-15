@@ -1,0 +1,394 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.utils.types &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.utils.types</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Routines for doing various type conversions. These usually embody some higher-level</span>
+<span class="sd">semantics than are present in standard Python types (e.g. ``boolean`` will convert the</span>
+<span class="sd">string ``&quot;false&quot;`` to ``False``, where as non-empty strings are usually considered to be</span>
+<span class="sd">``True``).</span>
+
+<span class="sd">A lot of these are intened to stpecify type conversions declaratively in place like</span>
+<span class="sd">``Parameter``&#39;s ``kind`` argument. These are basically &quot;hacks&quot; around the fact that Python</span>
+<span class="sd">is not the best language to use for configuration.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">shlex</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">isiterable</span><span class="p">,</span> <span class="n">to_identifier</span>
+
+
+<div class="viewcode-block" id="identifier"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.identifier">[docs]</a><span class="k">def</span> <span class="nf">identifier</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts text to a valid Python identifier by replacing all</span>
+<span class="sd">    whitespace and punctuation.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">to_identifier</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="boolean"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.boolean">[docs]</a><span class="k">def</span> <span class="nf">boolean</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns bool represented by the value. This is different from</span>
+<span class="sd">    calling the builtin bool() in that it will interpret string representations.</span>
+<span class="sd">    e.g. boolean(&#39;0&#39;) and boolean(&#39;false&#39;) will both yield False.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">false_strings</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;0&#39;</span><span class="p">,</span> <span class="s">&#39;n&#39;</span><span class="p">,</span> <span class="s">&#39;no&#39;</span><span class="p">,</span> <span class="s">&#39;off&#39;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">false_strings</span> <span class="ow">or</span> <span class="s">&#39;false&#39;</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">False</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="integer"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.integer">[docs]</a><span class="k">def</span> <span class="nf">integer</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Handles conversions for string respresentations of binary, octal and hex.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="numeric"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.numeric">[docs]</a><span class="k">def</span> <span class="nf">numeric</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the value as number (int if possible, or float otherwise), or</span>
+<span class="sd">    raises ``ValueError`` if the specified ``value`` does not have a straight</span>
+<span class="sd">    forward numeric conversion.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">fvalue</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Not numeric: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">fvalue</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="n">fvalue</span><span class="p">):</span>
+        <span class="n">ivalue</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fvalue</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ivalue</span> <span class="o">==</span> <span class="n">fvalue</span><span class="p">:</span>  <span class="c"># yeah, yeah, I know. Whatever. This is best-effort.</span>
+            <span class="k">return</span> <span class="n">ivalue</span>
+    <span class="k">return</span> <span class="n">fvalue</span>
+
+</div>
+<div class="viewcode-block" id="list_of_strs"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.list_of_strs">[docs]</a><span class="k">def</span> <span class="nf">list_of_strs</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Value must be iterable. All elements will be converted to strings.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+</div>
+<span class="n">list_of_strings</span> <span class="o">=</span> <span class="n">list_of_strs</span>
+
+
+<div class="viewcode-block" id="list_of_ints"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.list_of_ints">[docs]</a><span class="k">def</span> <span class="nf">list_of_ints</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Value must be iterable. All elements will be converted to ``int``\ s.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+</div>
+<span class="n">list_of_integers</span> <span class="o">=</span> <span class="n">list_of_ints</span>
+
+
+<div class="viewcode-block" id="list_of_numbers"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.list_of_numbers">[docs]</a><span class="k">def</span> <span class="nf">list_of_numbers</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Value must be iterable. All elements will be converted to numbers (either ``ints`` or</span>
+<span class="sd">    ``float``\ s depending on the elements).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="n">numeric</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="list_of_bools"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.list_of_bools">[docs]</a><span class="k">def</span> <span class="nf">list_of_bools</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">interpret_strings</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Value must be iterable. All elements will be converted to ``bool``\ s.</span>
+
+<span class="sd">    .. note:: By default, ``boolean()`` conversion function will be used, which means that</span>
+<span class="sd">              strings like ``&quot;0&quot;`` or ``&quot;false&quot;`` will be interpreted as ``False``. If this</span>
+<span class="sd">              is undesirable, set ``interpret_strings`` to ``False``.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">interpret_strings</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="n">boolean</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="list_of"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.list_of">[docs]</a><span class="k">def</span> <span class="nf">list_of</span><span class="p">(</span><span class="n">type_</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generates a &quot;list of&quot; callable for the specified type. The callable</span>
+<span class="sd">    attempts to convert all elements in the passed value to the specifed</span>
+<span class="sd">    ``type_``, raising ``ValueError`` on error.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="nb">list</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">map</span><span class="p">(</span><span class="n">type_</span><span class="p">,</span> <span class="n">values</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="nb">list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">extend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="nb">list</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">map</span><span class="p">(</span><span class="n">type_</span><span class="p">,</span> <span class="n">other</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="nb">list</span><span class="o">.</span><span class="n">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">type_</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="s">&#39;list_of_{}s&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">type_</span><span class="o">.</span><span class="n">__name__</span><span class="p">),</span>
+                <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="p">),</span> <span class="p">{</span>
+                    <span class="s">&quot;__init__&quot;</span><span class="p">:</span> <span class="n">__init__</span><span class="p">,</span>
+                    <span class="s">&quot;__setitem__&quot;</span><span class="p">:</span> <span class="n">__setitem__</span><span class="p">,</span>
+                    <span class="s">&quot;append&quot;</span><span class="p">:</span> <span class="n">append</span><span class="p">,</span>
+                    <span class="s">&quot;extend&quot;</span><span class="p">:</span> <span class="n">extend</span><span class="p">,</span>
+    <span class="p">})</span>
+
+</div>
+<div class="viewcode-block" id="list_or_string"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.list_or_string">[docs]</a><span class="k">def</span> <span class="nf">list_or_string</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Converts the value into a list of strings. If the value is not iterable,</span>
+<span class="sd">    a one-element list with stringified value will be returned.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">value</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)]</span>
+
+</div>
+<div class="viewcode-block" id="list_or_caseless_string"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.list_or_caseless_string">[docs]</a><span class="k">def</span> <span class="nf">list_or_caseless_string</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Converts the value into a list of ``caseless_string``&#39;s. If the value is not iterable</span>
+<span class="sd">    a one-element list with stringified value will be returned.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">caseless_string</span><span class="p">(</span><span class="n">value</span><span class="p">)]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="n">caseless_string</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">caseless_string</span><span class="p">(</span><span class="n">value</span><span class="p">)]</span>
+
+</div>
+<div class="viewcode-block" id="list_or"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.list_or">[docs]</a><span class="k">def</span> <span class="nf">list_or</span><span class="p">(</span><span class="n">type_</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generator for &quot;list or&quot; types. These take either a single value or a list values</span>
+<span class="sd">    and return a list of the specfied ``type_`` performing the conversion on the value</span>
+<span class="sd">    (if a single value is specified) or each of the elemented of the specified list.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">list_type</span> <span class="o">=</span> <span class="n">list_of</span><span class="p">(</span><span class="n">type_</span><span class="p">)</span>
+
+    <span class="k">class</span> <span class="nc">list_or_type</span><span class="p">(</span><span class="n">list_type</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+            <span class="c"># pylint: disable=non-parent-init-called,super-init-not-called</span>
+            <span class="k">if</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+                <span class="n">list_type</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">list_type</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="p">[</span><span class="n">value</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">list_or_type</span>
+
+</div>
+<span class="n">list_or_integer</span> <span class="o">=</span> <span class="n">list_or</span><span class="p">(</span><span class="n">integer</span><span class="p">)</span>
+<span class="n">list_or_number</span> <span class="o">=</span> <span class="n">list_or</span><span class="p">(</span><span class="n">numeric</span><span class="p">)</span>
+<span class="n">list_or_bool</span> <span class="o">=</span> <span class="n">list_or</span><span class="p">(</span><span class="n">boolean</span><span class="p">)</span>
+
+
+<span class="n">regex_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="regex"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.regex">[docs]</a><span class="k">def</span> <span class="nf">regex</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Regular expression. If value is a string, it will be complied with no flags. If you</span>
+<span class="sd">    want to specify flags, value must be precompiled.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">regex_type</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+</div>
+<span class="n">__counters</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="reset_counter"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.reset_counter">[docs]</a><span class="k">def</span> <span class="nf">reset_counter</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">__counters</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+</div>
+<div class="viewcode-block" id="counter"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.counter">[docs]</a><span class="k">def</span> <span class="nf">counter</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    An auto incremeting value (kind of like an AUTO INCREMENT field in SQL).</span>
+<span class="sd">    Optionally, the name of the counter to be used is specified (each counter</span>
+<span class="sd">    increments separately).</span>
+
+<span class="sd">    Counts start at 1, not 0.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">__counters</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">value</span> <span class="o">=</span> <span class="n">__counters</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">value</span>
+
+</div>
+<div class="viewcode-block" id="caseless_string"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.caseless_string">[docs]</a><span class="k">class</span> <span class="nc">caseless_string</span><span class="p">(</span><span class="nb">str</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Just like built-in Python string except case-insensitive on comparisons. However, the</span>
+<span class="sd">    case is preserved otherwise.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+            <span class="n">other</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">other</span>
+
+    <span class="k">def</span> <span class="nf">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">__eq__</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__cmp__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">basestring</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+            <span class="n">other</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">cmp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">other</span><span class="p">)</span>
+
+<div class="viewcode-block" id="caseless_string.format"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.caseless_string.format">[docs]</a>    <span class="k">def</span> <span class="nf">format</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">caseless_string</span><span class="p">(</span><span class="nb">super</span><span class="p">(</span><span class="n">caseless_string</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+
+</div></div>
+<div class="viewcode-block" id="arguments"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.arguments">[docs]</a><span class="k">class</span> <span class="nc">arguments</span><span class="p">(</span><span class="nb">list</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Represents command line arguments to be passed to a program.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">arguments</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+            <span class="n">posix</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="s">&#39;nt&#39;</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">arguments</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">shlex</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">posix</span><span class="o">=</span><span class="n">posix</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">value</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">arguments</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">arguments</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)])</span>
+
+<div class="viewcode-block" id="arguments.append"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.arguments.append">[docs]</a>    <span class="k">def</span> <span class="nf">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">arguments</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="arguments.extend"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.types.arguments.extend">[docs]</a>    <span class="k">def</span> <span class="nf">extend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">arguments</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">values</span><span class="p">))</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

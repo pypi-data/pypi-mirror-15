@@ -1,0 +1,230 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.video &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.video</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101,E0203,W0201</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">urllib</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Workload</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Alias</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">WorkloadError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">ensure_directory_exists</span> <span class="k">as</span> <span class="n">_d</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span>
+
+<span class="n">DOWNLOAD_URLS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;1080p&#39;</span><span class="p">:</span> <span class="s">&#39;http://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_1080p_surround.avi&#39;</span><span class="p">,</span>
+    <span class="s">&#39;720p&#39;</span><span class="p">:</span> <span class="s">&#39;http://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_720p_surround.avi&#39;</span><span class="p">,</span>
+    <span class="s">&#39;480p&#39;</span><span class="p">:</span> <span class="s">&#39;http://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_480p_surround-fix.avi&#39;</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="VideoWorkload"><a class="viewcode-back" href="../../../api/wlauto.workloads.video.html#wlauto.workloads.video.VideoWorkload">[docs]</a><span class="k">class</span> <span class="nc">VideoWorkload</span><span class="p">(</span><span class="n">Workload</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;video&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Plays a video file using the standard android video player for a predetermined duration.</span>
+
+<span class="s">    The video can be specified either using ``resolution`` workload parameter, in which case</span>
+<span class="s">    `Big Buck Bunny`_ MP4 video of that resolution will be downloaded and used, or using</span>
+<span class="s">    ``filename`` parameter, in which case the video file specified will be used.</span>
+
+
+<span class="s">    .. _Big Buck Bunny: http://www.bigbuckbunny.org/</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">supported_platforms</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;android&#39;</span><span class="p">]</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;play_duration&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Playback duration of the video file. This become the duration of the workload.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;resolution&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;720p&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;480p&#39;</span><span class="p">,</span> <span class="s">&#39;720p&#39;</span><span class="p">,</span> <span class="s">&#39;1080p&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Specifies which resolution video file to play.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;filename&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                   The name of the video file to play. This can be either a path</span>
+<span class="s">                   to the file anywhere on your file system, or it could be just a</span>
+<span class="s">                   name, in which case, the workload will look for it in</span>
+<span class="s">                   ``~/.workloads_automation/dependency/video``</span>
+<span class="s">                   *Note*: either resolution or filename should be specified, but not both!</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;force_dependency_push&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  If true, video will always be pushed to device, regardless</span>
+<span class="s">                  of whether the file is already on the device.  Default is ``False``.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">aliases</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;video_720p&#39;</span><span class="p">,</span> <span class="n">resolution</span><span class="o">=</span><span class="s">&#39;720p&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;video_1080p&#39;</span><span class="p">,</span> <span class="n">resolution</span><span class="o">=</span><span class="s">&#39;1080p&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">host_video_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_file</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="s">&#39;./&#39;</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;:&#39;</span><span class="p">:</span>
+                    <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">video_directory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="s">&#39;{} does not exist.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_selected_file</span> <span class="o">=</span> <span class="n">filepath</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">video_files</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">resolution</span><span class="p">]</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">files</span><span class="p">:</span>
+                    <span class="n">url</span> <span class="o">=</span> <span class="n">DOWNLOAD_URLS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">resolution</span><span class="p">]</span>
+                    <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">video_directory</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">url</span><span class="p">))</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Downloading {}...&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+                    <span class="n">urllib</span><span class="o">.</span><span class="n">urlretrieve</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_selected_file</span> <span class="o">=</span> <span class="n">filepath</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_selected_file</span> <span class="o">=</span> <span class="n">files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">files</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Multiple files for 720p found. Using {}.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_selected_file</span><span class="p">))</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Use </span><span class="se">\&#39;</span><span class="s">filename</span><span class="se">\&#39;</span><span class="s">parameter instead of </span><span class="se">\&#39;</span><span class="s">resolution</span><span class="se">\&#39;</span><span class="s"> to specify a different file.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_file</span>
+
+<div class="viewcode-block" id="VideoWorkload.init_resources"><a class="viewcode-back" href="../../../api/wlauto.workloads.video.html#wlauto.workloads.video.VideoWorkload.init_resources">[docs]</a>    <span class="k">def</span> <span class="nf">init_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">video_directory</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">dependencies_directory</span><span class="p">,</span> <span class="s">&#39;video&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">video_files</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enum_video_files</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_selected_file</span> <span class="o">=</span> <span class="bp">None</span>
+</div>
+<div class="viewcode-block" id="VideoWorkload.setup"><a class="viewcode-back" href="../../../api/wlauto.workloads.video.html#wlauto.workloads.video.VideoWorkload.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">on_device_video_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_video_file</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">force_dependency_push</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">file_exists</span><span class="p">(</span><span class="n">on_device_video_file</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Copying {} to device.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_video_file</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">push_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_video_file</span><span class="p">,</span> <span class="n">on_device_video_file</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;am start -n  com.android.browser/.BrowserActivity about:blank&#39;</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;am force-stop com.android.browser&#39;</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">clear_logcat</span><span class="p">()</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;am start -W -S -n com.android.gallery3d/.app.MovieActivity -d {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_video_file</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="VideoWorkload.run"><a class="viewcode-back" href="../../../api/wlauto.workloads.video.html#wlauto.workloads.video.VideoWorkload.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">play_duration</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="VideoWorkload.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.video.html#wlauto.workloads.video.VideoWorkload.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;am force-stop com.android.gallery3d&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="VideoWorkload.teardown"><a class="viewcode-back" href="../../../api/wlauto.workloads.video.html#wlauto.workloads.video.VideoWorkload.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resolution</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resolution</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;resolution&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">default</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Ether resolution *or* filename must be specified; but not both.&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="VideoWorkload.enum_video_files"><a class="viewcode-back" href="../../../api/wlauto.workloads.video.html#wlauto.workloads.video.VideoWorkload.enum_video_files">[docs]</a>    <span class="k">def</span> <span class="nf">enum_video_files</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">video_directory</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">resolution</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;resolution&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">allowed_values</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">resolution</span> <span class="ow">in</span> <span class="n">filename</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">video_files</span><span class="p">[</span><span class="n">resolution</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">video_directory</span><span class="p">,</span> <span class="n">filename</span><span class="p">))</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

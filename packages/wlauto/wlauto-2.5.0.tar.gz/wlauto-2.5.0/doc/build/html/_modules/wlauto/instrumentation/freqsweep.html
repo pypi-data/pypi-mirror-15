@@ -1,0 +1,246 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.instrumentation.freqsweep &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="wlauto.instrumentation" href="../instrumentation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" accesskey="U">wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.instrumentation.freqsweep</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c"># pylint: disable=access-member-before-definition,attribute-defined-outside-init</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Instrument</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">InstrumentError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">merge_dicts</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">caseless_string</span>
+
+
+<div class="viewcode-block" id="FreqSweep"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.freqsweep.html#wlauto.instrumentation.freqsweep.FreqSweep">[docs]</a><span class="k">class</span> <span class="nc">FreqSweep</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;freq_sweep&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Sweeps workloads through all available frequencies on a device.</span>
+
+<span class="s">    When enabled this instrument will take all workloads specified in an agenda</span>
+<span class="s">    and run them at all available frequencies for all clusters.</span>
+
+<span class="s">    Recommendations:</span>
+<span class="s">        - Setting the runner to &#39;by_spec&#39; increases the chance of successfully</span>
+<span class="s">          completing an agenda without encountering hotplug issues</span>
+<span class="s">        - If possible disable dynamic hotplug on the target device</span>
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;sweeps&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">list</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  By default this instrument will sweep across all available</span>
+<span class="s">                  frequencies for all available clusters. If you wish to only</span>
+<span class="s">                  sweep across certain frequencies on particular clusters you</span>
+<span class="s">                  can do so by specifying this parameter.</span>
+
+<span class="s">                  Sweeps should be a lists of dictionaries that can contain:</span>
+<span class="s">                    - Cluster (mandatory): The name of the cluster this sweep will be</span>
+<span class="s">                                           performed on. E.g A7</span>
+<span class="s">                    - Frequencies: A list of frequencies (in KHz) to use. If this is</span>
+<span class="s">                                   not provided all frequencies available for this</span>
+<span class="s">                                   cluster will be used.</span>
+<span class="s">                                   E.g: [800000, 900000, 100000]</span>
+<span class="s">                    - label: Workload specs will be named &#39;{spec id}_{label}_{frequency}&#39;.</span>
+<span class="s">                             If a label is not provided it will be named &#39;sweep{sweep No.}&#39;</span>
+
+<span class="s">                 Example sweep specification:</span>
+
+<span class="s">                     freq_sweep:</span>
+<span class="s">                         sweeps:</span>
+<span class="s">                             - cluster: A53</span>
+<span class="s">                               label: littles</span>
+<span class="s">                               frequencies: [800000, 900000, 100000]</span>
+<span class="s">                             - cluster: A57</span>
+<span class="s">                               label: bigs</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;The Device does not appear to have core_names configured.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=r0912</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;The device must be rooted to sweep frequencies&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="s">&#39;userspace&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">list_available_cluster_governors</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&quot;&#39;userspace&#39; cpufreq governor must be enabled&quot;</span><span class="p">)</span>
+
+        <span class="c"># Create sweeps for each core type using num_cpus cores</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">sweeps</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sweeps</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">core</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">):</span>
+                <span class="n">sweep_spec</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">core</span>
+                <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;label&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">core</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sweeps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sweep_spec</span><span class="p">)</span>
+
+        <span class="n">new_specs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">old_specs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">context</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">job_queue</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">spec</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">old_specs</span><span class="p">:</span>
+                <span class="n">old_specs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">spec</span><span class="p">)</span>
+
+        <span class="c"># Validate sweeps, add missing sections and create workload specs</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">sweep_spec</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sweeps</span><span class="p">):</span>
+            <span class="k">if</span> <span class="s">&#39;cluster&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sweep_spec</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;cluster must be define for all sweeps&#39;</span><span class="p">)</span>
+            <span class="c"># Check if cluster exists on device</span>
+            <span class="k">if</span> <span class="n">caseless_string</span><span class="p">(</span><span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">])</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Only {} cores are present on this device, you specified {}&#39;</span>
+                                  <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">)),</span> <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">]))</span>
+
+            <span class="c"># Default to all available frequencies</span>
+            <span class="k">if</span> <span class="s">&#39;frequencies&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sweep_spec</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">enable_cpu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">]))</span>
+                <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;frequencies&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">list_available_core_frequencies</span><span class="p">(</span><span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">])</span>
+
+            <span class="c"># Check that given frequencies are valid of the core cluster</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">enable_cpu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">]))</span>
+                <span class="n">available_freqs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">list_available_core_frequencies</span><span class="p">(</span><span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">])</span>
+                <span class="k">for</span> <span class="n">freq</span> <span class="ow">in</span> <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;frequencies&#39;</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">freq</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_freqs</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Frequency {} is not supported by {} cores&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">]))</span>
+
+            <span class="c"># Add default labels</span>
+            <span class="k">if</span> <span class="s">&#39;label&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sweep_spec</span><span class="p">:</span>
+                <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;label&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;sweep{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">new_specs</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_sweep_workload_specs</span><span class="p">(</span><span class="n">old_specs</span><span class="p">,</span> <span class="n">sweep_spec</span><span class="p">,</span> <span class="n">context</span><span class="p">))</span>
+
+        <span class="c"># Update config to refect jobs that will actually run.</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span> <span class="o">=</span> <span class="n">new_specs</span>
+        <span class="n">config_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="s">&#39;run_config.json&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">config_file</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="n">wfh</span><span class="p">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">init_queue</span><span class="p">(</span><span class="n">new_specs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="FreqSweep.get_sweep_workload_specs"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.freqsweep.html#wlauto.instrumentation.freqsweep.FreqSweep.get_sweep_workload_specs">[docs]</a>    <span class="k">def</span> <span class="nf">get_sweep_workload_specs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">old_specs</span><span class="p">,</span> <span class="n">sweep_spec</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">new_specs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">old_spec</span> <span class="ow">in</span> <span class="n">old_specs</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">freq</span> <span class="ow">in</span> <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;frequencies&#39;</span><span class="p">]:</span>
+                <span class="n">spec</span> <span class="o">=</span> <span class="n">old_spec</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="k">if</span> <span class="s">&#39;runtime_params&#39;</span> <span class="ow">in</span> <span class="n">sweep_spec</span><span class="p">:</span>
+                    <span class="n">spec</span><span class="o">.</span><span class="n">runtime_parameters</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">,</span>
+                                                          <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;runtime_params&#39;</span><span class="p">],</span>
+                                                          <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">)</span>
+                <span class="k">if</span> <span class="s">&#39;workload_params&#39;</span> <span class="ow">in</span> <span class="n">sweep_spec</span><span class="p">:</span>
+                    <span class="n">spec</span><span class="o">.</span><span class="n">workload_parameters</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">workload_parameters</span><span class="p">,</span>
+                                                           <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;workload_params&#39;</span><span class="p">],</span>
+                                                           <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">)</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">[</span><span class="s">&#39;{}_governor&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">])]</span> <span class="o">=</span> <span class="s">&quot;userspace&quot;</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">[</span><span class="s">&#39;{}_frequency&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">])]</span> <span class="o">=</span> <span class="n">freq</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="s">&#39;{}_{}_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;label&#39;</span><span class="p">],</span> <span class="n">freq</span><span class="p">)</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">classifiers</span><span class="p">[</span><span class="s">&#39;core&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sweep_spec</span><span class="p">[</span><span class="s">&#39;cluster&#39;</span><span class="p">]</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">classifiers</span><span class="p">[</span><span class="s">&#39;freq&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">freq</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">ext_loader</span><span class="p">)</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">workload</span><span class="o">.</span><span class="n">init_resources</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">workload</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+                <span class="n">new_specs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_specs</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" >wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

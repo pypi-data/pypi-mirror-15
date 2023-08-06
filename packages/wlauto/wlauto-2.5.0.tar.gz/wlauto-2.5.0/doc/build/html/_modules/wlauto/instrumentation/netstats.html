@@ -1,0 +1,286 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.instrumentation.netstats &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="wlauto.instrumentation" href="../instrumentation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" accesskey="U">wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.instrumentation.netstats</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">csv</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">izip_longest</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Instrument</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">ApkFile</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">DeviceError</span><span class="p">,</span> <span class="n">HostError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.android</span> <span class="kn">import</span> <span class="n">ApkInfo</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">list_of_strings</span>
+
+
+<span class="n">THIS_DIR</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+
+<span class="n">NETSTAT_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;I/(?P&lt;tag&gt;netstats-\d+)\(\s*\d*\): (?P&lt;ts&gt;\d+) &#39;</span>
+                           <span class="s">r&#39;&quot;(?P&lt;package&gt;[^&quot;]+)&quot; TX: (?P&lt;tx&gt;\S+) RX: (?P&lt;rx&gt;\S+)&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="extract_netstats"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.extract_netstats">[docs]</a><span class="k">def</span> <span class="nf">extract_netstats</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">netstats</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">NETSTAT_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">tag</span> <span class="ow">and</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;tag&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">tag</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">netstats</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;tag&#39;</span><span class="p">),</span>
+                             <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;ts&#39;</span><span class="p">),</span>
+                             <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;package&#39;</span><span class="p">),</span>
+                             <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;tx&#39;</span><span class="p">),</span>
+                             <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;rx&#39;</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">netstats</span>
+
+</div>
+<div class="viewcode-block" id="netstats_to_measurements"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.netstats_to_measurements">[docs]</a><span class="k">def</span> <span class="nf">netstats_to_measurements</span><span class="p">(</span><span class="n">netstats</span><span class="p">):</span>
+    <span class="n">measurements</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">netstats</span><span class="p">:</span>
+        <span class="n">tag</span><span class="p">,</span> <span class="n">ts</span><span class="p">,</span> <span class="n">package</span><span class="p">,</span> <span class="n">tx</span><span class="p">,</span> <span class="n">rx</span> <span class="o">=</span> <span class="n">row</span>  <span class="c"># pylint: disable=unused-variable</span>
+        <span class="n">measurements</span><span class="p">[</span><span class="n">package</span> <span class="o">+</span> <span class="s">&#39;_tx&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tx</span><span class="p">)</span>
+        <span class="n">measurements</span><span class="p">[</span><span class="n">package</span> <span class="o">+</span> <span class="s">&#39;_rx&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rx</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">measurements</span>
+
+</div>
+<div class="viewcode-block" id="write_measurements_csv"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.write_measurements_csv">[docs]</a><span class="k">def</span> <span class="nf">write_measurements_csv</span><span class="p">(</span><span class="n">measurements</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+    <span class="n">headers</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">measurements</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">measurements</span><span class="p">[</span><span class="n">h</span><span class="p">]</span> <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">headers</span><span class="p">]</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+        <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">wfh</span><span class="p">)</span>
+        <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">headers</span><span class="p">)</span>
+        <span class="n">writer</span><span class="o">.</span><span class="n">writerows</span><span class="p">(</span><span class="n">izip_longest</span><span class="p">(</span><span class="o">*</span><span class="n">columns</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="NetstatsCollector"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsCollector">[docs]</a><span class="k">class</span> <span class="nc">NetstatsCollector</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">apk</span><span class="p">,</span> <span class="n">service</span><span class="o">=</span><span class="s">&#39;.TrafficMetricsService&#39;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Additional paramerter:</span>
+
+<span class="sd">        :apk: Path to the APK file that contains ``com.arm.devlab.netstats``</span>
+<span class="sd">              package. If not specified, it will be assumed that an APK with</span>
+<span class="sd">              name &quot;netstats.apk&quot; is located in the same directory as the</span>
+<span class="sd">              Python module for the instrument.</span>
+<span class="sd">        :service: Name of the service to be launched. This service must be</span>
+<span class="sd">                  present in the APK.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target</span> <span class="o">=</span> <span class="n">target</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">apk</span> <span class="o">=</span> <span class="n">apk</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;netstat&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">package</span> <span class="o">=</span> <span class="n">ApkInfo</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">apk</span><span class="p">)</span><span class="o">.</span><span class="n">package</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">service</span> <span class="o">=</span> <span class="n">service</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tag</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_command</span> <span class="o">=</span> <span class="s">&#39;am kill {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NetstatsCollector.setup"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsCollector.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">package_is_installed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">force</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Re-installing {} (forced)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">uninstall</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">apk</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;{} already present on target&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Deploying {} to target&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">apk</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="NetstatsCollector.reset"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsCollector.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sites</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">period_arg</span><span class="p">,</span> <span class="n">packages_arg</span> <span class="o">=</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tag</span> <span class="o">=</span> <span class="s">&#39;netstats-{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s">&#39;%Y%m</span><span class="si">%d</span><span class="s">%H%M</span><span class="si">%s</span><span class="s">&#39;</span><span class="p">))</span>
+        <span class="n">tag_arg</span> <span class="o">=</span> <span class="s">&#39; --es tag {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tag</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">sites</span><span class="p">:</span>
+            <span class="n">packages_arg</span> <span class="o">=</span> <span class="s">&#39; --es packages {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sites</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">period</span><span class="p">:</span>
+            <span class="n">period_arg</span> <span class="o">=</span> <span class="s">&#39; --ei period {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">period</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="s">&#39;am startservice{}{}{} {}/{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">tag_arg</span><span class="p">,</span>
+                                                            <span class="n">period_arg</span><span class="p">,</span>
+                                                            <span class="n">packages_arg</span><span class="p">,</span>
+                                                            <span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">,</span>
+                                                            <span class="bp">self</span><span class="o">.</span><span class="n">service</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stop_command</span><span class="p">)</span>  <span class="c"># ensure the service is not running.</span>
+</div>
+<div class="viewcode-block" id="NetstatsCollector.start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsCollector.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;reset() must be called before start()&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="NetstatsCollector.stop"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsCollector.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stop_command</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="NetstatsCollector.get_data"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsCollector.get_data">[docs]</a>    <span class="k">def</span> <span class="nf">get_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outfile</span><span class="p">):</span>
+        <span class="n">raw_log_file</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mktemp</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">dump_logcat</span><span class="p">(</span><span class="n">raw_log_file</span><span class="p">)</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">extract_netstats</span><span class="p">(</span><span class="n">raw_log_file</span><span class="p">)</span>
+        <span class="n">measurements</span> <span class="o">=</span> <span class="n">netstats_to_measurements</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">write_measurements_csv</span><span class="p">(</span><span class="n">measurements</span><span class="p">,</span> <span class="n">outfile</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">raw_log_file</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="NetstatsCollector.teardown"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsCollector.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">uninstall</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="NetstatsInstrument"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsInstrument">[docs]</a><span class="k">class</span> <span class="nc">NetstatsInstrument</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+    <span class="c"># pylint: disable=unused-argument</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;netstats&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Measures transmit/receive network traffic on an Android divice on per-package</span>
+<span class="s">    basis.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;packages&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">list_of_strings</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  List of Android packages who&#39;s traffic will be monitored. If</span>
+<span class="s">                  unspecified, all packages in the device will be monitorred.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;period&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Polling period for instrumentation on the device. Traffic statistics</span>
+<span class="s">                  will be updated every ``period`` seconds.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;force_reinstall&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  If ``True``, instrumentation APK will always be re-installed even if</span>
+<span class="s">                  it already installed on the device.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;uninstall_on_completion&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;cleanup&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  If ``True``, instrumentation will be uninstalled upon run completion.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">platform</span> <span class="o">!=</span> <span class="s">&#39;android&#39;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;nestats instrument only supports on Android devices.&#39;</span><span class="p">)</span>
+        <span class="n">apk</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">ApkFile</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collector</span> <span class="o">=</span> <span class="n">NetstatsCollector</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">apk</span><span class="p">)</span>  <span class="c"># pylint: disable=attribute-defined-outside-init</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">force</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">force_reinstall</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NetstatsInstrument.setup"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsInstrument.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">sites</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">packages</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">period</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="NetstatsInstrument.start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsInstrument.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="NetstatsInstrument.stop"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsInstrument.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="NetstatsInstrument.update_result"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.netstats.html#wlauto.instrumentation.netstats.NetstatsInstrument.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;netstats.csv&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">outfile</span><span class="p">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;netstats&#39;</span><span class="p">,</span> <span class="n">outfile</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">outfile</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">reader</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+            <span class="n">metrics</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">izip_longest</span><span class="p">(</span><span class="o">*</span><span class="nb">list</span><span class="p">(</span><span class="n">reader</span><span class="p">))]</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span> <span class="k">if</span> <span class="n">v</span><span class="p">]))</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s">&#39;bytes&#39;</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">uninstall_on_completion</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">collector</span><span class="o">.</span><span class="n">teardown</span><span class="p">()</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" >wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

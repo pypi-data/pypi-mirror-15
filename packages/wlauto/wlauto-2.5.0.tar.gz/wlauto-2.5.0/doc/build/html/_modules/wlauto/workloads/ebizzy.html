@@ -1,0 +1,185 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.ebizzy &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.ebizzy</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2012-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+
+<span class="c"># pylint: disable=W0201, C0103</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Workload</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Executable</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="n">results_txt</span> <span class="o">=</span> <span class="s">&#39;ebizzy_results.txt&#39;</span>
+<span class="n">record_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;(?P&lt;record&gt;\d+) records/s&#39;</span><span class="p">)</span>
+<span class="n">result_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;(?P&lt;metric&gt;\D+)(?P&lt;value&gt;\d+.*\b)(?P&lt;unit&gt;\S+)&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Ebizzy"><a class="viewcode-back" href="../../../api/wlauto.workloads.ebizzy.html#wlauto.workloads.ebizzy.Ebizzy">[docs]</a><span class="k">class</span> <span class="nc">Ebizzy</span><span class="p">(</span><span class="n">Workload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;ebizzy&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    ebizzy is designed to generate a workload resembling common web</span>
+<span class="s">    application server workloads.  It is highly threaded, has a large in-memory</span>
+<span class="s">    working set with low locality, and allocates and deallocates memory frequently.</span>
+<span class="s">    When running most efficiently, it will max out the CPU.</span>
+
+<span class="s">    ebizzy description taken from the source code at</span>
+<span class="s">    https://github.com/linux-test-project/ltp/tree/master/utils/benchmark/ebizzy-0.3</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="c"># Workload parameters go here e.g.</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;threads&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&#39;Number of threads to execute.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;seconds&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&#39;Number of seconds.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;chunks&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Number of memory chunks to allocate.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;extra_params&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Extra parameters to pass in (e.g. -M to disable mmap).&#39;</span>
+                              <span class="s">&#39; See ebizzy -? for full list of options.&#39;</span><span class="p">)</span>
+    <span class="p">]</span>
+
+<div class="viewcode-block" id="Ebizzy.setup"><a class="viewcode-back" href="../../../api/wlauto.workloads.ebizzy.html#wlauto.workloads.ebizzy.Ebizzy.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">timeout_buf</span> <span class="o">=</span> <span class="mi">10</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="s">&#39;{} -t {} -S {} -n {} {} &gt; {}&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ebizzy_results</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">results_txt</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_binary</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_timeout</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seconds</span> <span class="o">+</span> <span class="n">timeout_buf</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">binary_name</span> <span class="o">=</span> <span class="s">&#39;ebizzy&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">is_installed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">binary_name</span><span class="p">):</span>
+            <span class="n">host_binary</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Executable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">abi</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">binary_name</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device_binary</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="n">host_binary</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device_binary</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">binary_name</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device_binary</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">threads</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">seconds</span><span class="p">,</span>
+                                           <span class="bp">self</span><span class="o">.</span><span class="n">chunks</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">extra_params</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ebizzy_results</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Ebizzy.run"><a class="viewcode-back" href="../../../api/wlauto.workloads.ebizzy.html#wlauto.workloads.ebizzy.Ebizzy.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run_timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Ebizzy.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.ebizzy.html#wlauto.workloads.ebizzy.Ebizzy.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ebizzy_results</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">results_txt</span><span class="p">))</span> <span class="k">as</span> <span class="n">ebizzy_file</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">ebizzy_file</span><span class="p">:</span>
+                <span class="n">record_match</span> <span class="o">=</span> <span class="n">record_regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">record_match</span><span class="p">:</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;total_recs&#39;</span><span class="p">,</span> <span class="n">record_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;record&#39;</span><span class="p">),</span>
+                                              <span class="s">&#39;records/s&#39;</span><span class="p">)</span>
+
+                <span class="n">results_match</span> <span class="o">=</span> <span class="n">result_regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">results_match</span><span class="p">:</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">results_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;metric&#39;</span><span class="p">),</span>
+                                              <span class="n">results_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;value&#39;</span><span class="p">),</span>
+                                              <span class="n">results_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;unit&#39;</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Ebizzy.teardown"><a class="viewcode-back" href="../../../api/wlauto.workloads.ebizzy.html#wlauto.workloads.ebizzy.Ebizzy.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">uninstall_executable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device_binary</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

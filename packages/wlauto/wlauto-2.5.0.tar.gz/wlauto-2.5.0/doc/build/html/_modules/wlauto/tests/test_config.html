@@ -1,0 +1,291 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.tests.test_config &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.tests.test_config</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="c"># pylint: disable=E0611,R0201</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">unittest</span> <span class="kn">import</span> <span class="n">TestCase</span>
+
+<span class="kn">from</span> <span class="nn">nose.tools</span> <span class="kn">import</span> <span class="n">assert_equal</span><span class="p">,</span> <span class="n">assert_in</span><span class="p">,</span> <span class="n">raises</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.core.bootstrap</span> <span class="kn">import</span> <span class="n">ConfigLoader</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.agenda</span> <span class="kn">import</span> <span class="n">AgendaWorkloadEntry</span><span class="p">,</span> <span class="n">AgendaGlobalEntry</span><span class="p">,</span> <span class="n">Agenda</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.configuration</span> <span class="kn">import</span> <span class="n">RunConfiguration</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span>
+
+
+<span class="n">DATA_DIR</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">),</span> <span class="s">&#39;data&#39;</span><span class="p">)</span>
+
+<span class="n">BAD_CONFIG_TEXT</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;device = &#39;TEST</span>
+<span class="s">device_config = &#39;TEST-CONFIG&#39;&quot;&quot;&quot;</span>
+
+
+<span class="n">LIST_PARAMS_AGENDA_TEXT</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">config:</span>
+<span class="s">    instrumentation: [list_params]</span>
+<span class="s">    list_params:</span>
+<span class="s">        param: [0.1, 0.1, 0.1]</span>
+<span class="s">workloads:</span>
+<span class="s">    - dhrystone</span>
+<span class="s">&quot;&quot;&quot;</span>
+
+<span class="n">INSTRUMENTATION_AGENDA_TEXT</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">config:</span>
+<span class="s">    instrumentation: [execution_time]</span>
+<span class="s">workloads:</span>
+<span class="s">    - dhrystone</span>
+<span class="s">    - name: angrybirds</span>
+<span class="s">      instrumentation: [fsp]</span>
+<span class="s">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MockExtensionLoader"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.MockExtensionLoader">[docs]</a><span class="k">class</span> <span class="nc">MockExtensionLoader</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_param_aliases</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;defaults_workload&#39;</span><span class="p">:</span> <span class="n">DefaultsWorkload</span><span class="p">(),</span>
+            <span class="s">&#39;list_params&#39;</span><span class="p">:</span> <span class="n">ListParamstrument</span><span class="p">(),</span>
+        <span class="p">}</span>
+
+<div class="viewcode-block" id="MockExtensionLoader.get_extension_class"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.MockExtensionLoader.get_extension_class">[docs]</a>    <span class="k">def</span> <span class="nf">get_extension_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>  <span class="c"># pylint: disable=unused-argument</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">NamedMock</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="MockExtensionLoader.resolve_alias"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.MockExtensionLoader.resolve_alias">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_alias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">name</span><span class="p">,</span> <span class="p">{}</span>
+</div>
+<div class="viewcode-block" id="MockExtensionLoader.get_default_config"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.MockExtensionLoader.get_default_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_default_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>  <span class="c"># pylint: disable=unused-argument</span>
+        <span class="n">ec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_extension_class</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">default</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ec</span><span class="o">.</span><span class="n">parameters</span><span class="p">}</span>
+</div>
+<div class="viewcode-block" id="MockExtensionLoader.has_extension"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.MockExtensionLoader.has_extension">[docs]</a>    <span class="k">def</span> <span class="nf">has_extension</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span> <span class="ow">or</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span>
+
+</div></div>
+<div class="viewcode-block" id="MockAgenda"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.MockAgenda">[docs]</a><span class="k">class</span> <span class="nc">MockAgenda</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_</span> <span class="o">=</span> <span class="n">AgendaGlobalEntry</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sections</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workloads</span> <span class="o">=</span> <span class="n">args</span>
+
+</div>
+<div class="viewcode-block" id="NamedMock"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.NamedMock">[docs]</a><span class="k">class</span> <span class="nc">NamedMock</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__attrs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;global_alias&#39;</span><span class="p">:</span> <span class="bp">None</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__attrs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__attrs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">NamedMock</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__attrs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="DefaultsWorkload"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.DefaultsWorkload">[docs]</a><span class="k">class</span> <span class="nc">DefaultsWorkload</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#39;defaults_workload&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span><span class="n">NamedMock</span><span class="p">(</span><span class="s">&#39;param&#39;</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">default</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="ListParamstrument"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ListParamstrument">[docs]</a><span class="k">class</span> <span class="nc">ListParamstrument</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#39;list_params&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span><span class="n">NamedMock</span><span class="p">(</span><span class="s">&#39;param&#39;</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">default</span> <span class="o">=</span> <span class="p">[]</span>
+
+</div>
+<div class="viewcode-block" id="ConfigLoaderTest"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigLoaderTest">[docs]</a><span class="k">class</span> <span class="nc">ConfigLoaderTest</span><span class="p">(</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ConfigLoaderTest.setUp"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigLoaderTest.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filepath</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mktemp</span><span class="p">()</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filepath</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">BAD_CONFIG_TEXT</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ConfigLoaderTest.test_load"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigLoaderTest.test_load">[docs]</a>    <span class="k">def</span> <span class="nf">test_load</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">test_cfg_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">DATA_DIR</span><span class="p">,</span> <span class="s">&#39;test-config.py&#39;</span><span class="p">)</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">ConfigLoader</span><span class="p">()</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">test_cfg_file</span><span class="p">)</span>
+        <span class="n">assert_equal</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="s">&#39;TEST&#39;</span><span class="p">)</span>
+</div>
+    <span class="nd">@raises</span><span class="p">(</span><span class="n">ConfigError</span><span class="p">)</span>
+<div class="viewcode-block" id="ConfigLoaderTest.test_load_bad"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigLoaderTest.test_load_bad">[docs]</a>    <span class="k">def</span> <span class="nf">test_load_bad</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">config_loader</span> <span class="o">=</span> <span class="n">ConfigLoader</span><span class="p">()</span>
+        <span class="n">config_loader</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filepath</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ConfigLoaderTest.test_load_duplicate"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigLoaderTest.test_load_duplicate">[docs]</a>    <span class="k">def</span> <span class="nf">test_load_duplicate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">config_loader</span> <span class="o">=</span> <span class="n">ConfigLoader</span><span class="p">()</span>
+        <span class="n">config_loader</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">instrumentation</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;test&#39;</span><span class="p">]))</span>
+        <span class="n">config_loader</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">instrumentation</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;test&#39;</span><span class="p">]))</span>
+        <span class="n">assert_equal</span><span class="p">(</span><span class="n">config_loader</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;test&#39;</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="ConfigLoaderTest.tearDown"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigLoaderTest.tearDown">[docs]</a>    <span class="k">def</span> <span class="nf">tearDown</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filepath</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="ConfigTest"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigTest">[docs]</a><span class="k">class</span> <span class="nc">ConfigTest</span><span class="p">(</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ConfigTest.setUp"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigTest.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">RunConfiguration</span><span class="p">(</span><span class="n">MockExtensionLoader</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">load_config</span><span class="p">({</span><span class="s">&#39;device&#39;</span><span class="p">:</span> <span class="s">&#39;MockDevice&#39;</span><span class="p">})</span>
+</div>
+<div class="viewcode-block" id="ConfigTest.test_case"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigTest.test_case">[docs]</a>    <span class="k">def</span> <span class="nf">test_case</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">devparams</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;sysfile_values&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;/sys/test/MyFile&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="s">&#39;/sys/test/other file&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="n">ws</span> <span class="o">=</span> <span class="n">AgendaWorkloadEntry</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s">&#39;a&#39;</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;linpack&#39;</span><span class="p">,</span> <span class="n">runtime_parameters</span><span class="o">=</span><span class="n">devparams</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_agenda</span><span class="p">(</span><span class="n">MockAgenda</span><span class="p">(</span><span class="n">ws</span><span class="p">))</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">assert_in</span><span class="p">(</span><span class="s">&#39;/sys/test/MyFile&#39;</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">[</span><span class="s">&#39;sysfile_values&#39;</span><span class="p">])</span>
+        <span class="n">assert_in</span><span class="p">(</span><span class="s">&#39;/sys/test/other file&#39;</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">[</span><span class="s">&#39;sysfile_values&#39;</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="ConfigTest.test_list_defaults_params"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigTest.test_list_defaults_params">[docs]</a>    <span class="k">def</span> <span class="nf">test_list_defaults_params</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">ws</span> <span class="o">=</span> <span class="n">AgendaWorkloadEntry</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s">&#39;a&#39;</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                                 <span class="n">name</span><span class="o">=</span><span class="s">&#39;defaults_workload&#39;</span><span class="p">,</span> <span class="n">workload_parameters</span><span class="o">=</span><span class="p">{</span><span class="s">&#39;param&#39;</span><span class="p">:[</span><span class="mi">3</span><span class="p">]})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_agenda</span><span class="p">(</span><span class="n">MockAgenda</span><span class="p">(</span><span class="n">ws</span><span class="p">))</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">assert_equal</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">workload_parameters</span><span class="p">,</span> <span class="p">{</span><span class="s">&#39;param&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">3</span><span class="p">]})</span>
+</div>
+<div class="viewcode-block" id="ConfigTest.test_exetension_params_lists"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigTest.test_exetension_params_lists">[docs]</a>    <span class="k">def</span> <span class="nf">test_exetension_params_lists</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">Agenda</span><span class="p">(</span><span class="n">LIST_PARAMS_AGENDA_TEXT</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_agenda</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+        <span class="n">assert_equal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">[</span><span class="s">&#39;list_params&#39;</span><span class="p">][</span><span class="s">&#39;param&#39;</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="ConfigTest.test_instrumentation_specification"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigTest.test_instrumentation_specification">[docs]</a>    <span class="k">def</span> <span class="nf">test_instrumentation_specification</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">Agenda</span><span class="p">(</span><span class="n">INSTRUMENTATION_AGENDA_TEXT</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_agenda</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+        <span class="n">assert_equal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;execution_time&#39;</span><span class="p">])</span>
+        <span class="n">assert_equal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;fsp&#39;</span><span class="p">,</span> <span class="s">&#39;execution_time&#39;</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="ConfigTest.test_remove_instrument"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigTest.test_remove_instrument">[docs]</a>    <span class="k">def</span> <span class="nf">test_remove_instrument</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">load_config</span><span class="p">({</span><span class="s">&#39;instrumentation&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;list_params&#39;</span><span class="p">]})</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">Agenda</span><span class="p">(</span><span class="s">&#39;{config: {instrumentation: [~list_params] }}&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_agenda</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+        <span class="n">assert_equal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">,</span> <span class="p">{})</span>
+</div>
+<div class="viewcode-block" id="ConfigTest.test_global_instrumentation"><a class="viewcode-back" href="../../../api/wlauto.tests.html#wlauto.tests.test_config.ConfigTest.test_global_instrumentation">[docs]</a>    <span class="k">def</span> <span class="nf">test_global_instrumentation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">load_config</span><span class="p">({</span><span class="s">&#39;instrumentation&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;global_instrument&#39;</span><span class="p">]})</span>
+        <span class="n">ws</span> <span class="o">=</span> <span class="n">AgendaWorkloadEntry</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s">&#39;a&#39;</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;linpack&#39;</span><span class="p">,</span> <span class="n">instrumentation</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;local_instrument&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_agenda</span><span class="p">(</span><span class="n">MockAgenda</span><span class="p">(</span><span class="n">ws</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+        <span class="n">assert_equal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">,</span>
+                     <span class="p">[</span><span class="s">&#39;local_instrument&#39;</span><span class="p">,</span> <span class="s">&#39;global_instrument&#39;</span><span class="p">])</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

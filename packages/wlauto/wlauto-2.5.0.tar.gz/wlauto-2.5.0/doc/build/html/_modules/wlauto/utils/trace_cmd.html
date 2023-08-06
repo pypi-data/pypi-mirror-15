@@ -1,0 +1,346 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.utils.trace_cmd &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.utils.trace_cmd</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">chain</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">isiterable</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">numeric</span>
+
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;trace-cmd&#39;</span><span class="p">)</span>
+
+
+<span class="c"># These markers can be injected into trace to identify the  &quot;interesting&quot;</span>
+<span class="c"># portion.</span>
+<span class="n">TRACE_MARKER_START</span> <span class="o">=</span> <span class="s">&#39;TRACE_MARKER_START&#39;</span>
+<span class="n">TRACE_MARKER_STOP</span> <span class="o">=</span> <span class="s">&#39;TRACE_MARKER_STOP&#39;</span>
+
+
+<div class="viewcode-block" id="TraceCmdEvent"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.trace_cmd.TraceCmdEvent">[docs]</a><span class="k">class</span> <span class="nc">TraceCmdEvent</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A single trace-cmd event. This will appear in the trace cmd report in the format ::</span>
+
+<span class="sd">          &lt;idle&gt;-0     [000]  3284.126993: sched_rq_runnable_load: cpu=0 load=54</span>
+<span class="sd">             |           |         |              |                |___________|</span>
+<span class="sd">             |           |         |              |                      |</span>
+<span class="sd">          thread        cpu    timestamp        name                    body</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">__slots__</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;thread&#39;</span><span class="p">,</span> <span class="s">&#39;reporting_cpu_id&#39;</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">,</span> <span class="s">&#39;fields&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thread</span><span class="p">,</span> <span class="n">cpu_id</span><span class="p">,</span> <span class="n">ts</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">parser</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        parameters:</span>
+
+<span class="sd">        :thread: thread which generated the event</span>
+<span class="sd">        :cpu: cpu on which the event has occurred</span>
+<span class="sd">        :ts: timestamp of the event</span>
+<span class="sd">        :name: the name of the event</span>
+<span class="sd">        :bodytext: a string with the rest of the event text</span>
+<span class="sd">        :parser: optionally, a function that will parse bodytext to populate</span>
+<span class="sd">                 this event&#39;s attributes</span>
+
+<span class="sd">        The parser can be any callable that can be invoked with</span>
+
+<span class="sd">            parser(event, text)</span>
+
+<span class="sd">        Where ``event`` is this TraceCmdEvent instance, and ``text`` is the body text to be</span>
+<span class="sd">        parsed. The parser should updated the passed event instance and not return anything</span>
+<span class="sd">        (the return value will be ignored). Any exceptions raised by the parser will be silently</span>
+<span class="sd">        ignored (note that this means that the event&#39;s attributes may be partially initialized).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thread</span> <span class="o">=</span> <span class="n">thread</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reporting_cpu_id</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cpu_id</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="n">numeric</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="n">body</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fields</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="n">parser</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">parser</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c"># pylint: disable=broad-except</span>
+                <span class="c"># unknown format assume user does not care or know how to</span>
+                <span class="c"># parse self.text</span>
+                <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fields</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;TE({} @ {})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+</div>
+<div class="viewcode-block" id="DroppedEventsEvent"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.trace_cmd.DroppedEventsEvent">[docs]</a><span class="k">class</span> <span class="nc">DroppedEventsEvent</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">__slots__</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;thread&#39;</span><span class="p">,</span> <span class="s">&#39;reporting_cpu_id&#39;</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">,</span> <span class="s">&#39;fields&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu_id</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thread</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reporting_cpu_id</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#39;DROPPED EVENTS DETECTED&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fields</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;cpu_id&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">cpu_id</span><span class="p">)}</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fields</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;DROPPED_EVENTS_ON_CPU{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cpu_id</span><span class="p">)</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+</div>
+<div class="viewcode-block" id="try_convert_to_numeric"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.trace_cmd.try_convert_to_numeric">[docs]</a><span class="k">def</span> <span class="nf">try_convert_to_numeric</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="n">numeric</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">numeric</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+</div>
+<div class="viewcode-block" id="default_body_parser"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.trace_cmd.default_body_parser">[docs]</a><span class="k">def</span> <span class="nf">default_body_parser</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Default parser to attempt to use to parser body text for the event (i.e. after</span>
+<span class="sd">    the &quot;header&quot; common to all events has been parsed). This assumes that the body is</span>
+<span class="sd">    a whitespace-separated list of key=value pairs. The parser will attempt to convert</span>
+<span class="sd">    the value into a numeric type, and failing that, keep it as string.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;=&#39;</span><span class="p">)]</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">chain</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="n">parts</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">v</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="n">event</span><span class="o">.</span><span class="n">fields</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+
+</div>
+<div class="viewcode-block" id="regex_body_parser"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.trace_cmd.regex_body_parser">[docs]</a><span class="k">def</span> <span class="nf">regex_body_parser</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Creates an event body parser form the specified regular expression (could be an</span>
+<span class="sd">    ``re.RegexObject``, or a string). The regular expression should contain some named</span>
+<span class="sd">    groups, as those will be extracted as the event attributes (unnamed groups and the</span>
+<span class="sd">    reset of the match will be ignored).</span>
+
+<span class="sd">    If the specified regex is a string, it will be compiled, in which case ``flags`` may</span>
+<span class="sd">    be provided for the resulting regex object (see ``re`` standard module documentation).</span>
+<span class="sd">    If regex is a pre-compiled object, flags will be ignored.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="n">regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span> <span class="n">flags</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">regex_parser_func</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+            <span class="n">event</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">groupdict</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="n">regex_parser_func</span>
+
+
+<span class="c"># Maps event onto the corresponding parser for it&#39;s body text. A parser may be</span>
+<span class="c"># a callable with signature</span>
+<span class="c">#</span>
+<span class="c">#   parser(event, bodytext)</span>
+<span class="c">#</span>
+<span class="c"># a re.RegexObject, or a string (in which case it will be compiled into a</span>
+<span class="c"># regex). In case of a string/regex, it&#39;s named groups will be used to populate</span>
+<span class="c"># the event&#39;s attributes.</span></div>
+<span class="n">EVENT_PARSER_MAP</span> <span class="o">=</span> <span class="p">{</span>
+<span class="p">}</span>
+
+<span class="n">TRACE_EVENT_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;^\s+(?P&lt;thread&gt;\S+.*?\S+)\s+\[(?P&lt;cpu_id&gt;\d+)\]\s+(?P&lt;ts&gt;[\d.]+):\s+&#39;</span>
+                               <span class="s">r&#39;(?P&lt;name&gt;[^:]+):\s+(?P&lt;body&gt;.*?)\s*$&#39;</span><span class="p">)</span>
+
+<span class="n">HEADER_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;^\s*(?:version|cpus)\s*=\s*([\d.]+)\s*$&#39;</span><span class="p">)</span>
+
+<span class="n">DROPPED_EVENTS_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;CPU:(?P&lt;cpu_id&gt;\d+) \[\d*\s*EVENTS DROPPED\]&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="TraceCmdTrace"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.trace_cmd.TraceCmdTrace">[docs]</a><span class="k">class</span> <span class="nc">TraceCmdTrace</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filter_markers</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_markers</span> <span class="o">=</span> <span class="n">filter_markers</span>
+
+<div class="viewcode-block" id="TraceCmdTrace.parse"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.trace_cmd.TraceCmdTrace.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">check_for_markers</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>  <span class="c"># pylint: disable=too-many-branches</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This is a generator for the trace event stream.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">inside_maked_region</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">filters</span> <span class="o">=</span> <span class="p">[</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39;^{}$&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">n</span><span class="p">))</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">names</span> <span class="ow">or</span> <span class="p">[]]</span>
+        <span class="k">if</span> <span class="n">check_for_markers</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">TRACE_MARKER_START</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                        <span class="k">break</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c"># maker not found force filtering by marker to False</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">filter_markers</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="c"># if processing trace markers, skip marker lines as well as all</span>
+                <span class="c"># lines outside marked region</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_markers</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">inside_maked_region</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">TRACE_MARKER_START</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                            <span class="n">inside_maked_region</span> <span class="o">=</span> <span class="bp">True</span>
+                        <span class="k">continue</span>
+                    <span class="k">elif</span> <span class="n">TRACE_MARKER_STOP</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                        <span class="n">inside_maked_region</span> <span class="o">=</span> <span class="bp">False</span>
+                        <span class="k">continue</span>
+
+                <span class="n">match</span> <span class="o">=</span> <span class="n">DROPPED_EVENTS_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                    <span class="k">yield</span> <span class="n">DroppedEventsEvent</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;cpu_id&#39;</span><span class="p">))</span>
+                    <span class="k">continue</span>
+
+                <span class="n">match</span> <span class="o">=</span> <span class="n">HEADER_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+                    <span class="k">continue</span>
+
+                <span class="n">match</span> <span class="o">=</span> <span class="n">TRACE_EVENT_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Invalid trace event: &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">line</span><span class="p">))</span>
+                    <span class="k">continue</span>
+
+                <span class="n">event_name</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;name&#39;</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">filters</span><span class="p">:</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">filters</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">event_name</span><span class="p">):</span>
+                            <span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+                            <span class="k">break</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+                        <span class="k">continue</span>
+
+                <span class="n">body_parser</span> <span class="o">=</span> <span class="n">EVENT_PARSER_MAP</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">event_name</span><span class="p">,</span> <span class="n">default_body_parser</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">body_parser</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+                    <span class="n">body_parser</span> <span class="o">=</span> <span class="n">regex_body_parser</span><span class="p">(</span><span class="n">body_parser</span><span class="p">)</span>
+                <span class="k">yield</span> <span class="n">TraceCmdEvent</span><span class="p">(</span><span class="n">parser</span><span class="o">=</span><span class="n">body_parser</span><span class="p">,</span> <span class="o">**</span><span class="n">match</span><span class="o">.</span><span class="n">groupdict</span><span class="p">())</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

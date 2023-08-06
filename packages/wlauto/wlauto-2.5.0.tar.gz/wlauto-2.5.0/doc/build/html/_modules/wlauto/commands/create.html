@@ -1,0 +1,493 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.commands.create &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.commands.create</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">stat</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">textwrap</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">getpass</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+
+<span class="kn">import</span> <span class="nn">yaml</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">ExtensionLoader</span><span class="p">,</span> <span class="n">Command</span><span class="p">,</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">CommandError</span><span class="p">,</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.cli</span> <span class="kn">import</span> <span class="n">init_argument_parser</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="p">(</span><span class="n">capitalize</span><span class="p">,</span> <span class="n">check_output</span><span class="p">,</span>
+                               <span class="n">ensure_file_directory_exists</span> <span class="k">as</span> <span class="n">_f</span><span class="p">,</span> <span class="n">ensure_directory_exists</span> <span class="k">as</span> <span class="n">_d</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">identifier</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.doc</span> <span class="kn">import</span> <span class="n">format_body</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;create_workload&#39;</span><span class="p">]</span>
+
+
+<span class="n">TEMPLATES_DIR</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">),</span> <span class="s">&#39;templates&#39;</span><span class="p">)</span>
+
+<span class="n">UIAUTO_BUILD_SCRIPT</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;#!/bin/bash</span>
+
+<span class="s">class_dir=bin/classes/com/arm/wlauto/uiauto</span>
+<span class="s">base_class=`python -c &quot;import os, wlauto; print os.path.join(os.path.dirname(wlauto.__file__), &#39;common&#39;, &#39;android&#39;, &#39;BaseUiAutomation.class&#39;)&quot;`</span>
+<span class="s">mkdir -p $$class_dir</span>
+<span class="s">cp $$base_class $$class_dir</span>
+
+<span class="s">ant build</span>
+
+<span class="s">if [[ -f bin/${package_name}.jar ]]; then</span>
+<span class="s">    cp bin/${package_name}.jar ..</span>
+<span class="s">fi</span>
+<span class="s">&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span> <span class="nc">CreateSubcommand</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">help</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">usage</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">epilog</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">formatter_class</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">subparsers</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">group</span> <span class="o">=</span> <span class="n">subparsers</span>
+        <span class="n">parser_params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">help</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">help</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">description</span><span class="p">),</span> <span class="n">usage</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">usage</span><span class="p">,</span>
+                             <span class="n">description</span><span class="o">=</span><span class="n">format_body</span><span class="p">(</span><span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">description</span><span class="p">),</span> <span class="mi">80</span><span class="p">),</span>
+                             <span class="n">epilog</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">epilog</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatter_class</span><span class="p">:</span>
+            <span class="n">parser_params</span><span class="p">[</span><span class="s">&#39;formatter_class&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatter_class</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">subparsers</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">parser_params</span><span class="p">)</span>
+        <span class="n">init_argument_parser</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="p">)</span>  <span class="c"># propagate top-level options</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+
+<span class="k">class</span> <span class="nc">CreateWorkloadSubcommand</span><span class="p">(</span><span class="n">CreateSubcommand</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;workload&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&#39;&#39;&#39;Create a new workload. By default, a basic workload template will be</span>
+<span class="s">                     used but you can use options to specify a different template.&#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;NAME&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;Name of the workload to be created&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-p&#39;</span><span class="p">,</span> <span class="s">&#39;--path&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;PATH&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;The location at which the workload will be created. If not specified, &#39;</span> <span class="o">+</span>
+                                      <span class="s">&#39;this defaults to &quot;~/.workload_automation/workloads&quot;.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-f&#39;</span><span class="p">,</span> <span class="s">&#39;--force&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;Create the new workload even if a workload with the specified &#39;</span> <span class="o">+</span>
+                                      <span class="s">&#39;name already exists.&#39;</span><span class="p">)</span>
+
+        <span class="n">template_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_mutually_exclusive_group</span><span class="p">()</span>
+        <span class="n">template_group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-A&#39;</span><span class="p">,</span> <span class="s">&#39;--android-benchmark&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                                    <span class="n">help</span><span class="o">=</span><span class="s">&#39;Use android benchmark template. This template allows you to specify &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39; an APK file that will be installed and run on the device. You should &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39; place the APK file into the workload</span><span class="se">\&#39;</span><span class="s">s directory at the same level &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;as the __init__.py.&#39;</span><span class="p">)</span>
+        <span class="n">template_group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-U&#39;</span><span class="p">,</span> <span class="s">&#39;--ui-automation&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                                    <span class="n">help</span><span class="o">=</span><span class="s">&#39;Use UI automation template. This template generates a UI automation &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;Android project as well as the Python class. This a more general &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;version of the android benchmark template that makes no assumptions &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;about the nature of your workload, apart from the fact that you need &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;UI automation. If you need to install an APK, start an app on device, &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;etc., you will need to do that explicitly in your code.&#39;</span><span class="p">)</span>
+        <span class="n">template_group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-B&#39;</span><span class="p">,</span> <span class="s">&#39;--android-uiauto-benchmark&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                                    <span class="n">help</span><span class="o">=</span><span class="s">&#39;Use android uiauto benchmark template. This generates a UI automation &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;project as well as a Python class. This template should be used &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;if you have a APK file that needs to be run on the device. You &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;should place the APK file into the workload</span><span class="se">\&#39;</span><span class="s">s directory at the &#39;</span> <span class="o">+</span>
+                                         <span class="s">&#39;same level as the __init__.py.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>  <span class="c"># pylint: disable=R0201</span>
+        <span class="n">where</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">path</span> <span class="ow">or</span> <span class="s">&#39;local&#39;</span>
+        <span class="n">check_name</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">force</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">android_benchmark</span><span class="p">:</span>
+            <span class="n">kind</span> <span class="o">=</span> <span class="s">&#39;android&#39;</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">ui_automation</span><span class="p">:</span>
+            <span class="n">kind</span> <span class="o">=</span> <span class="s">&#39;uiauto&#39;</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">android_uiauto_benchmark</span><span class="p">:</span>
+            <span class="n">kind</span> <span class="o">=</span> <span class="s">&#39;android_uiauto&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">kind</span> <span class="o">=</span> <span class="s">&#39;basic&#39;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">create_workload</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">where</span><span class="p">,</span> <span class="n">check_name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">CommandError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;ERROR:&quot;</span><span class="p">,</span> <span class="n">e</span>
+
+
+<span class="k">class</span> <span class="nc">CreatePackageSubcommand</span><span class="p">(</span><span class="n">CreateSubcommand</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;package&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&#39;&#39;&#39;Create a new empty Python package for WA extensions. On installation,</span>
+<span class="s">                     this package will &quot;advertise&quot; itself to WA so that Extensions with in it will</span>
+<span class="s">                     be loaded by WA when it runs.&#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;NAME&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;Name of the package to be created&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-p&#39;</span><span class="p">,</span> <span class="s">&#39;--path&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;PATH&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;The location at which the new pacakge will be created. If not specified, &#39;</span> <span class="o">+</span>
+                                      <span class="s">&#39;current working directory will be used.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-f&#39;</span><span class="p">,</span> <span class="s">&#39;--force&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;Create the new package even if a file or directory with the same name &#39;</span>
+                                      <span class="s">&#39;already exists at the specified location.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>  <span class="c"># pylint: disable=R0201</span>
+        <span class="n">package_dir</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">path</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">)</span>
+        <span class="n">template_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">TEMPLATES_DIR</span><span class="p">,</span> <span class="s">&#39;setup.template&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_extensions_package</span><span class="p">(</span><span class="n">package_dir</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">template_path</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">force</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">create_extensions_package</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">location</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">setup_template_path</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="n">package_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">package_path</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">overwrite</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;overwriting existing &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">package_path</span><span class="p">))</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">package_path</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">CommandError</span><span class="p">(</span><span class="s">&#39;Location &quot;{}&quot; already exists.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">package_path</span><span class="p">))</span>
+        <span class="n">actual_package_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">package_path</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">actual_package_path</span><span class="p">)</span>
+        <span class="n">setup_text</span> <span class="o">=</span> <span class="n">render_template</span><span class="p">(</span><span class="n">setup_template_path</span><span class="p">,</span> <span class="p">{</span><span class="s">&#39;package_name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s">&#39;user&#39;</span><span class="p">:</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getuser</span><span class="p">()})</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">package_path</span><span class="p">,</span> <span class="s">&#39;setup.py&#39;</span><span class="p">),</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">setup_text</span><span class="p">)</span>
+        <span class="n">touch</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">actual_package_path</span><span class="p">,</span> <span class="s">&#39;__init__.py&#39;</span><span class="p">))</span>
+
+
+<span class="k">class</span> <span class="nc">CreateAgendaSubcommand</span><span class="p">(</span><span class="n">CreateSubcommand</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;agenda&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Create an agenda whith the specified extensions enabled. And parameters set to their</span>
+<span class="s">    default values.</span>
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;extensions&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s">&#39;+&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;Extensions to be added&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--iterations&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;Sets the number of iterations for all workloads&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--include-runtime-params&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                                 Adds runtime parameters to the global section of the generated</span>
+<span class="s">                                 agenda. Note: these do not have default values, so only name</span>
+<span class="s">                                 will be added. Also, runtime parameters are devices-specific, so</span>
+<span class="s">                                 a device must be specified (either in the list of extensions,</span>
+<span class="s">                                 or in the existing config).</span>
+<span class="s">                                 &quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-o&#39;</span><span class="p">,</span> <span class="s">&#39;--output&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;FILE&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&#39;Output file. If not specfied, STDOUT will be used instead.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>  <span class="c"># pylint: disable=no-self-use,too-many-branches,too-many-statements</span>
+        <span class="n">loader</span> <span class="o">=</span> <span class="n">ExtensionLoader</span><span class="p">(</span><span class="n">packages</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">extension_packages</span><span class="p">,</span>
+                                 <span class="n">paths</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">extension_paths</span><span class="p">)</span>
+        <span class="n">agenda</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;config&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">(</span><span class="n">instrumentation</span><span class="o">=</span><span class="p">[],</span> <span class="n">result_processors</span><span class="o">=</span><span class="p">[])</span>
+        <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;global&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">(</span><span class="n">iterations</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">iterations</span><span class="p">)</span>
+        <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;workloads&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">device</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">device_config</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">extensions</span><span class="p">:</span>
+            <span class="n">extcls</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">get_extension_class</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">del</span> <span class="n">config</span><span class="p">[</span><span class="s">&#39;modules&#39;</span><span class="p">]</span>
+
+            <span class="k">if</span> <span class="n">extcls</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;workload&#39;</span><span class="p">:</span>
+                <span class="n">entry</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+                <span class="n">entry</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">extcls</span><span class="o">.</span><span class="n">name</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="o">!=</span> <span class="n">extcls</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                    <span class="n">entry</span><span class="p">[</span><span class="s">&#39;label&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">name</span>
+                <span class="n">entry</span><span class="p">[</span><span class="s">&#39;params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">config</span>
+                <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;workloads&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">extcls</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;device&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Specifying multiple devices: {} and {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+                <span class="n">device</span> <span class="o">=</span> <span class="n">extcls</span>
+                <span class="n">device_config</span> <span class="o">=</span> <span class="n">config</span>
+                <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;config&#39;</span><span class="p">][</span><span class="s">&#39;device&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">name</span>
+                <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;config&#39;</span><span class="p">][</span><span class="s">&#39;device_config&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">config</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">extcls</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;instrument&#39;</span><span class="p">:</span>
+                    <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;config&#39;</span><span class="p">][</span><span class="s">&#39;instrumentation&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">extcls</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;result_processor&#39;</span><span class="p">:</span>
+                    <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;config&#39;</span><span class="p">][</span><span class="s">&#39;result_processors&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;config&#39;</span><span class="p">][</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">config</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">include_runtime_params</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">device</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">device</span><span class="p">:</span>
+                    <span class="n">device</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">get_extension_class</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+                    <span class="n">device_config</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;-r option requires for a device to be in the list of extensions&#39;</span><span class="p">)</span>
+            <span class="n">rps</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">rp</span> <span class="ow">in</span> <span class="n">device</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rp</span><span class="p">,</span> <span class="s">&#39;get_runtime_parameters&#39;</span><span class="p">):</span>
+                    <span class="c"># a core parameter needs to be expanded for each of the</span>
+                    <span class="c"># device&#39;s cores, if they&#39;re avialable</span>
+                    <span class="k">for</span> <span class="n">crp</span> <span class="ow">in</span> <span class="n">rp</span><span class="o">.</span><span class="n">get_runtime_parameters</span><span class="p">(</span><span class="n">device_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;core_names&#39;</span><span class="p">,</span> <span class="p">[])):</span>
+                        <span class="n">rps</span><span class="p">[</span><span class="n">crp</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">rps</span><span class="p">[</span><span class="n">rp</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">agenda</span><span class="p">[</span><span class="s">&#39;global&#39;</span><span class="p">][</span><span class="s">&#39;runtime_params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rps</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">:</span>
+            <span class="n">wfh</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">wfh</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span>
+        <span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">agenda</span><span class="p">,</span> <span class="n">wfh</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">default_flow_style</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">:</span>
+            <span class="n">wfh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">CreateCommand</span><span class="p">(</span><span class="n">Command</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;create&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&#39;&#39;&#39;Used to create various WA-related objects (see positional arguments list for what</span>
+<span class="s">                     objects may be created).</span><span class="se">\n\n</span><span class="s">Use &quot;wa create &lt;object&gt; -h&quot; for object-specific arguments.&#39;&#39;&#39;</span>
+    <span class="n">formatter_class</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">RawDescriptionHelpFormatter</span>
+    <span class="n">subcmd_classes</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">CreateWorkloadSubcommand</span><span class="p">,</span>
+        <span class="n">CreatePackageSubcommand</span><span class="p">,</span>
+        <span class="n">CreateAgendaSubcommand</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">subparsers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_subparsers</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="s">&#39;what&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">subcommands</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c"># pylint: disable=W0201</span>
+        <span class="k">for</span> <span class="n">subcmd_cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">subcmd_classes</span><span class="p">:</span>
+            <span class="n">subcmd</span> <span class="o">=</span> <span class="n">subcmd_cls</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="p">,</span> <span class="n">subparsers</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">subcommands</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">subcmd</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">subcmd</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">subcommands</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">subcmd</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">args</span><span class="o">.</span><span class="n">what</span><span class="p">:</span>
+                <span class="n">subcmd</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+                <span class="k">break</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">CommandError</span><span class="p">(</span><span class="s">&#39;Not a valid create parameter: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="create_workload"><a class="viewcode-back" href="../../../api/wlauto.commands.html#wlauto.commands.create.create_workload">[docs]</a><span class="k">def</span> <span class="nf">create_workload</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;basic&#39;</span><span class="p">,</span> <span class="n">where</span><span class="o">=</span><span class="s">&#39;local&#39;</span><span class="p">,</span> <span class="n">check_name</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">check_name</span><span class="p">:</span>
+        <span class="n">extloader</span> <span class="o">=</span> <span class="n">ExtensionLoader</span><span class="p">(</span><span class="n">packages</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">extension_packages</span><span class="p">,</span> <span class="n">paths</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">extension_paths</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">[</span><span class="n">wl</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">wl</span> <span class="ow">in</span> <span class="n">extloader</span><span class="o">.</span><span class="n">list_workloads</span><span class="p">()]:</span>
+            <span class="k">raise</span> <span class="n">CommandError</span><span class="p">(</span><span class="s">&#39;Workload with name &quot;{}&quot; already exists.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+
+    <span class="n">class_name</span> <span class="o">=</span> <span class="n">get_class_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">where</span> <span class="o">==</span> <span class="s">&#39;local&#39;</span><span class="p">:</span>
+        <span class="n">workload_dir</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">environment_root</span><span class="p">,</span> <span class="s">&#39;workloads&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">workload_dir</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;basic&#39;</span><span class="p">:</span>
+        <span class="n">create_basic_workload</span><span class="p">(</span><span class="n">workload_dir</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">class_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;uiauto&#39;</span><span class="p">:</span>
+        <span class="n">create_uiautomator_workload</span><span class="p">(</span><span class="n">workload_dir</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">class_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;android&#39;</span><span class="p">:</span>
+        <span class="n">create_android_benchmark</span><span class="p">(</span><span class="n">workload_dir</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">class_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;android_uiauto&#39;</span><span class="p">:</span>
+        <span class="n">create_android_uiauto_benchmark</span><span class="p">(</span><span class="n">workload_dir</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">class_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">CommandError</span><span class="p">(</span><span class="s">&#39;Unknown workload type: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">kind</span><span class="p">))</span>
+
+    <span class="k">print</span> <span class="s">&#39;Workload created in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">workload_dir</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">create_basic_workload</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+    <span class="n">source_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;__init__.py&#39;</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">source_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">render_template</span><span class="p">(</span><span class="s">&#39;basic_workload&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s">&#39;class_name&#39;</span><span class="p">:</span> <span class="n">class_name</span><span class="p">}))</span>
+
+
+<span class="k">def</span> <span class="nf">create_uiautomator_workload</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+    <span class="n">uiauto_path</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;uiauto&#39;</span><span class="p">))</span>
+    <span class="n">create_uiauto_project</span><span class="p">(</span><span class="n">uiauto_path</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">source_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;__init__.py&#39;</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">source_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">render_template</span><span class="p">(</span><span class="s">&#39;uiauto_workload&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s">&#39;class_name&#39;</span><span class="p">:</span> <span class="n">class_name</span><span class="p">}))</span>
+
+
+<span class="k">def</span> <span class="nf">create_android_benchmark</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+    <span class="n">source_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;__init__.py&#39;</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">source_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">render_template</span><span class="p">(</span><span class="s">&#39;android_benchmark&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s">&#39;class_name&#39;</span><span class="p">:</span> <span class="n">class_name</span><span class="p">}))</span>
+
+
+<span class="k">def</span> <span class="nf">create_android_uiauto_benchmark</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+    <span class="n">uiauto_path</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;uiauto&#39;</span><span class="p">))</span>
+    <span class="n">create_uiauto_project</span><span class="p">(</span><span class="n">uiauto_path</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">source_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;__init__.py&#39;</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">source_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">render_template</span><span class="p">(</span><span class="s">&#39;android_uiauto_benchmark&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s">&#39;class_name&#39;</span><span class="p">:</span> <span class="n">class_name</span><span class="p">}))</span>
+
+
+<span class="k">def</span> <span class="nf">create_uiauto_project</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s">&#39;1&#39;</span><span class="p">):</span>
+    <span class="n">sdk_path</span> <span class="o">=</span> <span class="n">get_sdk_path</span><span class="p">()</span>
+    <span class="n">android_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sdk_path</span><span class="p">,</span> <span class="s">&#39;tools&#39;</span><span class="p">,</span> <span class="s">&#39;android&#39;</span><span class="p">)</span>
+    <span class="n">package_name</span> <span class="o">=</span> <span class="s">&#39;com.arm.wlauto.uiauto.&#39;</span> <span class="o">+</span> <span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="c"># ${ANDROID_HOME}/tools/android create uitest-project -n com.arm.wlauto.uiauto.linpack -t 1 -p ../test2</span>
+    <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;{} create uitest-project --name {} --target {} --path {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">android_path</span><span class="p">,</span>
+                                                                                <span class="n">package_name</span><span class="p">,</span>
+                                                                                <span class="n">target</span><span class="p">,</span>
+                                                                                <span class="n">path</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">check_output</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s">&#39;is is not valid&#39;</span> <span class="ow">in</span> <span class="n">e</span><span class="o">.</span><span class="n">output</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;No Android SDK target found; have you run &quot;{} update sdk&quot; and download a platform?&#39;</span>
+            <span class="k">raise</span> <span class="n">CommandError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">android_path</span><span class="p">))</span>
+
+    <span class="n">build_script</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;build.sh&#39;</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">build_script</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+        <span class="n">template</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="n">UIAUTO_BUILD_SCRIPT</span><span class="p">)</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">template</span><span class="o">.</span><span class="n">substitute</span><span class="p">({</span><span class="s">&#39;package_name&#39;</span><span class="p">:</span> <span class="n">package_name</span><span class="p">}))</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">build_script</span><span class="p">,</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IRWXU</span> <span class="o">|</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IRWXG</span> <span class="o">|</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IRWXO</span><span class="p">)</span>
+
+    <span class="n">source_file</span> <span class="o">=</span> <span class="n">_f</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;src&#39;</span><span class="p">,</span>
+                                  <span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">package_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span>
+                                  <span class="s">&#39;UiAutomation.java&#39;</span><span class="p">))</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">source_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+        <span class="n">wfh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">render_template</span><span class="p">(</span><span class="s">&#39;UiAutomation.java&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s">&#39;package_name&#39;</span><span class="p">:</span> <span class="n">package_name</span><span class="p">}))</span>
+
+
+<span class="c"># Utility functions</span>
+
+<span class="k">def</span> <span class="nf">get_sdk_path</span><span class="p">():</span>
+    <span class="n">sdk_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;ANDROID_HOME&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">sdk_path</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">CommandError</span><span class="p">(</span><span class="s">&#39;Please set ANDROID_HOME environment variable to point to &#39;</span> <span class="o">+</span>
+                           <span class="s">&#39;the locaton of Android SDK&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">sdk_path</span>
+
+
+<span class="k">def</span> <span class="nf">get_class_name</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">postfix</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="n">identifier</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">capitalize</span><span class="p">,</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;_&#39;</span><span class="p">)))</span> <span class="o">+</span> <span class="n">postfix</span>
+
+
+<span class="k">def</span> <span class="nf">render_template</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">TEMPLATES_DIR</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="n">template</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">template</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">touch</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">_</span><span class="p">:</span>
+        <span class="k">pass</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

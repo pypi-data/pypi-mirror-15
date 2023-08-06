@@ -1,0 +1,271 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.modules.cgroups &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.modules.cgroups</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+<span class="c"># pylint: disable=attribute-defined-outside-init</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">import</span> <span class="nn">wlauto.core.signal</span> <span class="kn">as</span> <span class="nn">signal</span>
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Module</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">list_to_ranges</span><span class="p">,</span> <span class="n">isiterable</span>
+
+
+<div class="viewcode-block" id="CgroupController"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CgroupController">[docs]</a><span class="k">class</span> <span class="nc">CgroupController</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">kind</span> <span class="o">=</span> <span class="s">&#39;cpuset&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__new__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">arg</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">cls</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">arg</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">object</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mount_name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mount_point</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mount_name</span> <span class="o">=</span> <span class="n">mount_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CgroupController.mount"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CgroupController.mount">[docs]</a>    <span class="k">def</span> <span class="nf">mount</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">mount_root</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mount_point</span> <span class="o">=</span> <span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">mount_root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">mount_name</span><span class="p">)</span>
+        <span class="n">mounted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">list_file_systems</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mount_point</span> <span class="ow">in</span> <span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">mount_point</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">mounted</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;controller is already mounted.&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;mkdir -p {} 2&gt;/dev/null&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mount_point</span><span class="p">),</span>
+                                <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;mount -t cgroup -o {} {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span>
+                                                                     <span class="bp">self</span><span class="o">.</span><span class="n">mount_name</span><span class="p">,</span>
+                                                                     <span class="bp">self</span><span class="o">.</span><span class="n">mount_point</span><span class="p">),</span>
+                                <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="CpusetGroup"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetGroup">[docs]</a><span class="k">class</span> <span class="nc">CpusetGroup</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">cpus</span><span class="p">,</span> <span class="n">mems</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">controller</span> <span class="o">=</span> <span class="n">controller</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">controller</span><span class="o">.</span><span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s">&#39;root&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">directory</span> <span class="o">=</span> <span class="n">controller</span><span class="o">.</span><span class="n">mount_point</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">directory</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">controller</span><span class="o">.</span><span class="n">mount_point</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;mkdir -p {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">directory</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpus_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">directory</span><span class="p">,</span> <span class="s">&#39;cpuset.cpus&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mems_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">directory</span><span class="p">,</span> <span class="s">&#39;cpuset.mems&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tasks_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">directory</span><span class="p">,</span> <span class="s">&#39;tasks&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">cpus</span><span class="p">,</span> <span class="n">mems</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CpusetGroup.set"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetGroup.set">[docs]</a>    <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpus</span><span class="p">,</span> <span class="n">mems</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">cpus</span><span class="p">):</span>
+            <span class="n">cpus</span> <span class="o">=</span> <span class="n">list_to_ranges</span><span class="p">(</span><span class="n">cpus</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">mems</span><span class="p">):</span>
+            <span class="n">mems</span> <span class="o">=</span> <span class="n">list_to_ranges</span><span class="p">(</span><span class="n">mems</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cpus_file</span><span class="p">,</span> <span class="n">cpus</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mems_file</span><span class="p">,</span> <span class="n">mems</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpusetGroup.get"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetGroup.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">cpus</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cpus_file</span><span class="p">)</span>
+        <span class="n">mems</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mems_file</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">cpus</span><span class="p">,</span> <span class="n">mems</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpusetGroup.get_tasks"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetGroup.get_tasks">[docs]</a>    <span class="k">def</span> <span class="nf">get_tasks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">task_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tasks_file</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">task_ids</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpusetGroup.add_tasks"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetGroup.add_tasks">[docs]</a>    <span class="k">def</span> <span class="nf">add_tasks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tasks</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">tid</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_task</span><span class="p">(</span><span class="n">tid</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpusetGroup.add_task"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetGroup.add_task">[docs]</a>    <span class="k">def</span> <span class="nf">add_task</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tid</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tasks_file</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="CpusetController"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetController">[docs]</a><span class="k">class</span> <span class="nc">CpusetController</span><span class="p">(</span><span class="n">CgroupController</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">CpusetController</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="CpusetController.mount"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetController.mount">[docs]</a>    <span class="k">def</span> <span class="nf">mount</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">mount_root</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">CpusetController</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">mount</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="n">mount_root</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s">&#39;root&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">online_cpus</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpusetController.create_group"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetController.create_group">[docs]</a>    <span class="k">def</span> <span class="nf">create_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">cpus</span><span class="p">,</span> <span class="n">mems</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;device&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Attempting to create group for unmounted controller {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Group {} already exists&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">CpusetGroup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">cpus</span><span class="p">,</span> <span class="n">mems</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpusetController.move_tasks"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetController.move_tasks">[docs]</a>    <span class="k">def</span> <span class="nf">move_tasks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">source_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">[</span><span class="n">source</span><span class="p">]</span>
+            <span class="n">dest_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">[</span><span class="n">dest</span><span class="p">]</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;for task in $(cat {}); do echo $task&gt;{}; done&#39;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source_group</span><span class="o">.</span><span class="n">tasks_file</span><span class="p">,</span> <span class="n">dest_group</span><span class="o">.</span><span class="n">tasks_file</span><span class="p">),</span>
+                                <span class="c"># this will always fail as some of the tasks</span>
+                                <span class="c"># are kthreads that cannot be migrated, but we</span>
+                                <span class="c"># don&#39;t care about those, so don&#39;t check exit</span>
+                                <span class="c"># code.</span>
+                                <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Unkown group: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpusetController.move_all_tasks_to"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.CpusetController.move_all_tasks_to">[docs]</a>    <span class="k">def</span> <span class="nf">move_all_tasks_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_group</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">group</span> <span class="o">!=</span> <span class="n">target_group</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">move_tasks</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">target_group</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="Cgroups"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.Cgroups">[docs]</a><span class="k">class</span> <span class="nc">Cgroups</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;cgroups&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Adds cgroups query and manupution APIs to a Device interface.</span>
+
+<span class="s">    Currently, only cpusets controller is supported.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">capabilities</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;cgroups&#39;</span><span class="p">]</span>
+
+    <span class="n">controllers</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">CpusetController</span><span class="p">(</span><span class="s">&#39;wa_cpuset&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;cgroup_root&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/sys/fs/cgroup&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Location where cgroups are mounted on the device.&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_owner</span>
+        <span class="n">signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_on_device_init</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">RUN_INIT</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Cgroups.get_cgroup_controller"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cgroups.Cgroups.get_cgroup_controller">[docs]</a>    <span class="k">def</span> <span class="nf">get_cgroup_controller</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kind</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">controller</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">controllers</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">controller</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">kind</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">controller</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">kind</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_on_device_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=unused-argument</span>
+        <span class="n">mounted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">list_file_systems</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cgroup_root</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">mount_point</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">mounted</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;mount -t tmpfs {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s">&#39;cgroup_root&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cgroup_root</span><span class="p">),</span>
+                                <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;cgroup_root already mounted at {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cgroup_root</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">controller</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">controllers</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">controller</span><span class="o">.</span><span class="n">kind</span> <span class="ow">in</span> <span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">device</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">mounted</span><span class="p">]:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;controller {} is already mounted.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">controller</span><span class="o">.</span><span class="n">kind</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">controller</span><span class="o">.</span><span class="n">mount</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cgroup_root</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

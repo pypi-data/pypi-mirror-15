@@ -1,0 +1,223 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.skypevideo &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.skypevideo</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101,W0201,E0203</span>
+
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">UiAutomatorWorkload</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span>
+
+
+<div class="viewcode-block" id="SkypeVideo"><a class="viewcode-back" href="../../../api/wlauto.workloads.skypevideo.html#wlauto.workloads.skypevideo.SkypeVideo">[docs]</a><span class="k">class</span> <span class="nc">SkypeVideo</span><span class="p">(</span><span class="n">UiAutomatorWorkload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;skypevideo&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Initiates Skype video call to a specified contact for a pre-determined duration.</span>
+<span class="s">    (Note: requires Skype to be set up appropriately).</span>
+
+<span class="s">    This workload is intended for monitoring the behaviour of a device while a Skype</span>
+<span class="s">    video call is in progress (a common use case). It does not produce any score or</span>
+<span class="s">    metric and the intention is that some addition instrumentation is enabled while</span>
+<span class="s">    running this workload.</span>
+
+<span class="s">    This workload, obviously, requires a network connection (ideally, wifi).</span>
+
+<span class="s">    This workload accepts the following parameters:</span>
+
+
+<span class="s">    **Skype Setup**</span>
+
+<span class="s">       - You should install Skype client from Google Play Store on the device</span>
+<span class="s">         (this was tested with client version 4.5.0.39600; other recent versions</span>
+<span class="s">         should also work).</span>
+<span class="s">       - You must have an account set up and logged into Skype on the device.</span>
+<span class="s">       - The contact to be called must be added (and has accepted) to the</span>
+<span class="s">         account. It&#39;s possible to have multiple contacts in the list, however</span>
+<span class="s">         the contact to be called *must* be visible on initial navigation to the</span>
+<span class="s">         list.</span>
+<span class="s">       - The contact must be able to received the call. This means that there</span>
+<span class="s">         must be  a Skype client running (somewhere) with the contact logged in</span>
+<span class="s">         and that client must have been configured to auto-accept calls from the</span>
+<span class="s">         account on the device (how to set this varies between different versions</span>
+<span class="s">         of Skype and between platforms -- please search online for specific</span>
+<span class="s">         instructions).</span>
+<span class="s">         https://support.skype.com/en/faq/FA3751/can-i-automatically-answer-all-my-calls-with-video-in-skype-for-windows-desktop</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">package</span> <span class="o">=</span> <span class="s">&#39;com.skype.raider&#39;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;duration&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Duration of the video call in seconds.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;contact&#39;</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  The name of the Skype contact to call. The contact must be already</span>
+<span class="s">                  added (see below). *If use_gui is set*, then this must be the skype</span>
+<span class="s">                  ID of the contact, *otherwise*, this must be the name of the</span>
+<span class="s">                  contact as it appears in Skype client&#39;s contacts list. In the latter case</span>
+<span class="s">                  it *must not* contain underscore characters (``_``); it may, however, contain</span>
+<span class="s">                  spaces. There is no default, you **must specify the name of the contact**.</span>
+
+<span class="s">                  .. note:: You may alternatively specify the contact name as</span>
+<span class="s">                            ``skype_contact`` setting in your ``config.py``. If this is</span>
+<span class="s">                            specified, the ``contact`` parameter is optional, though</span>
+<span class="s">                            it may still be specified (in which case it will override</span>
+<span class="s">                            ``skype_contact`` setting).</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;use_gui&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specifies whether the call should be placed directly through a</span>
+<span class="s">                  Skype URI, or by navigating the GUI. The URI is the recommended way</span>
+<span class="s">                  to place Skype calls on a device, but that does not seem to work</span>
+<span class="s">                  correctly on some devices (the URI seems to just start Skype, but not</span>
+<span class="s">                  place the call), so an alternative exists that will start the Skype app</span>
+<span class="s">                  and will then navigate the UI to place the call (incidentally, this method</span>
+<span class="s">                  does not seem to work on all devices either, as sometimes Skype starts</span>
+<span class="s">                  backgrounded...). Please note that the meaning of ``contact`` prameter</span>
+<span class="s">                  is different depending on whether this is set.  Defaults to ``False``.</span>
+
+<span class="s">                  .. note:: You may alternatively specify this as ``skype_use_gui`` setting</span>
+<span class="s">                            in your ``config.py``.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">SkypeVideo</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_gui</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">contact</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="s">&#39;_&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;duration&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_timeout</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">+</span> <span class="mi">30</span>
+
+<div class="viewcode-block" id="SkypeVideo.setup"><a class="viewcode-back" href="../../../api/wlauto.workloads.skypevideo.html#wlauto.workloads.skypevideo.SkypeVideo.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_gui</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">SkypeVideo</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;am force-stop {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;am start -W -a android.intent.action.VIEW -d skype:&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;am force-stop {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="SkypeVideo.run"><a class="viewcode-back" href="../../../api/wlauto.workloads.skypevideo.html#wlauto.workloads.skypevideo.SkypeVideo.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_gui</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">SkypeVideo</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&quot;am start -W -a android.intent.action.VIEW -d </span><span class="se">\&quot;</span><span class="s">skype:{}?call&amp;video=true</span><span class="se">\&quot;</span><span class="s">&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">contact</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Call started; waiting for {} seconds...&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">))</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;am force-stop com.skype.raider&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SkypeVideo.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.skypevideo.html#wlauto.workloads.skypevideo.SkypeVideo.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="SkypeVideo.teardown"><a class="viewcode-back" href="../../../api/wlauto.workloads.skypevideo.html#wlauto.workloads.skypevideo.SkypeVideo.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_gui</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">SkypeVideo</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">teardown</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;am force-stop {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">))</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

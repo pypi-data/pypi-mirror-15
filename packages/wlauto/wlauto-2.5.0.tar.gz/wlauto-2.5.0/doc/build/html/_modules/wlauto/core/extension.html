@@ -1,0 +1,782 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.extension &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.extension</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="c"># pylint: disable=E1101</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">copy</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.core.bootstrap</span> <span class="kn">import</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ValidationError</span><span class="p">,</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">isiterable</span><span class="p">,</span> <span class="n">ensure_directory_exists</span> <span class="k">as</span> <span class="n">_d</span><span class="p">,</span> <span class="n">get_article</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">identifier</span><span class="p">,</span> <span class="n">integer</span><span class="p">,</span> <span class="n">boolean</span>
+
+
+<div class="viewcode-block" id="AttributeCollection"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.AttributeCollection">[docs]</a><span class="k">class</span> <span class="nc">AttributeCollection</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Accumulator for extension attribute objects (such as Parameters or Artifacts). This will</span>
+<span class="sd">    replace any class member list accumulating such attributes through the magic of</span>
+<span class="sd">    metaprogramming\ [*]_.</span>
+
+<span class="sd">    .. [*] which is totally safe and not going backfire in any way...</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">values</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attrcls</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attrcls</span> <span class="o">=</span> <span class="n">attrcls</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+
+<div class="viewcode-block" id="AttributeCollection.add"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.AttributeCollection.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_attrcls</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">override</span><span class="p">:</span>
+                <span class="n">newp</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">])</span>
+                <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">p</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                        <span class="nb">setattr</span><span class="p">(</span><span class="n">newp</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">newp</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c"># Duplicate attribute condition is check elsewhere.</span>
+                <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span>
+</div>
+    <span class="n">append</span> <span class="o">=</span> <span class="n">add</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;AC({})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+    <span class="k">def</span> <span class="nf">_to_attrcls</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrcls</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrcls</span><span class="p">(</span><span class="o">*</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrcls</span><span class="p">(</span><span class="o">**</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrcls</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid parameter value: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">p</span><span class="o">.</span><span class="n">override</span> <span class="ow">and</span>
+                <span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="s">&#39;modules&#39;</span><span class="p">):</span>  <span class="c"># TODO: HACK due to &quot;diamond dependecy&quot; in workloads...</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attribute {} has already been defined.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">p</span>
+
+    <span class="k">def</span> <span class="nf">__iadd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">other</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="AliasCollection"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.AliasCollection">[docs]</a><span class="k">class</span> <span class="nc">AliasCollection</span><span class="p">(</span><span class="n">AttributeCollection</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">AliasCollection</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">Alias</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_to_attrcls</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="c"># must be in the form (name, {param: value, ...})</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrcls</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="o">**</span><span class="n">p</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrcls</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid parameter value: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attribute {} has already been defined.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">p</span>
+
+</div>
+<div class="viewcode-block" id="ListCollection"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.ListCollection">[docs]</a><span class="k">class</span> <span class="nc">ListCollection</span><span class="p">(</span><span class="nb">list</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attrcls</span><span class="p">):</span>  <span class="c"># pylint: disable=unused-argument</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ListCollection</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="Param"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Param">[docs]</a><span class="k">class</span> <span class="nc">Param</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This is a generic parameter for an extension. Extensions instantiate this to declare which parameters</span>
+<span class="sd">    are supported.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># Mapping for kind conversion; see docs for convert_types below</span>
+    <span class="n">kind_map</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="nb">int</span><span class="p">:</span> <span class="n">integer</span><span class="p">,</span>
+        <span class="nb">bool</span><span class="p">:</span> <span class="n">boolean</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">allowed_values</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">constraint</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">global_alias</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">convert_types</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a new Parameter object.</span>
+
+<span class="sd">        :param name: The name of the parameter. This will become an instance member of the</span>
+<span class="sd">                     extension object to which the parameter is applied, so it must be a valid</span>
+<span class="sd">                     python  identifier. This is the only mandatory parameter.</span>
+<span class="sd">        :param kind: The type of parameter this is. This must be a callable that takes an arbitrary</span>
+<span class="sd">                     object and converts it to the expected type, or raised ``ValueError`` if such</span>
+<span class="sd">                     conversion is not possible. Most Python standard types -- ``str``, ``int``, ``bool``, etc. --</span>
+<span class="sd">                     can be used here. This defaults to ``str`` if not specified.</span>
+<span class="sd">        :param mandatory: If set to ``True``, then a non-``None`` value for this parameter *must* be</span>
+<span class="sd">                          provided on extension object construction, otherwise ``ConfigError`` will be</span>
+<span class="sd">                          raised.</span>
+<span class="sd">        :param default: The default value for this parameter. If no value is specified on extension</span>
+<span class="sd">                        construction, this value will be used instead. (Note: if this is specified and</span>
+<span class="sd">                        is not ``None``, then ``mandatory`` parameter will be ignored).</span>
+<span class="sd">        :param override: A ``bool`` that specifies whether a parameter of the same name further up the</span>
+<span class="sd">                         hierarchy should be overridden. If this is ``False`` (the default), an exception</span>
+<span class="sd">                         will be raised by the ``AttributeCollection`` instead.</span>
+<span class="sd">        :param allowed_values: This should be the complete list of allowed values for this parameter.</span>
+<span class="sd">                               Note: ``None`` value will always be allowed, even if it is not in this list.</span>
+<span class="sd">                               If you want to disallow ``None``, set ``mandatory`` to ``True``.</span>
+<span class="sd">        :param constraint: If specified, this must be a callable that takes the parameter value</span>
+<span class="sd">                           as an argument and return a boolean indicating whether the constraint</span>
+<span class="sd">                           has been satisfied. Alternatively, can be a two-tuple with said callable as</span>
+<span class="sd">                           the first element and a string describing the constraint as the second.</span>
+<span class="sd">        :param global_alias: This is an alternative alias for this parameter, unlike the name, this</span>
+<span class="sd">                             alias will not be namespaced under the owning extension&#39;s name (hence the</span>
+<span class="sd">                             global part). This is introduced primarily for backward compatibility -- so</span>
+<span class="sd">                             that old extension settings names still work. This should not be used for</span>
+<span class="sd">                             new parameters.</span>
+
+<span class="sd">        :param convert_types: If ``True`` (the default), will automatically convert ``kind`` values from</span>
+<span class="sd">                              native Python types to WA equivalents. This allows more ituitive interprestation</span>
+<span class="sd">                              of parameter values, e.g. the string ``&quot;false&quot;`` being interpreted as ``False``</span>
+<span class="sd">                              when specifed as the value for a boolean Parameter.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">identifier</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kind</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">kind</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Kind must be callable.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">convert_types</span> <span class="ow">and</span> <span class="n">kind</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind_map</span><span class="p">:</span>
+            <span class="n">kind</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind_map</span><span class="p">[</span><span class="n">kind</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">kind</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mandatory</span> <span class="o">=</span> <span class="n">mandatory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default</span> <span class="o">=</span> <span class="n">default</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">override</span> <span class="o">=</span> <span class="n">override</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">allowed_values</span> <span class="o">=</span> <span class="n">allowed_values</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="n">description</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">override</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="nb">str</span>
+        <span class="k">if</span> <span class="n">constraint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">constraint</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">constraint</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Constraint must be callable or a (callable, str) tuple.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">constraint</span> <span class="o">=</span> <span class="n">constraint</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_alias</span> <span class="o">=</span> <span class="n">global_alias</span>
+
+<div class="viewcode-block" id="Param.set_value"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Param.set_value">[docs]</a>    <span class="k">def</span> <span class="nf">set_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">default</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mandatory</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;No values specified for mandatory parameter {} in {}&#39;</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+                <span class="n">typename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_type_name</span><span class="p">()</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Bad value &quot;{}&quot; for {}; must be {} {}&#39;</span>
+                <span class="n">article</span> <span class="o">=</span> <span class="n">get_article</span><span class="p">(</span><span class="n">typename</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">article</span><span class="p">,</span> <span class="n">typename</span><span class="p">))</span>
+        <span class="n">current_value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">current_value</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">isiterable</span><span class="p">(</span><span class="n">current_value</span><span class="p">):</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new_value</span> <span class="o">=</span> <span class="n">current_value</span> <span class="o">+</span> <span class="p">[</span><span class="n">value</span><span class="p">]</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">new_value</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Param.validate"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Param.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">allowed_values</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_validate_allowed_values</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">constraint</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_validate_constraint</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mandatory</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;No value specified for mandatory parameter {} in {}.&#39;</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Param.get_type_name"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Param.get_type_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_type_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">typename</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s">&#39;</span><span class="se">\&#39;</span><span class="s">&#39;</span> <span class="ow">in</span> <span class="n">typename</span><span class="p">:</span>
+            <span class="n">typename</span> <span class="o">=</span> <span class="n">typename</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\&#39;</span><span class="s">&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">typename</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;&lt;function&#39;</span><span class="p">):</span>
+            <span class="n">typename</span> <span class="o">=</span> <span class="n">typename</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">typename</span>
+</div>
+    <span class="k">def</span> <span class="nf">_validate_allowed_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s">&#39;list&#39;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">v</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">allowed_values</span><span class="p">:</span>
+                    <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Invalid value {} for {} in {}; must be in {}&#39;</span>
+                    <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">allowed_values</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">allowed_values</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Invalid value {} for {} in {}; must be in {}&#39;</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">allowed_values</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_validate_constraint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">msg_vals</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span> <span class="s">&#39;param&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s">&#39;extension&#39;</span><span class="p">:</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">constraint</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">constraint</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">constraint</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">constraint</span>  <span class="c"># pylint: disable=unpacking-non-sequence</span>
+        <span class="k">elif</span> <span class="nb">callable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">constraint</span><span class="p">):</span>
+            <span class="n">constraint</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">constraint</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;&quot;{value}&quot; failed constraint validation for {param} in {extension}.&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid constraint for {}: must be callable or a 2-tuple&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">constraint</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="n">msg_vals</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">)</span>
+        <span class="k">del</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;description&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="s">&#39;Param({})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+    <span class="n">__str__</span> <span class="o">=</span> <span class="n">__repr__</span>
+
+</div>
+<span class="n">Parameter</span> <span class="o">=</span> <span class="n">Param</span>
+
+
+<div class="viewcode-block" id="Artifact"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Artifact">[docs]</a><span class="k">class</span> <span class="nc">Artifact</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This is an artifact generated during execution/post-processing of a workload.</span>
+<span class="sd">    Unlike metrics, this represents an actual artifact, such as a file, generated.</span>
+<span class="sd">    This may be &quot;result&quot;, such as trace, or it could be &quot;meta data&quot; such as logs.</span>
+<span class="sd">    These are distinguished using the ``kind`` attribute, which also helps WA decide</span>
+<span class="sd">    how it should be handled. Currently supported kinds are:</span>
+
+<span class="sd">        :log: A log file. Not part of &quot;results&quot; as such but contains information about the</span>
+<span class="sd">              run/workload execution that be useful for diagnostics/meta analysis.</span>
+<span class="sd">        :meta: A file containing metadata. This is not part of &quot;results&quot;, but contains</span>
+<span class="sd">               information that may be necessary to reproduce the results (contrast with</span>
+<span class="sd">               ``log`` artifacts which are *not* necessary).</span>
+<span class="sd">        :data: This file contains new data, not available otherwise and should be considered</span>
+<span class="sd">               part of the &quot;results&quot; generated by WA. Most traces would fall into this category.</span>
+<span class="sd">        :export: Exported version of results or some other artifact. This signifies that</span>
+<span class="sd">                 this artifact does not contain any new data that is not available</span>
+<span class="sd">                 elsewhere and that it may be safely discarded without losing information.</span>
+<span class="sd">        :raw: Signifies that this is a raw dump/log that is normally processed to extract</span>
+<span class="sd">              useful information and is then discarded. In a sense, it is the opposite of</span>
+<span class="sd">              ``export``, but in general may also be discarded.</span>
+
+<span class="sd">              .. note:: whether a file is marked as ``log``/``data`` or ``raw`` depends on</span>
+<span class="sd">                        how important it is to preserve this file, e.g. when archiving, vs</span>
+<span class="sd">                        how much space it takes up. Unlike ``export`` artifacts which are</span>
+<span class="sd">                        (almost) always ignored by other exporters as that would never result</span>
+<span class="sd">                        in data loss, ``raw`` files *may* be processed by exporters if they</span>
+<span class="sd">                        decided that the risk of losing potentially (though unlikely) useful</span>
+<span class="sd">                        data is greater than the time/space cost of handling the artifact (e.g.</span>
+<span class="sd">                        a database uploader may choose to ignore ``raw`` artifacts, where as a</span>
+<span class="sd">                        network filer archiver may choose to archive them).</span>
+
+<span class="sd">        .. note: The kind parameter is intended to represent the logical function of a particular</span>
+<span class="sd">                 artifact, not it&#39;s intended means of processing -- this is left entirely up to the</span>
+<span class="sd">                 result processors.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">RUN</span> <span class="o">=</span> <span class="s">&#39;run&#39;</span>
+    <span class="n">ITERATION</span> <span class="o">=</span> <span class="s">&#39;iteration&#39;</span>
+
+    <span class="n">valid_kinds</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;log&#39;</span><span class="p">,</span> <span class="s">&#39;meta&#39;</span><span class="p">,</span> <span class="s">&#39;data&#39;</span><span class="p">,</span> <span class="s">&#39;export&#39;</span><span class="p">,</span> <span class="s">&#39;raw&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">RUN</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;&quot;</span>
+<span class="sd">        :param name: Name that uniquely identifies this artifact.</span>
+<span class="sd">        :param path: The *relative* path of the artifact. Depending on the ``level``</span>
+<span class="sd">                     must be either relative to the run or iteration output directory.</span>
+<span class="sd">                     Note: this path *must* be delimited using ``/`` irrespective of the</span>
+<span class="sd">                     operating system.</span>
+<span class="sd">        :param kind: The type of the artifact this is (e.g. log file, result, etc.) this</span>
+<span class="sd">                     will be used a hit to result processors. This must be one of ``&#39;log&#39;``,</span>
+<span class="sd">                     ``&#39;meta&#39;``, ``&#39;data&#39;``, ``&#39;export&#39;``, ``&#39;raw&#39;``.</span>
+<span class="sd">        :param level: The level at which the artifact will be generated. Must be either</span>
+<span class="sd">                      ``&#39;iteration&#39;`` or ``&#39;run&#39;``.</span>
+<span class="sd">        :param mandatory: Boolean value indicating whether this artifact must be present</span>
+<span class="sd">                          at the end of result processing for its level.</span>
+<span class="sd">        :param description: A free-form description of what this artifact is.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">kind</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_kinds</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid Artifact kind: {}; must be in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">kind</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_kinds</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">path</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;/&#39;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">)</span> <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">path</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">kind</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">level</span> <span class="o">=</span> <span class="n">level</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mandatory</span> <span class="o">=</span> <span class="n">mandatory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="n">description</span>
+
+<div class="viewcode-block" id="Artifact.exists"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Artifact.exists">[docs]</a>    <span class="k">def</span> <span class="nf">exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns ``True`` if artifact exists within the specified context, and</span>
+<span class="sd">        ``False`` otherwise.&quot;&quot;&quot;</span>
+        <span class="n">fullpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">fullpath</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Artifact.to_dict"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Artifact.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="Alias"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Alias">[docs]</a><span class="k">class</span> <span class="nc">Alias</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This represents a configuration alias for an extension, mapping an alternative name to</span>
+<span class="sd">    a set of parameter values, effectively providing an alternative set of default values.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extension_name</span> <span class="o">=</span> <span class="bp">None</span>  <span class="c"># gets set by the MetaClass</span>
+
+<div class="viewcode-block" id="Alias.validate"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Alias.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ext</span><span class="p">):</span>
+        <span class="n">ext_params</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ext</span><span class="o">.</span><span class="n">parameters</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">param</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ext_params</span><span class="p">:</span>
+                <span class="c"># Raising config error because aliases might have come through</span>
+                <span class="c"># the config.</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Parameter {} (defined in alias {}) is invalid for {}&#39;</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+</div></div>
+<div class="viewcode-block" id="ExtensionMeta"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.ExtensionMeta">[docs]</a><span class="k">class</span> <span class="nc">ExtensionMeta</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This basically adds some magic to extensions to make implementing new extensions, such as</span>
+<span class="sd">    workloads less complicated.</span>
+
+<span class="sd">    It ensures that certain class attributes (specified by the ``to_propagate``</span>
+<span class="sd">    attribute of the metaclass) get propagated down the inheritance hierarchy. The assumption</span>
+<span class="sd">    is that the values of the attributes specified in the class are iterable; if that is not met,</span>
+<span class="sd">    Bad Things (tm) will happen.</span>
+
+<span class="sd">    This also provides virtual method implementation, similar to those in C-derived OO languages,</span>
+<span class="sd">    and alias specifications.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">to_propagate</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s">&#39;parameters&#39;</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">AttributeCollection</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;artifacts&#39;</span><span class="p">,</span> <span class="n">Artifact</span><span class="p">,</span> <span class="n">AttributeCollection</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;core_modules&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ListCollection</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">virtual_methods</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;validate&#39;</span><span class="p">,</span> <span class="s">&#39;initialize&#39;</span><span class="p">,</span> <span class="s">&#39;finalize&#39;</span><span class="p">]</span>
+    <span class="n">global_virtuals</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;initialize&#39;</span><span class="p">,</span> <span class="s">&#39;finalize&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__new__</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">clsname</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">):</span>
+        <span class="n">mcs</span><span class="o">.</span><span class="n">_propagate_attributes</span><span class="p">(</span><span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+        <span class="n">cls</span> <span class="o">=</span> <span class="nb">type</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">clsname</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+        <span class="n">mcs</span><span class="o">.</span><span class="n">_setup_aliases</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+        <span class="n">mcs</span><span class="o">.</span><span class="n">_implement_virtual</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">bases</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cls</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_propagate_attributes</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        For attributes specified by to_propagate, their values will be a union of</span>
+<span class="sd">        that specified for cls and it&#39;s bases (cls values overriding those of bases</span>
+<span class="sd">        in case of conflicts).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">prop_attr</span><span class="p">,</span> <span class="n">attr_cls</span><span class="p">,</span> <span class="n">attr_collector_cls</span> <span class="ow">in</span> <span class="n">mcs</span><span class="o">.</span><span class="n">to_propagate</span><span class="p">:</span>
+            <span class="n">should_propagate</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="n">propagated</span> <span class="o">=</span> <span class="n">attr_collector_cls</span><span class="p">(</span><span class="n">attr_cls</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">base</span> <span class="ow">in</span> <span class="n">bases</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">prop_attr</span><span class="p">):</span>
+                    <span class="n">propagated</span> <span class="o">+=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">prop_attr</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+                    <span class="n">should_propagate</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">if</span> <span class="n">prop_attr</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+                <span class="n">propagated</span> <span class="o">+=</span> <span class="n">attrs</span><span class="p">[</span><span class="n">prop_attr</span><span class="p">]</span> <span class="ow">or</span> <span class="p">[]</span>
+                <span class="n">should_propagate</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">if</span> <span class="n">should_propagate</span><span class="p">:</span>
+                <span class="n">attrs</span><span class="p">[</span><span class="n">prop_attr</span><span class="p">]</span> <span class="o">=</span> <span class="n">propagated</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_setup_aliases</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">cls</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&#39;aliases&#39;</span><span class="p">):</span>
+            <span class="n">aliases</span><span class="p">,</span> <span class="n">cls</span><span class="o">.</span><span class="n">aliases</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">aliases</span><span class="p">,</span> <span class="n">AliasCollection</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">alias</span> <span class="ow">in</span> <span class="n">aliases</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">alias</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+                    <span class="n">alias</span> <span class="o">=</span> <span class="n">Alias</span><span class="p">(</span><span class="n">alias</span><span class="p">)</span>
+                <span class="n">alias</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+                <span class="n">alias</span><span class="o">.</span><span class="n">extension_name</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">name</span>
+                <span class="n">cls</span><span class="o">.</span><span class="n">aliases</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">alias</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_implement_virtual</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">cls</span><span class="p">,</span> <span class="n">bases</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This implements automatic method propagation to the bases, so</span>
+<span class="sd">        that you don&#39;t have to do something like</span>
+
+<span class="sd">            super(cls, self).vmname()</span>
+
+<span class="sd">        This also ensures that the methods that have beend identified as</span>
+<span class="sd">        &quot;globally virtual&quot; are executed exactly once per WA execution, even if</span>
+<span class="sd">        invoked through instances of different subclasses</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">methods</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">called_globals</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">vmname</span> <span class="ow">in</span> <span class="n">mcs</span><span class="o">.</span><span class="n">virtual_methods</span><span class="p">:</span>
+            <span class="n">clsmethod</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">vmname</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">clsmethod</span><span class="p">:</span>
+                <span class="n">basemethods</span> <span class="o">=</span> <span class="p">[</span><span class="nb">getattr</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">vmname</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">bases</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">vmname</span><span class="p">)]</span>
+                <span class="n">methods</span><span class="p">[</span><span class="n">vmname</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">bm</span> <span class="k">for</span> <span class="n">bm</span> <span class="ow">in</span> <span class="n">basemethods</span> <span class="k">if</span> <span class="n">bm</span> <span class="o">!=</span> <span class="n">clsmethod</span><span class="p">]</span>
+                <span class="n">methods</span><span class="p">[</span><span class="n">vmname</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">clsmethod</span><span class="p">)</span>
+
+                <span class="k">def</span> <span class="nf">generate_method_wrapper</span><span class="p">(</span><span class="n">vname</span><span class="p">):</span>  <span class="c"># pylint: disable=unused-argument</span>
+                    <span class="c"># this creates a closure with the method name so that it</span>
+                    <span class="c"># does not need to be passed to the wrapper as an argument,</span>
+                    <span class="c"># leaving the wrapper to accept exactly the same set of</span>
+                    <span class="c"># arguments as the method it is wrapping.</span>
+                    <span class="n">name__</span> <span class="o">=</span> <span class="n">vmname</span>  <span class="c"># pylint: disable=cell-var-from-loop</span>
+
+                    <span class="k">def</span> <span class="nf">wrapper</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+                        <span class="k">for</span> <span class="n">dm</span> <span class="ow">in</span> <span class="n">methods</span><span class="p">[</span><span class="n">name__</span><span class="p">]:</span>
+                            <span class="k">if</span> <span class="n">name__</span> <span class="ow">in</span> <span class="n">mcs</span><span class="o">.</span><span class="n">global_virtuals</span><span class="p">:</span>
+                                <span class="k">if</span> <span class="n">dm</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">called_globals</span><span class="p">:</span>
+                                    <span class="n">dm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                                    <span class="n">called_globals</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">dm</span><span class="p">)</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">dm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="n">wrapper</span>
+
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">vmname</span><span class="p">,</span> <span class="n">generate_method_wrapper</span><span class="p">(</span><span class="n">vmname</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="Extension"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension">[docs]</a><span class="k">class</span> <span class="nc">Extension</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for all WA extensions. An extension is basically a plug-in.</span>
+<span class="sd">    It extends the functionality of WA in some way. Extensions are discovered</span>
+<span class="sd">    and loaded dynamically by the extension loader upon invocation of WA scripts.</span>
+<span class="sd">    Adding an extension is a matter of placing a class that implements an appropriate</span>
+<span class="sd">    interface somewhere it would be discovered by the loader. That &quot;somewhere&quot; is</span>
+<span class="sd">    typically one of the extension subdirectories under ``~/.workload_automation/``.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">__metaclass__</span> <span class="o">=</span> <span class="n">ExtensionMeta</span>
+
+    <span class="n">kind</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;modules&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">list</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Lists the modules to be loaded by this extension. A module is a plug-in that</span>
+<span class="s">                  further extends functionality of an extension.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+    <span class="n">artifacts</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">aliases</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">core_modules</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="Extension.get_default_config"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension.get_default_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_default_config</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">default</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">parameters</span><span class="p">}</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">dependencies_directory</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">dependencies_directory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">_classname</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__check_from_loader</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_classname</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_modules</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">capabilities</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="p">,</span> <span class="s">&#39;capabilities&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+            <span class="n">param</span><span class="o">.</span><span class="n">set_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Unexpected parameter &quot;{}&quot; for {}&#39;</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+<div class="viewcode-block" id="Extension.get_config"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension.get_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns current configuration (i.e. parameter values) of this extension.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+            <span class="n">config</span><span class="p">[</span><span class="n">param</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config</span>
+</div>
+<div class="viewcode-block" id="Extension.validate"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform basic validation to ensure that this extension is capable of running.</span>
+<span class="sd">        This is intended as an early check to ensure the extension has not been mis-configured,</span>
+<span class="sd">        rather than a comprehensive check (that may, e.g., require access to the execution</span>
+<span class="sd">        context).</span>
+
+<span class="sd">        This method may also be used to enforce (i.e. set as well as check) inter-parameter</span>
+<span class="sd">        constraints for the extension (e.g. if valid values for parameter A depend on the value</span>
+<span class="sd">        of parameter B -- something that is not possible to enfroce using ``Parameter``\ &#39;s</span>
+<span class="sd">        ``constraint`` attribute.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s">&#39;Name not set for {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_classname</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+            <span class="n">param</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Extension.initialize"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="Extension.finalize"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension.finalize">[docs]</a>    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="Extension.check_artifacts"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension.check_artifacts">[docs]</a>    <span class="k">def</span> <span class="nf">check_artifacts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">level</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Make sure that all mandatory artifacts have been generated.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">artifact</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">artifact</span><span class="o">.</span><span class="n">level</span> <span class="o">!=</span> <span class="n">level</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">artifact</span><span class="o">.</span><span class="n">mandatory</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">fullpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">artifact</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">fullpath</span><span class="p">):</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Mandatory &quot;{}&quot; has not been generated for {}.&#39;</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">artifact</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+</div>
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s">&#39;_modules&#39;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;_modules accessed too early!&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">module</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_modules</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+                <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Extension.load_modules"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension.load_modules">[docs]</a>    <span class="k">def</span> <span class="nf">load_modules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loader</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Load the modules specified by the &quot;modules&quot; Parameter using the provided loader. A loader</span>
+<span class="sd">        can be any object that has an atribute called &quot;get_module&quot; that implements the following</span>
+<span class="sd">        signature::</span>
+
+<span class="sd">            get_module(name, owner, **kwargs)</span>
+
+<span class="sd">        and returns an instance of :class:`wlauto.core.extension.Module`. If the module with the</span>
+<span class="sd">        specified name is not found, the loader must raise an appropriate exception.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">modules</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">core_modules</span><span class="p">))</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">modules</span> <span class="ow">or</span> <span class="p">[]))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">modules</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">for</span> <span class="n">module_spec</span> <span class="ow">in</span> <span class="n">modules</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">module_spec</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">module</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_module</span><span class="p">(</span><span class="n">loader</span><span class="p">,</span> <span class="n">module_spec</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_install_module</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Extension.has"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Extension.has">[docs]</a>    <span class="k">def</span> <span class="nf">has</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">capability</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check if this extension has the specified capability. The alternative method ``can`` is</span>
+<span class="sd">        identical to this. Which to use is up to the caller depending on what makes semantic sense</span>
+<span class="sd">        in the context of the capability, e.g. ``can(&#39;hard_reset&#39;)`` vs  ``has(&#39;active_cooling&#39;)``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">capability</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">capabilities</span>
+</div>
+    <span class="n">can</span> <span class="o">=</span> <span class="n">has</span>
+
+    <span class="k">def</span> <span class="nf">_load_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loader</span><span class="p">,</span> <span class="n">module_spec</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module_spec</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">module_spec</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module_spec</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">module_spec</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid module spec: {}; dict must have exctly one key -- the module name.&#39;</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">module_spec</span><span class="p">))</span>
+            <span class="n">name</span><span class="p">,</span> <span class="n">params</span> <span class="o">=</span> <span class="n">module_spec</span><span class="o">.</span><span class="n">items</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid module spec: {}; must be a string or a one-key dict.&#39;</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">module_spec</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Invalid module spec: {}; dict value must also be a dict.&#39;</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">module_spec</span><span class="p">))</span>
+
+        <span class="n">module</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">get_module</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">owner</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span>
+        <span class="n">module</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">module</span>
+
+    <span class="k">def</span> <span class="nf">_install_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">capability</span> <span class="ow">in</span> <span class="n">module</span><span class="o">.</span><span class="n">capabilities</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">capability</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">capabilities</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">capabilities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">capability</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_modules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__check_from_loader</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        There are a few things that need to happen in order to get a valide extension instance.</span>
+<span class="sd">        Not all of them are currently done through standard Python initialisation mechanisms</span>
+<span class="sd">        (specifically, the loading of modules and alias resolution). In order to avoid potential</span>
+<span class="sd">        problems with not fully loaded extensions, make sure that an extension is *only* instantiated</span>
+<span class="sd">        by the loader.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">stack</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">stack</span><span class="p">()</span>
+        <span class="n">stack</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>  <span class="c"># current frame</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="n">stack</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="c"># skip throuth the init call chain</span>
+        <span class="k">while</span> <span class="n">stack</span> <span class="ow">and</span> <span class="n">frame</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;__init__&#39;</span><span class="p">:</span>
+            <span class="n">frame</span> <span class="o">=</span> <span class="n">stack</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">frame</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&#39;_instantiate&#39;</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Attempting to instantiate {} directly (must be done through an ExtensionLoader)&#39;</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="Module"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Module">[docs]</a><span class="k">class</span> <span class="nc">Module</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This is a &quot;plugin&quot; for an extension this is intended to capture functionality that may be optional</span>
+<span class="sd">    for an extension, and so may or may not be present in a particular setup; or, conversely, functionality</span>
+<span class="sd">    that may be reusable between multiple devices, even if they are not with the same inheritance hierarchy.</span>
+
+<span class="sd">    In other words, a Module is roughly equivalent to a kernel module and its primary purpose is to</span>
+<span class="sd">    implement WA &quot;drivers&quot; for various peripherals that may or may not be present in a particular setup.</span>
+
+<span class="sd">    .. note:: A mudule is itself an Extension and can therefore have it&#39;s own modules.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">capabilities</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">root_owner</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">owner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">owner</span>
+        <span class="k">while</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">owner</span><span class="p">,</span> <span class="n">Module</span><span class="p">)</span> <span class="ow">and</span> <span class="n">owner</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="n">owner</span> <span class="o">=</span> <span class="n">owner</span><span class="o">.</span><span class="n">owner</span>
+        <span class="k">return</span> <span class="n">owner</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Module</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">owner</span> <span class="o">=</span> <span class="n">owner</span>
+        <span class="k">while</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">owner</span><span class="p">,</span> <span class="n">Module</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">owner</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Circular module import for {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+<div class="viewcode-block" id="Module.initialize"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.commands.list.Module.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

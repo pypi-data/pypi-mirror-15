@@ -1,0 +1,444 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.geekbench &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.geekbench</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">AndroidUiAutoBenchmark</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Artifact</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">WorkloadError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">capitalize</span>
+<span class="kn">import</span> <span class="nn">wlauto.common.android.resources</span>
+
+
+<div class="viewcode-block" id="Geekbench"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.Geekbench">[docs]</a><span class="k">class</span> <span class="nc">Geekbench</span><span class="p">(</span><span class="n">AndroidUiAutoBenchmark</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;geekbench&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Geekbench provides a comprehensive set of benchmarks engineered to quickly</span>
+<span class="s">    and accurately measure processor and memory performance.</span>
+
+<span class="s">    http://www.primatelabs.com/geekbench/</span>
+
+<span class="s">    From the website:</span>
+
+<span class="s">    Designed to make benchmarks easy to run and easy to understand, Geekbench</span>
+<span class="s">    takes the guesswork out of producing robust and reliable benchmark results.</span>
+
+<span class="s">    Geekbench scores are calibrated against a baseline score of 1,000 (which is</span>
+<span class="s">    the score of a single-processor Power Mac G5 @ 1.6GHz). Higher scores are</span>
+<span class="s">    better, with double the score indicating double the performance.</span>
+
+<span class="s">    The benchmarks fall into one of four categories:</span>
+
+<span class="s">        - integer performance.</span>
+<span class="s">        - floating point performance.</span>
+<span class="s">        - memory performance.</span>
+<span class="s">        - stream performance.</span>
+
+<span class="s">    Geekbench benchmarks: http://www.primatelabs.com/geekbench/doc/benchmarks.html</span>
+
+<span class="s">    Geekbench scoring methedology:</span>
+<span class="s">    http://support.primatelabs.com/kb/geekbench/interpreting-geekbench-scores</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">summary_metrics</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;score&#39;</span><span class="p">,</span> <span class="s">&#39;multicore_score&#39;</span><span class="p">]</span>
+    <span class="n">versions</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;3&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s">&#39;package&#39;</span><span class="p">:</span> <span class="s">&#39;com.primatelabs.geekbench3&#39;</span><span class="p">,</span>
+            <span class="s">&#39;activity&#39;</span><span class="p">:</span> <span class="s">&#39;.HomeActivity&#39;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s">&#39;2&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s">&#39;package&#39;</span><span class="p">:</span> <span class="s">&#39;ca.primatelabs.geekbench2&#39;</span><span class="p">,</span>
+            <span class="s">&#39;activity&#39;</span><span class="p">:</span> <span class="s">&#39;.HomeActivity&#39;</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">}</span>
+    <span class="n">begin_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;^\s*D/WebViewClassic.loadDataWithBaseURL\(\s*\d+\s*\)&#39;</span>
+                             <span class="s">r&#39;\s*:\s*(?P&lt;content&gt;\&lt;.*)\s*$&#39;</span><span class="p">)</span>
+    <span class="n">replace_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;&lt;[^&gt;]*&gt;&#39;</span><span class="p">)</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;version&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">sorted</span><span class="p">(</span><span class="n">versions</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">allowed_values</span><span class="o">=</span><span class="nb">sorted</span><span class="p">(</span><span class="n">versions</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Specifies which version of the workload should be run.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;times&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;Specfies the number of times the benchmark will be run in a &quot;tight &#39;</span>
+                               <span class="s">&#39;loop&quot;, i.e. without performaing setup/teardown inbetween.&#39;</span><span class="p">)),</span>
+    <span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">activity</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">versions</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">][</span><span class="s">&#39;activity&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">package</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">versions</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">][</span><span class="s">&#39;package&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Geekbench</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;version&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_params</span><span class="p">[</span><span class="s">&#39;times&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">times</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_timeout</span> <span class="o">=</span> <span class="mi">5</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">times</span>
+
+<div class="viewcode-block" id="Geekbench.init_resources"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.Geekbench.init_resources">[docs]</a>    <span class="k">def</span> <span class="nf">init_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">apk_file</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">wlauto</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">android</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">ApkFile</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="n">version</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_file</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">wlauto</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">android</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">JarFile</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_uiauto_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span>
+                                                        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uiauto_file</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_package</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">uiauto_package</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uiauto_file</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="Geekbench.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.Geekbench.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Geekbench</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update_result</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">update_method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;update_result_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">))</span>
+        <span class="n">update_method</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">times</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span> <span class="o">==</span> <span class="s">&#39;2&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;times parameter is not supported for version 2 of Geekbench.&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Geekbench.update_result_2"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.Geekbench.update_result_2">[docs]</a>    <span class="k">def</span> <span class="nf">update_result_2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">score_calculator</span> <span class="o">=</span> <span class="n">GBScoreCalculator</span><span class="p">()</span>
+        <span class="n">score_calculator</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">logcat_log</span><span class="p">)</span>
+        <span class="n">score_calculator</span><span class="o">.</span><span class="n">update_results</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Geekbench.update_result_3"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.Geekbench.update_result_3">[docs]</a>    <span class="k">def</span> <span class="nf">update_result_3</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">outfile_glob</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">package_data_directory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">,</span> <span class="s">&#39;files&#39;</span><span class="p">,</span> <span class="s">&#39;*gb3&#39;</span><span class="p">)</span>
+        <span class="n">on_device_output_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span>
+                                  <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;ls {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">outfile_glob</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">on_device_output_file</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">on_device_output_files</span><span class="p">):</span>
+            <span class="n">host_temp_file</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mktemp</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="n">on_device_output_file</span><span class="p">,</span> <span class="n">host_temp_file</span><span class="p">)</span>
+            <span class="n">host_output_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">on_device_output_file</span><span class="p">))</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">host_temp_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">host_temp_file</span><span class="p">)</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">host_output_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+                <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">wfh</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">iteration_artifacts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Artifact</span><span class="p">(</span><span class="s">&#39;geekout&#39;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">on_device_output_file</span><span class="p">),</span>
+                                                        <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">,</span>
+                                                        <span class="n">description</span><span class="o">=</span><span class="s">&#39;Geekbench 3 output from device.&#39;</span><span class="p">))</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">namemify</span><span class="p">(</span><span class="s">&#39;score&#39;</span><span class="p">,</span> <span class="n">i</span><span class="p">),</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;score&#39;</span><span class="p">])</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">namemify</span><span class="p">(</span><span class="s">&#39;multicore_score&#39;</span><span class="p">,</span> <span class="n">i</span><span class="p">),</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;multicore_score&#39;</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;sections&#39;</span><span class="p">]:</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">namemify</span><span class="p">(</span><span class="n">section</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s">&#39;_score&#39;</span><span class="p">,</span> <span class="n">i</span><span class="p">),</span> <span class="n">section</span><span class="p">[</span><span class="s">&#39;score&#39;</span><span class="p">])</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">namemify</span><span class="p">(</span><span class="n">section</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s">&#39;_multicore_score&#39;</span><span class="p">,</span> <span class="n">i</span><span class="p">),</span>
+                                          <span class="n">section</span><span class="p">[</span><span class="s">&#39;multicore_score&#39;</span><span class="p">])</span>
+
+</div></div>
+<div class="viewcode-block" id="GBWorkload"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.GBWorkload">[docs]</a><span class="k">class</span> <span class="nc">GBWorkload</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Geekbench workload (not to be confused with WA&#39;s workloads). This is a single test run by</span>
+<span class="sd">    geek bench, such as preforming compression or generating Madelbrot.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># Index maps onto the hundreds digit of the ID.</span>
+    <span class="n">categories</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span><span class="p">,</span> <span class="s">&#39;integer&#39;</span><span class="p">,</span> <span class="s">&#39;float&#39;</span><span class="p">,</span> <span class="s">&#39;memory&#39;</span><span class="p">,</span> <span class="s">&#39;stream&#39;</span><span class="p">]</span>
+
+    <span class="c"># 2003 entry-level Power Mac G5 is considered to have a baseline score of</span>
+    <span class="c"># 1000 for every category.</span>
+    <span class="n">pmac_g5_base_score</span> <span class="o">=</span> <span class="mi">1000</span>
+
+    <span class="n">units_conversion_map</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;K&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s">&#39;M&#39;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
+        <span class="s">&#39;G&#39;</span><span class="p">:</span> <span class="mi">1000000</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wlid</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">pmac_g5_st_score</span><span class="p">,</span> <span class="n">pmac_g5_mt_score</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param wlid: A three-digit workload ID. Uniquely identifies a workload and also</span>
+<span class="sd">                     determines the category a workload belongs to.</span>
+<span class="sd">        :param name: The name of the workload.</span>
+<span class="sd">        :param pmac_g5_st_score: Score achieved for this workload on 2003 entry-level</span>
+<span class="sd">                                 Power Mac G5 running in a single thread.</span>
+<span class="sd">        :param pmac_g5_mt_score: Score achieved for this workload on 2003 entry-level</span>
+<span class="sd">                                 Power Mac G5 running in multiple threads.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wlid</span> <span class="o">=</span> <span class="n">wlid</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pmac_g5_st_score</span> <span class="o">=</span> <span class="n">pmac_g5_st_score</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pmac_g5_mt_score</span> <span class="o">=</span> <span class="n">pmac_g5_mt_score</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">category</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">wlid</span><span class="p">)</span> <span class="o">//</span> <span class="mi">100</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collected_results</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="GBWorkload.add_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.GBWorkload.add_result">[docs]</a>    <span class="k">def</span> <span class="nf">add_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collected_results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">convert_to_kilo</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="GBWorkload.convert_to_kilo"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.GBWorkload.convert_to_kilo">[docs]</a>    <span class="k">def</span> <span class="nf">convert_to_kilo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">units_conversion_map</span><span class="p">[</span><span class="n">units</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+</div>
+<div class="viewcode-block" id="GBWorkload.clear"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.GBWorkload.clear">[docs]</a>    <span class="k">def</span> <span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collected_results</span> <span class="o">=</span> <span class="p">[]</span>
+</div>
+<div class="viewcode-block" id="GBWorkload.get_scores"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.GBWorkload.get_scores">[docs]</a>    <span class="k">def</span> <span class="nf">get_scores</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a tuple (single-thraded score, multi-threaded score) for this workload.</span>
+<span class="sd">        Some workloads only have a single-threaded score, in which case multi-threaded</span>
+<span class="sd">        score will be ``None``.</span>
+
+<span class="sd">        Geekbench will perform four iterations of each workload in single-threaded and,</span>
+<span class="sd">        for some workloads, multi-threaded configurations. Thus there should always be</span>
+<span class="sd">        either four or eight scores collected for each workload. Single-threaded iterations</span>
+<span class="sd">        are always done before multi-threaded, so the ordering of the scores can be used</span>
+<span class="sd">        to determine which configuration they belong to.</span>
+
+<span class="sd">        This method should not be called before score collection has finished.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">no_of_results</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collected_results</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">no_of_results</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_calculate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collected_results</span><span class="p">[:</span><span class="mi">4</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">pmac_g5_st_score</span><span class="p">),</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">no_of_results</span> <span class="o">==</span> <span class="mi">8</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_calculate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collected_results</span><span class="p">[:</span><span class="mi">4</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">pmac_g5_st_score</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_calculate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collected_results</span><span class="p">[</span><span class="mi">4</span><span class="p">:],</span> <span class="bp">self</span><span class="o">.</span><span class="n">pmac_g5_mt_score</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Collected {} results for Geekbench {} workload;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">no_of_results</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">msg</span> <span class="o">+=</span> <span class="s">&#39; expecting either 4 or 8.&#39;</span>
+            <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_calculate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">scale_factor</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">pmac_g5_base_score</span> <span class="o">/</span> <span class="n">scale_factor</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+</div>
+<div class="viewcode-block" id="GBScoreCalculator"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.GBScoreCalculator">[docs]</a><span class="k">class</span> <span class="nc">GBScoreCalculator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parses logcat output to extract raw Geekbench workload values and converts them into</span>
+<span class="sd">    category and overall scores.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">result_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;workload (?P&lt;id&gt;\d+) (?P&lt;value&gt;[0-9.]+) &#39;</span>
+                              <span class="s">r&#39;(?P&lt;units&gt;[a-zA-Z/]+) (?P&lt;time&gt;[0-9.]+)s&#39;</span><span class="p">)</span>
+
+    <span class="c"># Indicates contribution to the overall score.</span>
+    <span class="n">category_weights</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;integer&#39;</span><span class="p">:</span> <span class="mf">0.3357231</span><span class="p">,</span>
+        <span class="s">&#39;float&#39;</span><span class="p">:</span> <span class="mf">0.3594</span><span class="p">,</span>
+        <span class="s">&#39;memory&#39;</span><span class="p">:</span> <span class="mf">0.1926489</span><span class="p">,</span>
+        <span class="s">&#39;stream&#39;</span><span class="p">:</span> <span class="mf">0.1054738</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="c">#pylint: disable=C0326</span>
+    <span class="n">workloads</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="c">#          ID    Name        Power Mac ST  Power Mac MT</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">101</span><span class="p">,</span> <span class="s">&#39;Blowfish&#39;</span><span class="p">,</span>         <span class="mi">43971</span><span class="p">,</span>   <span class="mi">40979</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">102</span><span class="p">,</span> <span class="s">&#39;Text Compress&#39;</span><span class="p">,</span>    <span class="mi">3202</span><span class="p">,</span>    <span class="mi">3280</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">103</span><span class="p">,</span> <span class="s">&#39;Text Decompress&#39;</span><span class="p">,</span>  <span class="mi">4112</span><span class="p">,</span>    <span class="mi">3986</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">104</span><span class="p">,</span> <span class="s">&#39;Image Compress&#39;</span><span class="p">,</span>   <span class="mi">8272</span><span class="p">,</span>    <span class="mi">8412</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">105</span><span class="p">,</span> <span class="s">&#39;Image Decompress&#39;</span><span class="p">,</span> <span class="mi">16800</span><span class="p">,</span>   <span class="mi">16330</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">107</span><span class="p">,</span> <span class="s">&#39;Lua&#39;</span><span class="p">,</span>              <span class="mi">385</span><span class="p">,</span>     <span class="mi">385</span><span class="p">),</span>
+
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">201</span><span class="p">,</span> <span class="s">&#39;Mandelbrot&#39;</span><span class="p">,</span>       <span class="mi">665589</span><span class="p">,</span>  <span class="mi">653746</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">202</span><span class="p">,</span> <span class="s">&#39;Dot Product&#39;</span><span class="p">,</span>      <span class="mi">481449</span><span class="p">,</span>  <span class="mi">455422</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">203</span><span class="p">,</span> <span class="s">&#39;LU Decomposition&#39;</span><span class="p">,</span> <span class="mi">889933</span><span class="p">,</span>  <span class="mi">877657</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">204</span><span class="p">,</span> <span class="s">&#39;Primality Test&#39;</span><span class="p">,</span>   <span class="mi">149394</span><span class="p">,</span>  <span class="mi">185502</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">205</span><span class="p">,</span> <span class="s">&#39;Sharpen Image&#39;</span><span class="p">,</span>    <span class="mi">2340</span><span class="p">,</span>    <span class="mi">2304</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">206</span><span class="p">,</span> <span class="s">&#39;Blur Image&#39;</span><span class="p">,</span>       <span class="mi">791</span><span class="p">,</span>     <span class="mi">787</span><span class="p">),</span>
+
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">302</span><span class="p">,</span> <span class="s">&#39;Read Sequential&#39;</span><span class="p">,</span>  <span class="mi">1226708</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">304</span><span class="p">,</span> <span class="s">&#39;Write Sequential&#39;</span><span class="p">,</span> <span class="mi">683782</span><span class="p">,</span>  <span class="bp">None</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">306</span><span class="p">,</span> <span class="s">&#39;Stdlib Allocate&#39;</span><span class="p">,</span>  <span class="mi">3739</span><span class="p">,</span>    <span class="bp">None</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">307</span><span class="p">,</span> <span class="s">&#39;Stdlib Write&#39;</span><span class="p">,</span>     <span class="mi">2070681</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">308</span><span class="p">,</span> <span class="s">&#39;Stdlib Copy&#39;</span><span class="p">,</span>      <span class="mi">1030360</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">401</span><span class="p">,</span> <span class="s">&#39;Stream Copy&#39;</span><span class="p">,</span>      <span class="mi">1367892</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">402</span><span class="p">,</span> <span class="s">&#39;Stream Scale&#39;</span><span class="p">,</span>     <span class="mi">1296053</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">403</span><span class="p">,</span> <span class="s">&#39;Stream Add&#39;</span><span class="p">,</span>       <span class="mi">1507115</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+        <span class="n">GBWorkload</span><span class="p">(</span><span class="mi">404</span><span class="p">,</span> <span class="s">&#39;Stream Triad&#39;</span><span class="p">,</span>     <span class="mi">1384526</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workload_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">wl</span><span class="o">.</span><span class="n">wlid</span><span class="p">:</span> <span class="n">wl</span> <span class="k">for</span> <span class="n">wl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workloads</span><span class="p">}</span>
+
+<div class="viewcode-block" id="GBScoreCalculator.parse"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.GBScoreCalculator.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Extract results from the specified file. The file should contain a logcat log of Geekbench execution.</span>
+<span class="sd">        Iteration results in the log appear as &#39;I/geekbench&#39; category entries in the following format::</span>
+
+<span class="sd">         |                     worklod ID          value      units   timing</span>
+<span class="sd">         |                         \-------------    |     ----/     ---/</span>
+<span class="sd">         |                                      |    |     |         |</span>
+<span class="sd">         |  I/geekbench(29026): [....] workload 101 132.9 MB/sec 0.0300939s</span>
+<span class="sd">         |      |               |</span>
+<span class="sd">         |      |               -----\</span>
+<span class="sd">         |      label    random crap we don&#39;t care about</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">wl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workloads</span><span class="p">:</span>
+            <span class="n">wl</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">match</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">result_regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                    <span class="n">wkload</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_map</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">))]</span>
+                    <span class="n">wkload</span><span class="o">.</span><span class="n">add_result</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;value&#39;</span><span class="p">)),</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;units&#39;</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="GBScoreCalculator.update_results"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.GBScoreCalculator.update_results">[docs]</a>    <span class="k">def</span> <span class="nf">update_results</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        http://support.primatelabs.com/kb/geekbench/interpreting-geekbench-2-scores</span>
+
+<span class="sd">        From the website:</span>
+
+<span class="sd">        Each workload&#39;s performance is compared against a baseline to determine a score. These</span>
+<span class="sd">        scores are averaged together to determine an overall, or Geekbench, score for the system.</span>
+
+<span class="sd">        Geekbench uses the 2003 entry-level Power Mac G5 as the baseline with a score of 1,000</span>
+<span class="sd">        points. Higher scores are better, with double the score indicating double the performance.</span>
+
+<span class="sd">        Geekbench provides three different kinds of scores:</span>
+
+<span class="sd">            :Workload Scores: Each time a workload is executed Geekbench calculates a score based</span>
+<span class="sd">                              on the computer&#39;s performance compared to the baseline</span>
+<span class="sd">                              performance. There can be multiple workload scores for the</span>
+<span class="sd">                              same workload as Geekbench can execute each workload multiple</span>
+<span class="sd">                              times with different settings. For example, the &quot;Dot Product&quot;</span>
+<span class="sd">                              workload is executed four times (single-threaded scalar code,</span>
+<span class="sd">                              multi-threaded scalar code, single-threaded vector code, and</span>
+<span class="sd">                              multi-threaded vector code) producing four &quot;Dot Product&quot; scores.</span>
+
+<span class="sd">            :Section Scores: A section score is the average of all the workload scores for</span>
+<span class="sd">                             workloads that are part of the section. These scores are useful</span>
+<span class="sd">                             for determining the performance of the computer in a particular</span>
+<span class="sd">                             area. See the section descriptions above for a summary on what</span>
+<span class="sd">                             each section measures.</span>
+
+<span class="sd">            :Geekbench Score: The Geekbench score is the weighted average of the four section</span>
+<span class="sd">                              scores. The Geekbench score provides a way to quickly compare</span>
+<span class="sd">                              performance across different computers and different platforms</span>
+<span class="sd">                              without getting bogged down in details.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">scores_by_category</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">wkload</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workloads</span><span class="p">:</span>
+            <span class="n">st_score</span><span class="p">,</span> <span class="n">mt_score</span> <span class="o">=</span> <span class="n">wkload</span><span class="o">.</span><span class="n">get_scores</span><span class="p">()</span>
+            <span class="n">scores_by_category</span><span class="p">[</span><span class="n">wkload</span><span class="o">.</span><span class="n">category</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">st_score</span><span class="p">)</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">wkload</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39; (single-threaded)&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">st_score</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">mt_score</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">scores_by_category</span><span class="p">[</span><span class="n">wkload</span><span class="o">.</span><span class="n">category</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mt_score</span><span class="p">)</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">wkload</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39; (multi-threaded)&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">mt_score</span><span class="p">))</span>
+
+        <span class="n">overall_score</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">category</span> <span class="ow">in</span> <span class="n">scores_by_category</span><span class="p">:</span>
+            <span class="n">scores</span> <span class="o">=</span> <span class="n">scores_by_category</span><span class="p">[</span><span class="n">category</span><span class="p">]</span>
+            <span class="n">category_score</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+            <span class="n">overall_score</span> <span class="o">+=</span> <span class="n">category_score</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">category_weights</span><span class="p">[</span><span class="n">category</span><span class="p">]</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">capitalize</span><span class="p">(</span><span class="n">category</span><span class="p">)</span> <span class="o">+</span> <span class="s">&#39; Score&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">category_score</span><span class="p">))</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;Geekbench Score&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">overall_score</span><span class="p">))</span>
+
+</div></div>
+<div class="viewcode-block" id="namemify"><a class="viewcode-back" href="../../../api/wlauto.workloads.geekbench.html#wlauto.workloads.geekbench.namemify">[docs]</a><span class="k">def</span> <span class="nf">namemify</span><span class="p">(</span><span class="n">basename</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">basename</span> <span class="o">+</span> <span class="p">(</span><span class="s">&#39; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span> <span class="k">else</span> <span class="s">&#39;&#39;</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

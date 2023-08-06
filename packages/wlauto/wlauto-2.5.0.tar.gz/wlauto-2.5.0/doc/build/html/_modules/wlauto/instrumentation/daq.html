@@ -1,0 +1,509 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.instrumentation.daq &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="wlauto.instrumentation" href="../instrumentation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" accesskey="U">wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.instrumentation.daq</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=W0613,E1101,access-member-before-definition,attribute-defined-outside-init</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">csv</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span><span class="p">,</span> <span class="n">defaultdict</span>
+<span class="kn">from</span> <span class="nn">string</span> <span class="kn">import</span> <span class="n">ascii_lowercase</span>
+
+<span class="kn">from</span> <span class="nn">multiprocessing</span> <span class="kn">import</span> <span class="n">Process</span><span class="p">,</span> <span class="n">Queue</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Instrument</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.core</span> <span class="kn">import</span> <span class="n">signal</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">InstrumentError</span><span class="p">,</span> <span class="n">DeviceError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">ensure_directory_exists</span> <span class="k">as</span> <span class="n">_d</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">list_of_ints</span><span class="p">,</span> <span class="n">list_of_strs</span><span class="p">,</span> <span class="n">boolean</span>
+
+<span class="n">daqpower_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">),</span> <span class="s">&#39;..&#39;</span><span class="p">,</span> <span class="s">&#39;..&#39;</span><span class="p">,</span> <span class="s">&#39;external&#39;</span><span class="p">,</span> <span class="s">&#39;daq_server&#39;</span><span class="p">,</span> <span class="s">&#39;src&#39;</span><span class="p">)</span>
+<span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">daqpower_path</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">daqpower.client</span> <span class="kn">as</span> <span class="nn">daq</span>  <span class="c"># pylint: disable=F0401</span>
+    <span class="kn">from</span> <span class="nn">daqpower.config</span> <span class="kn">import</span> <span class="n">DeviceConfiguration</span><span class="p">,</span> <span class="n">ServerConfiguration</span><span class="p">,</span> <span class="n">ConfigurationError</span>  <span class="c"># pylint: disable=F0401</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">daq</span><span class="p">,</span> <span class="n">DeviceConfiguration</span><span class="p">,</span> <span class="n">ServerConfiguration</span><span class="p">,</span> <span class="n">ConfigurationError</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span>
+    <span class="n">import_error_mesg</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">message</span>
+<span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+
+<span class="n">UNITS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;energy&#39;</span><span class="p">:</span> <span class="s">&#39;Joules&#39;</span><span class="p">,</span>
+    <span class="s">&#39;power&#39;</span><span class="p">:</span> <span class="s">&#39;Watts&#39;</span><span class="p">,</span>
+    <span class="s">&#39;voltage&#39;</span><span class="p">:</span> <span class="s">&#39;Volts&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="n">GPIO_ROOT</span> <span class="o">=</span> <span class="s">&#39;/sys/class/gpio&#39;</span>
+<span class="n">TRACE_MARKER_PATH</span> <span class="o">=</span> <span class="s">&#39;/sys/kernel/debug/tracing/trace_marker&#39;</span>
+
+
+<div class="viewcode-block" id="dict_or_bool"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.dict_or_bool">[docs]</a><span class="k">def</span> <span class="nf">dict_or_bool</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Ensures that either a dictionary or a boolean is used as a parameter.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="k">return</span> <span class="n">boolean</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="Daq"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq">[docs]</a><span class="k">class</span> <span class="nc">Daq</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;daq&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    DAQ instrument obtains the power consumption of the target device&#39;s core</span>
+<span class="s">    measured by National Instruments Data Acquisition(DAQ) device.</span>
+
+<span class="s">    WA communicates with a DAQ device server running on a Windows machine</span>
+<span class="s">    (Please refer to :ref:`daq_setup`) over a network. You must specify the IP</span>
+<span class="s">    address and port the server is listening on in the config file as follows ::</span>
+
+<span class="s">        daq_server_host = &#39;10.1.197.176&#39;</span>
+<span class="s">        daq_server_port = 45677</span>
+
+<span class="s">    These values will be output by the server when you run it on Windows.</span>
+
+<span class="s">    You must also specify the values of resistors (in Ohms) across which the</span>
+<span class="s">    voltages are measured (Please refer to :ref:`daq_setup`). The values should be</span>
+<span class="s">    specified as a list with an entry for each resistor, e.g.::</span>
+
+<span class="s">        daq_resistor_values = [0.005, 0.005]</span>
+
+<span class="s">    In addition to this mandatory configuration, you can also optionally specify the</span>
+<span class="s">    following::</span>
+
+<span class="s">        :daq_labels: Labels to be used for ports. Defaults to ``&#39;PORT_&lt;pnum&gt;&#39;``, where</span>
+<span class="s">                     &#39;pnum&#39; is the number of the port.</span>
+<span class="s">        :daq_device_id: The ID under which the DAQ is registered with the driver.</span>
+<span class="s">                        Defaults to ``&#39;Dev1&#39;``.</span>
+<span class="s">        :daq_v_range: Specifies the voltage range for the SOC voltage channel on the DAQ</span>
+<span class="s">                      (please refer to :ref:`daq_setup` for details). Defaults to ``2.5``.</span>
+<span class="s">        :daq_dv_range: Specifies the voltage range for the resistor voltage channel on</span>
+<span class="s">                       the DAQ (please refer to :ref:`daq_setup` for details).</span>
+<span class="s">                       Defaults to ``0.2``.</span>
+<span class="s">        :daq_sampling_rate: DAQ sampling rate. DAQ will take this many samples each</span>
+<span class="s">                            second. Please note that this maybe limitted by your DAQ model</span>
+<span class="s">                            and then number of ports you&#39;re measuring (again, see</span>
+<span class="s">                            :ref:`daq_setup`). Defaults to ``10000``.</span>
+<span class="s">        :daq_channel_map: Represents mapping from  logical AI channel number to physical</span>
+<span class="s">                          connector on the DAQ (varies between DAQ models). The default</span>
+<span class="s">                          assumes DAQ 6363 and similar with AI channels on connectors</span>
+<span class="s">                          0-7 and 16-23.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;server_host&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;localhost&#39;</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_server_host&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The host address of the machine that runs the daq Server which the &#39;</span>
+                              <span class="s">&#39;insturment communicates with.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;server_port&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">45677</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_server_port&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The port number for daq Server in which daq insturment communicates &#39;</span>
+                              <span class="s">&#39;with.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;device_id&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;Dev1&#39;</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_device_id&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The ID under which the DAQ is registered with the driver.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;v_range&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_v_range&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Specifies the voltage range for the SOC voltage channel on the DAQ &#39;</span>
+                              <span class="s">&#39;(please refer to :ref:`daq_setup` for details).&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;dv_range&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_dv_range&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Specifies the voltage range for the resistor voltage channel on &#39;</span>
+                              <span class="s">&#39;the DAQ (please refer to :ref:`daq_setup` for details).&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;sampling_rate&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_sampling_rate&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;DAQ sampling rate. DAQ will take this many samples each &#39;</span>
+                              <span class="s">&#39;second. Please note that this maybe limitted by your DAQ model &#39;</span>
+                              <span class="s">&#39;and then number of ports you</span><span class="se">\&#39;</span><span class="s">re measuring (again, see &#39;</span>
+                              <span class="s">&#39;:ref:`daq_setup`)&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;resistor_values&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">list</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_resistor_values&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The values of resistors (in Ohms) across which the voltages are measured on &#39;</span>
+                              <span class="s">&#39;each port.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;channel_map&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">list_of_ints</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">17</span><span class="p">,</span> <span class="mi">18</span><span class="p">,</span> <span class="mi">19</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="mi">23</span><span class="p">),</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_channel_map&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Represents mapping from  logical AI channel number to physical &#39;</span>
+                              <span class="s">&#39;connector on the DAQ (varies between DAQ models). The default &#39;</span>
+                              <span class="s">&#39;assumes DAQ 6363 and similar with AI channels on connectors &#39;</span>
+                              <span class="s">&#39;0-7 and 16-23.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;labels&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">list_of_strs</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_labels&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;List of port labels. If specified, the lenght of the list must match &#39;</span>
+                              <span class="s">&#39;the length of ``resistor_values``. Defaults to &quot;PORT_&lt;pnum&gt;&quot;, where &#39;</span>
+                              <span class="s">&#39;&quot;pnum&quot; is the number of the port.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;negative_samples&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;keep&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;keep&#39;</span><span class="p">,</span> <span class="s">&#39;zero&#39;</span><span class="p">,</span> <span class="s">&#39;drop&#39;</span><span class="p">,</span> <span class="s">&#39;abs&#39;</span><span class="p">],</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;daq_negative_samples&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specifies how negative power samples should be handled. The following</span>
+<span class="s">                  methods are possible:</span>
+
+<span class="s">                    :keep: keep them as they are</span>
+<span class="s">                    :zero: turn negative values to zero</span>
+<span class="s">                    :drop: drop samples if they contain negative values. *warning:* this may result in</span>
+<span class="s">                           port files containing different numbers of samples</span>
+<span class="s">                    :abs: take the absoulte value of negave samples</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;gpio_sync&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">constraint</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  If specified, the instrument will simultaneously set the</span>
+<span class="s">                  specified GPIO pin high and put a marker into ftrace. This is</span>
+<span class="s">                  to facillitate syncing kernel trace events to DAQ power</span>
+<span class="s">                  trace.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;merge_channels&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">dict_or_bool</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  If set to ``True``, channels with consecutive letter suffixes will be summed.</span>
+<span class="s">                  e.g. If you have channels A7a, A7b, A7c, A15a, A15b they will be summed to A7, A15</span>
+
+<span class="s">                  You can also manually specify the name of channels to be merged and the name of the</span>
+<span class="s">                  result like so:</span>
+
+<span class="s">                  merge_channels:</span>
+<span class="s">                       A15: [A15dvfs, A15ram]</span>
+<span class="s">                       NonCPU: [GPU, RoS, Mem]</span>
+
+<span class="s">                  In the above exaples the DAQ channels labeled A15a and A15b will be summed together</span>
+<span class="s">                  with the results being saved as &#39;channel&#39; &#39;&#39;a&#39;&#39;. A7, GPU and RoS will be summed to &#39;c&#39;</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">)</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">status</span><span class="p">,</span> <span class="n">devices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_execute_command</span><span class="p">(</span><span class="s">&#39;list_devices&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="o">==</span> <span class="n">daq</span><span class="o">.</span><span class="n">Status</span><span class="o">.</span><span class="n">OK</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">devices</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;DAQ: server did not report any devices registered with the driver.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_results</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gpio_path</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpio_sync</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">file_exists</span><span class="p">(</span><span class="n">GPIO_ROOT</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;GPIO sysfs not enabled on the device.&#39;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">export_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">GPIO_ROOT</span><span class="p">,</span> <span class="s">&#39;export&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpio_sync</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+                <span class="n">pin_root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">GPIO_ROOT</span><span class="p">,</span> <span class="s">&#39;gpio{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gpio_sync</span><span class="p">))</span>
+                <span class="n">direction_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pin_root</span><span class="p">,</span> <span class="s">&#39;direction&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">direction_path</span><span class="p">,</span> <span class="s">&#39;out&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">gpio_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pin_root</span><span class="p">,</span> <span class="s">&#39;value&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gpio_path</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+                <span class="n">signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">insert_start_marker</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_WORKLOAD_EXECUTION</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
+                <span class="n">signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">insert_stop_marker</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_EXECUTION</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">DeviceError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;Could not configure GPIO on device: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+
+<div class="viewcode-block" id="Daq.setup"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initialising session.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_execute_command</span><span class="p">(</span><span class="s">&#39;configure&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device_config</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Daq.slow_start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq.slow_start">[docs]</a>    <span class="k">def</span> <span class="nf">slow_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Starting collecting measurements.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_execute_command</span><span class="p">(</span><span class="s">&#39;start&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Daq.slow_stop"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq.slow_stop">[docs]</a>    <span class="k">def</span> <span class="nf">slow_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Stopping collecting measurements.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_execute_command</span><span class="p">(</span><span class="s">&#39;stop&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Daq.update_result"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=R0914</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Downloading data files.&#39;</span><span class="p">)</span>
+        <span class="n">output_directory</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;daq&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_execute_command</span><span class="p">(</span><span class="s">&#39;get_data&#39;</span><span class="p">,</span> <span class="n">output_directory</span><span class="o">=</span><span class="n">output_directory</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">merge_channels</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_merge_channels</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">output_directory</span><span class="p">):</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">add_iteration_artifact</span><span class="p">(</span><span class="s">&#39;DAQ_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">entry</span><span class="p">)[</span><span class="mi">0</span><span class="p">]),</span>
+                                           <span class="n">path</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&#39;daq&#39;</span><span class="p">,</span> <span class="n">entry</span><span class="p">),</span>
+                                           <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">,</span>
+                                           <span class="n">description</span><span class="o">=</span><span class="s">&#39;DAQ power measurments.&#39;</span><span class="p">)</span>
+            <span class="n">port</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">entry</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">current_iteration</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_results</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_results</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+            <span class="n">temp_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">gettempdir</span><span class="p">(),</span> <span class="n">entry</span><span class="p">)</span>
+            <span class="n">writer</span><span class="p">,</span> <span class="n">wfh</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span>
+
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">negative_samples</span> <span class="o">!=</span> <span class="s">&#39;keep&#39;</span><span class="p">:</span>
+                    <span class="n">wfh</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">temp_file</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span>
+                    <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">wfh</span><span class="p">)</span>
+
+                <span class="n">reader</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+                <span class="n">metrics</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">writer</span><span class="p">:</span>
+                    <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_metrics</span> <span class="o">|=</span> <span class="nb">set</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span>
+
+                <span class="n">rows</span> <span class="o">=</span> <span class="n">_get_rows</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span> <span class="n">writer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">negative_samples</span><span class="p">)</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">rows</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">writer</span><span class="p">:</span>
+                    <span class="n">wfh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">temp_file</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">entry</span><span class="p">))</span>
+
+                <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="n">means</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="o">/</span> <span class="n">n</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="nb">sum</span><span class="p">,</span> <span class="n">data</span><span class="p">)]</span>
+                <span class="k">for</span> <span class="n">metric</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span> <span class="n">means</span><span class="p">):</span>
+                    <span class="n">metric_name</span> <span class="o">=</span> <span class="s">&#39;{}_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="n">metric</span><span class="p">)</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">metric_name</span><span class="p">,</span> <span class="nb">round</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">UNITS</span><span class="p">[</span><span class="n">metric</span><span class="p">])</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_results</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">metric_name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+                <span class="n">energy</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">metrics</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s">&#39;power&#39;</span><span class="p">)])</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling_rate</span> <span class="o">/</span> <span class="mi">1000000</span><span class="p">)</span>
+                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;{}_energy&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">port</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">energy</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">UNITS</span><span class="p">[</span><span class="s">&#39;energy&#39;</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="Daq.teardown"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Terminating session.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_execute_command</span><span class="p">(</span><span class="s">&#39;close&#39;</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpio_path</span><span class="p">:</span>
+            <span class="n">unexport_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">GPIO_ROOT</span><span class="p">,</span> <span class="s">&#39;unexport&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">unexport_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpio_sync</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c"># pylint: disable=too-many-branches</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">daq</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="n">import_error_mesg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_results</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_metrics</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resistor_values</span><span class="p">)):</span>  <span class="c"># pylint: disable=superfluous-parens</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Number of DAQ port labels does not match the number of resistor values.&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;PORT_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resistor_values</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">server_config</span> <span class="o">=</span> <span class="n">ServerConfiguration</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">server_host</span><span class="p">,</span>
+                                                 <span class="n">port</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">server_port</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_config</span> <span class="o">=</span> <span class="n">DeviceConfiguration</span><span class="p">(</span><span class="n">device_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device_id</span><span class="p">,</span>
+                                                 <span class="n">v_range</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">v_range</span><span class="p">,</span>
+                                                 <span class="n">dv_range</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dv_range</span><span class="p">,</span>
+                                                 <span class="n">sampling_rate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling_rate</span><span class="p">,</span>
+                                                 <span class="n">resistor_values</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">resistor_values</span><span class="p">,</span>
+                                                 <span class="n">channel_map</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">channel_map</span><span class="p">,</span>
+                                                 <span class="n">labels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">server_config</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device_config</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">ConfigurationError</span><span class="p">,</span> <span class="n">ex</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;DAQ configuration: &#39;</span> <span class="o">+</span> <span class="n">ex</span><span class="o">.</span><span class="n">message</span><span class="p">)</span>  <span class="c"># Re-raise as a WA error</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">grouped_suffixes</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">merge_channels</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">merge_channels</span><span class="p">:</span>
+            <span class="c"># Create a dict of potential prefixes and a list of their suffixes</span>
+            <span class="n">grouped_suffixes</span> <span class="o">=</span> <span class="p">{</span><span class="n">label</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span> <span class="n">label</span> <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">label</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">}</span>
+            <span class="c"># Only merge channels if more than one channel has the same prefix and the prefixes</span>
+            <span class="c"># are consecutive letters starting with &#39;a&#39;.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">channel</span><span class="p">,</span> <span class="n">suffixes</span> <span class="ow">in</span> <span class="n">grouped_suffixes</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">suffixes</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="s">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">s</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">suffixes</span><span class="p">])</span> <span class="ow">in</span> <span class="n">ascii_lowercase</span><span class="p">[:</span><span class="nb">len</span><span class="p">(</span><span class="n">suffixes</span><span class="p">)]:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span><span class="p">[</span><span class="n">channel</span><span class="p">]</span> <span class="o">=</span> <span class="n">suffixes</span>
+
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">merge_channels</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="c"># Check if given channel names match labels</span>
+            <span class="k">for</span> <span class="n">old_names</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">merge_channels</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">old_names</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&quot;No channel with label {} specified&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">merge_channels</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">merge_channels</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c"># Should never reach here</span>
+            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s">&quot;Merge files is of invalid type&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Daq.before_overall_results_processing"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq.before_overall_results_processing">[docs]</a>    <span class="k">def</span> <span class="nf">before_overall_results_processing</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_results</span><span class="p">:</span>
+            <span class="n">headers</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;id&#39;</span><span class="p">,</span> <span class="s">&#39;workload&#39;</span><span class="p">,</span> <span class="s">&#39;iteration&#39;</span><span class="p">]</span>
+            <span class="n">metrics</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;{}_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_metrics</span><span class="p">)]</span>
+            <span class="n">headers</span> <span class="o">+=</span> <span class="n">metrics</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span><span class="n">headers</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_results</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="n">value</span><span class="p">[</span><span class="n">m</span><span class="p">]</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">metrics</span><span class="p">])</span>
+
+            <span class="n">outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;daq_power.csv&#39;</span><span class="p">)</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">outfile</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+                <span class="n">writer</span><span class="o">.</span><span class="n">writerows</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Daq.insert_start_marker"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq.insert_start_marker">[docs]</a>    <span class="k">def</span> <span class="nf">insert_start_marker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpio_path</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;echo DAQ_START_MARKER &gt; {}; echo 1 &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">TRACE_MARKER_PATH</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpio_path</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Daq.insert_stop_marker"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.daq.html#wlauto.instrumentation.daq.Daq.insert_stop_marker">[docs]</a>    <span class="k">def</span> <span class="nf">insert_stop_marker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpio_path</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;echo DAQ_STOP_MARKER &gt; {}; echo 0 &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">TRACE_MARKER_PATH</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpio_path</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_execute_command</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c"># pylint: disable=E1101</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">_send_daq_command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">server_config</span><span class="p">,</span> <span class="n">command</span><span class="p">),</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">p</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+        <span class="n">p</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">daq</span><span class="o">.</span><span class="n">Status</span><span class="o">.</span><span class="n">OK</span><span class="p">:</span>
+            <span class="k">pass</span>  <span class="c"># all good</span>
+        <span class="k">elif</span> <span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">daq</span><span class="o">.</span><span class="n">Status</span><span class="o">.</span><span class="n">OKISH</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">message</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">daq</span><span class="o">.</span><span class="n">Status</span><span class="o">.</span><span class="n">ERROR</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;DAQ: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">message</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;DAQ: Unexpected result: {} - {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">message</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_merge_channels</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=r0914</span>
+        <span class="n">output_directory</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;daq&#39;</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">labels</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="n">summed</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">labels</span><span class="p">:</span>
+                <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&quot;{}.csv&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">label</span><span class="p">))</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                    <span class="n">reader</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+                    <span class="n">metrics</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+                    <span class="n">rows</span> <span class="o">=</span> <span class="n">_get_rows</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">negative_samples</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">summed</span><span class="p">:</span>
+                        <span class="n">summed</span> <span class="o">=</span> <span class="p">[[</span><span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)]</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">summed</span><span class="p">)]</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">summed</span> <span class="o">=</span> <span class="n">rows</span>
+            <span class="n">output_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&quot;{}.csv&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+                <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">wfh</span><span class="p">)</span>
+                <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">summed</span><span class="p">:</span>
+                    <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_send_daq_command</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">daq</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">q</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_get_rows</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span> <span class="n">writer</span><span class="p">,</span> <span class="n">negative_samples</span><span class="p">):</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">reader</span><span class="p">:</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">row</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">negative_samples</span> <span class="o">==</span> <span class="s">&#39;keep&#39;</span><span class="p">:</span>
+            <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">negative_samples</span> <span class="o">==</span> <span class="s">&#39;zero&#39;</span><span class="p">:</span>
+            <span class="k">def</span> <span class="nf">nonneg</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">v</span> <span class="k">if</span> <span class="n">v</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+            <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">nonneg</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">row</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="n">negative_samples</span> <span class="o">==</span> <span class="s">&#39;drop&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">v</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">row</span><span class="p">):</span>
+                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">negative_samples</span> <span class="o">==</span> <span class="s">&#39;abs&#39;</span><span class="p">:</span>
+            <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="nb">abs</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">row</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="n">negative_samples</span><span class="p">)</span>  <span class="c"># should never get here</span>
+        <span class="k">if</span> <span class="n">writer</span><span class="p">:</span>
+            <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">rows</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" >wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,422 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.result &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.result</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=no-member</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module defines the classes used to handle result</span>
+<span class="sd">processing inside Workload Automation. There will be a</span>
+<span class="sd">:class:`wlauto.core.workload.WorkloadResult` object generated for</span>
+<span class="sd">every workload iteration executed. This object will have a list of</span>
+<span class="sd">:class:`wlauto.core.workload.WorkloadMetric` objects. This list will be</span>
+<span class="sd">populated by the workload itself and may also be updated by instrumentation</span>
+<span class="sd">(e.g. to add power measurements).  Once the result object has been fully</span>
+<span class="sd">populated, it will be passed into the ``process_iteration_result`` method of</span>
+<span class="sd">:class:`ResultProcessor`. Once the entire run has completed, a list containing</span>
+<span class="sd">result objects from all iterations will be passed into ``process_results``</span>
+<span class="sd">method of :class`ResultProcessor`.</span>
+
+<span class="sd">Which result processors will be active is defined by the ``result_processors``</span>
+<span class="sd">list in the ``~/.workload_automation/config.py``. Only the result_processors</span>
+<span class="sd">who&#39;s names appear in this list will be used.</span>
+
+<span class="sd">A :class:`ResultsManager`  keeps track of active results processors.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">copy</span>
+<span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">contextmanager</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.core.extension</span> <span class="kn">import</span> <span class="n">Extension</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">WAError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">numeric</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">enum_metaclass</span><span class="p">,</span> <span class="n">merge_dicts</span>
+
+
+<div class="viewcode-block" id="ResultManager"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultManager">[docs]</a><span class="k">class</span> <span class="nc">ResultManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Keeps track of result processors and passes on the results onto the individual processors.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;ResultsManager&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">processors</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bad</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="ResultManager.install"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultManager.install">[docs]</a>    <span class="k">def</span> <span class="nf">install</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">processor</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Installing results processor </span><span class="si">%s</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">processor</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">processor</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ResultManager.uninstall"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultManager.uninstall">[docs]</a>    <span class="k">def</span> <span class="nf">uninstall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">processor</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Uninstalling results processor </span><span class="si">%s</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">processor</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">processor</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Attempting to uninstall results processor </span><span class="si">%s</span><span class="s">, which is not installed.&#39;</span><span class="p">,</span>
+                                <span class="n">processor</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ResultManager.initialize"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultManager.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="c"># Errors aren&#39;t handled at this stage, because this gets executed</span>
+        <span class="c"># before workload execution starts and we just want to propagte them</span>
+        <span class="c"># and terminate (so that error can be corrected and WA restarted).</span>
+        <span class="k">for</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="p">:</span>
+            <span class="n">processor</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ResultManager.add_result"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultManager.add_result">[docs]</a>    <span class="k">def</span> <span class="nf">add_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manage_processors</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="p">:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="n">processor</span><span class="p">):</span>
+                    <span class="n">processor</span><span class="o">.</span><span class="n">process_iteration_result</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="p">:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="n">processor</span><span class="p">):</span>
+                    <span class="n">processor</span><span class="o">.</span><span class="n">export_iteration_result</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ResultManager.process_run_result"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultManager.process_run_result">[docs]</a>    <span class="k">def</span> <span class="nf">process_run_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manage_processors</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="p">:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="n">processor</span><span class="p">):</span>
+                    <span class="n">processor</span><span class="o">.</span><span class="n">process_run_result</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="p">:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="n">processor</span><span class="p">):</span>
+                    <span class="n">processor</span><span class="o">.</span><span class="n">export_run_result</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ResultManager.finalize"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultManager.finalize">[docs]</a>    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manage_processors</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="p">:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="n">processor</span><span class="p">):</span>
+                    <span class="n">processor</span><span class="o">.</span><span class="n">finalize</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ResultManager.validate"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultManager.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">processors</span><span class="p">:</span>
+            <span class="n">processor</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+</div>
+    <span class="nd">@contextmanager</span>
+    <span class="k">def</span> <span class="nf">_manage_processors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">finalize_bad</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="k">yield</span>
+        <span class="k">for</span> <span class="n">processor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bad</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">finalize_bad</span><span class="p">:</span>
+                <span class="n">processor</span><span class="o">.</span><span class="n">finalize</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">uninstall</span><span class="p">(</span><span class="n">processor</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bad</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="nd">@contextmanager</span>
+    <span class="k">def</span> <span class="nf">_handle_errors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">processor</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">yield</span>
+        <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">e</span>
+        <span class="k">except</span> <span class="n">WAError</span><span class="p">,</span> <span class="n">we</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;&quot;{}&quot; result processor has encountered an error&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">processor</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;{}(&quot;{}&quot;)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">we</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">we</span><span class="o">.</span><span class="n">message</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_bad</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">processor</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>  <span class="c"># pylint: disable=W0703</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;&quot;{}&quot; result processor has encountered an error&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">processor</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;{}(&quot;{}&quot;)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">())</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_bad</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">processor</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ResultProcessor"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultProcessor">[docs]</a><span class="k">class</span> <span class="nc">ResultProcessor</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for result processors. Defines an interface that should be implemented</span>
+<span class="sd">    by the subclasses. A result processor can be used to do any kind of post-processing</span>
+<span class="sd">    of the results, from writing them out to a file, to uploading them to a database,</span>
+<span class="sd">    performing calculations, generating plots, etc.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+<div class="viewcode-block" id="ResultProcessor.process_iteration_result"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultProcessor.process_iteration_result">[docs]</a>    <span class="k">def</span> <span class="nf">process_iteration_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="ResultProcessor.export_iteration_result"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultProcessor.export_iteration_result">[docs]</a>    <span class="k">def</span> <span class="nf">export_iteration_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="ResultProcessor.process_run_result"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultProcessor.process_run_result">[docs]</a>    <span class="k">def</span> <span class="nf">process_run_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="ResultProcessor.export_run_result"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.ResultProcessor.export_run_result">[docs]</a>    <span class="k">def</span> <span class="nf">export_run_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+    <span class="k">def</span> <span class="nf">finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+</div>
+<div class="viewcode-block" id="RunResult"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.RunResult">[docs]</a><span class="k">class</span> <span class="nc">RunResult</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Contains overall results for a run.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">__metaclass__</span> <span class="o">=</span> <span class="n">enum_metaclass</span><span class="p">(</span><span class="s">&#39;values&#39;</span><span class="p">,</span> <span class="n">return_name</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s">&#39;OK&#39;</span><span class="p">,</span>
+        <span class="s">&#39;OKISH&#39;</span><span class="p">,</span>
+        <span class="s">&#39;PARTIAL&#39;</span><span class="p">,</span>
+        <span class="s">&#39;FAILED&#39;</span><span class="p">,</span>
+        <span class="s">&#39;UNKNOWN&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">status</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteration_results</span> <span class="ow">or</span> <span class="nb">all</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">FAILED</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteration_results</span><span class="p">]):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">FAILED</span>
+        <span class="k">elif</span> <span class="nb">any</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">FAILED</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteration_results</span><span class="p">]):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">PARTIAL</span>
+        <span class="k">elif</span> <span class="nb">any</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">ABORTED</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteration_results</span><span class="p">]):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">PARTIAL</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="nb">any</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">PARTIAL</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteration_results</span><span class="p">])</span> <span class="ow">or</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">non_iteration_errors</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">OKISH</span>
+        <span class="k">elif</span> <span class="nb">all</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">OK</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteration_results</span><span class="p">]):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">OK</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">UNKNOWN</span>  <span class="c"># should never happen</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">run_info</span><span class="p">,</span> <span class="n">output_directory</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">info</span> <span class="o">=</span> <span class="n">run_info</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iteration_results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">events</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">non_iteration_errors</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="n">output_directory</span>
+
+</div>
+<div class="viewcode-block" id="RunEvent"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.RunEvent">[docs]</a><span class="k">class</span> <span class="nc">RunEvent</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    An event that occured during a run.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">message</span>
+
+<div class="viewcode-block" id="RunEvent.to_dict"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.RunEvent.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;{} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="p">)</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+</div>
+<div class="viewcode-block" id="IterationResult"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.IterationResult">[docs]</a><span class="k">class</span> <span class="nc">IterationResult</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Contains the result of running a single iteration of a workload. It is the</span>
+<span class="sd">    responsibility of a workload to instantiate a IterationResult, populate it,</span>
+<span class="sd">    and return it form its get_result() method.</span>
+
+<span class="sd">    Status explanations:</span>
+
+<span class="sd">       :NOT_STARTED: This iteration has not yet started.</span>
+<span class="sd">       :RUNNING: This iteration is currently running and no errors have been detected.</span>
+<span class="sd">       :OK: This iteration has completed and no errors have been detected</span>
+<span class="sd">       :PARTIAL: One or more instruments have failed (the iteration may still be running).</span>
+<span class="sd">       :FAILED: The workload itself has failed.</span>
+<span class="sd">       :ABORTED: The user interupted the workload</span>
+<span class="sd">       :SKIPPED: The iteration was skipped due to a previous failure</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">__metaclass__</span> <span class="o">=</span> <span class="n">enum_metaclass</span><span class="p">(</span><span class="s">&#39;values&#39;</span><span class="p">,</span> <span class="n">return_name</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s">&#39;NOT_STARTED&#39;</span><span class="p">,</span>
+        <span class="s">&#39;RUNNING&#39;</span><span class="p">,</span>
+
+        <span class="s">&#39;OK&#39;</span><span class="p">,</span>
+        <span class="s">&#39;NONCRITICAL&#39;</span><span class="p">,</span>
+        <span class="s">&#39;PARTIAL&#39;</span><span class="p">,</span>
+        <span class="s">&#39;FAILED&#39;</span><span class="p">,</span>
+        <span class="s">&#39;ABORTED&#39;</span><span class="p">,</span>
+        <span class="s">&#39;SKIPPED&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">spec</span> <span class="o">=</span> <span class="n">spec</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workload</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">workload</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">classifiers</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">classifiers</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iteration</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">NOT_STARTED</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">events</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="IterationResult.add_metric"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.IterationResult.add_metric">[docs]</a>    <span class="k">def</span> <span class="nf">add_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">classifiers</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">classifiers</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">classifiers</span><span class="p">,</span> <span class="n">classifiers</span> <span class="ow">or</span> <span class="p">{},</span>
+                                  <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">,</span> <span class="n">should_normalize</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Metric</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="p">,</span> <span class="n">classifiers</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="IterationResult.has_metric"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.IterationResult.has_metric">[docs]</a>    <span class="k">def</span> <span class="nf">has_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">metric</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">metric</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">False</span>
+</div>
+<div class="viewcode-block" id="IterationResult.add_event"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.IterationResult.add_event">[docs]</a>    <span class="k">def</span> <span class="nf">add_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RunEvent</span><span class="p">(</span><span class="n">message</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="IterationResult.to_dict"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.IterationResult.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">)</span>
+        <span class="n">d</span><span class="p">[</span><span class="s">&#39;events&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">d</span>
+</div>
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">metric</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">metric</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">metric</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s">&#39;Metric {} not found.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="Metric"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.Metric">[docs]</a><span class="k">class</span> <span class="nc">Metric</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This is a single metric collected from executing a workload.</span>
+
+<span class="sd">    :param name: the name of the metric. Uniquely identifies the metric</span>
+<span class="sd">                 within the results.</span>
+<span class="sd">    :param value: The numerical value of the metric for this execution of</span>
+<span class="sd">                  a workload. This can be either an int or a float.</span>
+<span class="sd">    :param units: Units for the collected value. Can be None if the value</span>
+<span class="sd">                  has no units (e.g. it&#39;s a count or a standardised score).</span>
+<span class="sd">    :param lower_is_better: Boolean flag indicating where lower values are</span>
+<span class="sd">                            better than higher ones. Defaults to False.</span>
+<span class="sd">    :param classifiers: A set of key-value pairs to further classify this metric</span>
+<span class="sd">                        beyond current iteration (e.g. this can be used to identify</span>
+<span class="sd">                        sub-tests).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">lower_is_better</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">classifiers</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">numeric</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="n">units</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lower_is_better</span> <span class="o">=</span> <span class="n">lower_is_better</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">classifiers</span> <span class="o">=</span> <span class="n">classifiers</span> <span class="ow">or</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="Metric.to_dict"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.result.Metric.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="s">&#39;{}: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">units</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39; &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">units</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39; ({})&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s">&#39;-&#39;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lower_is_better</span> <span class="k">else</span> <span class="s">&#39;+&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s">&#39;&lt;{}&gt;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

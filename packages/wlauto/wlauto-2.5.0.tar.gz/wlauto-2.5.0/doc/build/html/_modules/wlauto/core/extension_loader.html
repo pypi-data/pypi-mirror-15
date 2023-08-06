@@ -1,0 +1,493 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.extension_loader &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.extension_loader</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">imp</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.core.bootstrap</span> <span class="kn">import</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.extension</span> <span class="kn">import</span> <span class="n">Extension</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">NotFoundError</span><span class="p">,</span> <span class="n">LoaderError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">walk_modules</span><span class="p">,</span> <span class="n">load_class</span><span class="p">,</span> <span class="n">merge_lists</span><span class="p">,</span> <span class="n">merge_dicts</span><span class="p">,</span> <span class="n">get_article</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">identifier</span>
+
+
+<span class="n">MODNAME_TRANS</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">maketrans</span><span class="p">(</span><span class="s">&#39;:/</span><span class="se">\\</span><span class="s">.&#39;</span><span class="p">,</span> <span class="s">&#39;____&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ExtensionLoaderItem"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoaderItem">[docs]</a><span class="k">class</span> <span class="nc">ExtensionLoaderItem</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ext_tuple</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">ext_tuple</span><span class="o">.</span><span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_package</span> <span class="o">=</span> <span class="n">ext_tuple</span><span class="o">.</span><span class="n">default_package</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_path</span> <span class="o">=</span> <span class="n">ext_tuple</span><span class="o">.</span><span class="n">default_path</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cls</span> <span class="o">=</span> <span class="n">load_class</span><span class="p">(</span><span class="n">ext_tuple</span><span class="o">.</span><span class="n">cls</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="GlobalParameterAlias"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.GlobalParameterAlias">[docs]</a><span class="k">class</span> <span class="nc">GlobalParameterAlias</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Represents a &quot;global alias&quot; for an extension parameter. A global alias</span>
+<span class="sd">    is specified at the top-level of config rather namespaced under an extension</span>
+<span class="sd">    name.</span>
+
+<span class="sd">    Multiple extensions may have parameters with the same global_alias if they are</span>
+<span class="sd">    part of the same inheritance hierarchy and one parameter is an override of the</span>
+<span class="sd">    other. This class keeps track of all such cases in its extensions dict.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="GlobalParameterAlias.iteritems"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.GlobalParameterAlias.iteritems">[docs]</a>    <span class="k">def</span> <span class="nf">iteritems</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="n">ext</span><span class="p">),</span> <span class="n">ext</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="GlobalParameterAlias.get_param"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.GlobalParameterAlias.get_param">[docs]</a>    <span class="k">def</span> <span class="nf">get_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ext</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">ext</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">param</span><span class="o">.</span><span class="n">global_alias</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">param</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Extension {} does not have a parameter with global alias {}&#39;</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="GlobalParameterAlias.update"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.GlobalParameterAlias.update">[docs]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other_ext</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_ext</span><span class="p">(</span><span class="n">other_ext</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span><span class="p">[</span><span class="n">other_ext</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">other_ext</span>
+</div>
+    <span class="k">def</span> <span class="nf">_validate_ext</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other_ext</span><span class="p">):</span>
+        <span class="n">other_param</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="n">other_ext</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">param</span><span class="p">,</span> <span class="n">ext</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="p">((</span><span class="ow">not</span> <span class="p">(</span><span class="nb">issubclass</span><span class="p">(</span><span class="n">ext</span><span class="p">,</span> <span class="n">other_ext</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">other_ext</span><span class="p">,</span> <span class="n">ext</span><span class="p">)))</span> <span class="ow">and</span>
+                    <span class="n">other_param</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="n">param</span><span class="o">.</span><span class="n">kind</span><span class="p">):</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Duplicate global alias {} declared in {} and {} extensions with different types&#39;</span>
+                <span class="k">raise</span> <span class="n">LoaderError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">other_ext</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">param</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">other_param</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Two params {} in {} and {} in {} both declare global alias {}&#39;</span>
+                <span class="k">raise</span> <span class="n">LoaderError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                                                 <span class="n">other_param</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">other_ext</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="s">&#39;GlobalAlias({} =&gt; {})&#39;</span>
+        <span class="n">extlist</span> <span class="o">=</span> <span class="s">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&#39;{}.{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()])</span>
+        <span class="k">return</span> <span class="n">text</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">extlist</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ExtensionLoader"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader">[docs]</a><span class="k">class</span> <span class="nc">ExtensionLoader</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Discovers, enumerates and loads available devices, configs, etc.</span>
+<span class="sd">    The loader will attempt to discover things on construction by looking</span>
+<span class="sd">    in predetermined set of locations defined by default_paths. Optionally,</span>
+<span class="sd">    additional locations may specified through paths parameter that must</span>
+<span class="sd">    be a list of additional Python module paths (i.e. dot-delimited).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_instance</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="c"># Singleton</span>
+    <span class="k">def</span> <span class="nf">__new__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cls</span><span class="o">.</span><span class="n">_instance</span><span class="p">:</span>
+            <span class="n">cls</span><span class="o">.</span><span class="n">_instance</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">ExtensionLoader</span><span class="p">,</span> <span class="n">cls</span><span class="p">)</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">_instance</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid parameter for ExtensionLoader: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">_instance</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cls</span><span class="o">.</span><span class="n">_instance</span>
+
+<div class="viewcode-block" id="ExtensionLoader.set_load_defaults"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.set_load_defaults">[docs]</a>    <span class="k">def</span> <span class="nf">set_load_defaults</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_defaults</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">packages</span> <span class="o">=</span> <span class="n">merge_lists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_packages</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">packages</span><span class="p">,</span> <span class="n">duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.get_load_defaults"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.get_load_defaults">[docs]</a>    <span class="k">def</span> <span class="nf">get_load_defaults</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_defaults</span>
+</div>
+    <span class="n">load_defaults</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">get_load_defaults</span><span class="p">,</span> <span class="n">set_load_defaults</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">packages</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">paths</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">ignore_paths</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">keep_going</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">load_defaults</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        params::</span>
+
+<span class="sd">            :packages: List of packages to load extensions from.</span>
+<span class="sd">            :paths: List of paths to be searched for Python modules containing</span>
+<span class="sd">                    WA extensions.</span>
+<span class="sd">            :ignore_paths: List of paths to ignore when search for WA extensions (these would</span>
+<span class="sd">                           typically be subdirectories of one or more locations listed in</span>
+<span class="sd">                           ``paths`` parameter.</span>
+<span class="sd">            :keep_going: Specifies whether to keep going if an error occurs while loading</span>
+<span class="sd">                         extensions.</span>
+<span class="sd">            :load_defaults: Specifies whether extension should be loaded from default locations</span>
+<span class="sd">                            (WA package, and user&#39;s WA directory) as well as the packages/paths</span>
+<span class="sd">                            specified explicitly in ``packages`` and ``paths`` parameters.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_defaults</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;ExtensionLoader&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">keep_going</span> <span class="o">=</span> <span class="n">keep_going</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span> <span class="o">=</span> <span class="p">{</span><span class="n">ext_tuple</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">ExtensionLoaderItem</span><span class="p">(</span><span class="n">ext_tuple</span><span class="p">)</span>
+                                <span class="k">for</span> <span class="n">ext_tuple</span> <span class="ow">in</span> <span class="n">settings</span><span class="o">.</span><span class="n">extensions</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_packages</span> <span class="o">=</span> <span class="p">[</span><span class="n">ext</span><span class="o">.</span><span class="n">default_package</span> <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="o">.</span><span class="n">values</span><span class="p">()]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">packages</span> <span class="o">=</span> <span class="n">packages</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_defaults</span> <span class="o">=</span> <span class="n">load_defaults</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">paths</span> <span class="o">=</span> <span class="n">paths</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ignore_paths</span> <span class="o">=</span> <span class="n">ignore_paths</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_param_aliases</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c"># create an empty dict for each extension type to store discovered</span>
+        <span class="c"># extensions.</span>
+        <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;_&#39;</span> <span class="o">+</span> <span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_from_packages</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">packages</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_from_paths</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ignore_paths</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ExtensionLoader.update"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.update">[docs]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">packages</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">paths</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">ignore_paths</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Load extensions from the specified paths/packages</span>
+<span class="sd">        without clearing or reloading existing extension. &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">packages</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">packages</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">packages</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_load_from_packages</span><span class="p">(</span><span class="n">packages</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">paths</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">paths</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ignore_paths</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">ignore_paths</span> <span class="ow">or</span> <span class="p">[])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_load_from_paths</span><span class="p">(</span><span class="n">paths</span><span class="p">,</span> <span class="n">ignore_paths</span> <span class="ow">or</span> <span class="p">[])</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.clear"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.clear">[docs]</a>    <span class="k">def</span> <span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Clear all discovered items. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_get_store</span><span class="p">(</span><span class="n">ext</span><span class="p">)</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.reload"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.reload">[docs]</a>    <span class="k">def</span> <span class="nf">reload</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Clear all discovered items and re-run the discovery. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_from_packages</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">packages</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_from_paths</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ignore_paths</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.get_extension_class"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.get_extension_class">[docs]</a>    <span class="k">def</span> <span class="nf">get_extension_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the class for the specified extension if found or raises ``ValueError``.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve_alias</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kind</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="n">ext</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">kind</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ext</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Unknown extension type: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">kind</span><span class="p">))</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_store</span><span class="p">(</span><span class="n">ext</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">store</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="s">&#39;Extensions {} is not {} {}.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">get_article</span><span class="p">(</span><span class="n">kind</span><span class="p">),</span> <span class="n">kind</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">store</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.get_extension"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.get_extension">[docs]</a>    <span class="k">def</span> <span class="nf">get_extension</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return extension of the specified kind with the specified name. Any additional</span>
+<span class="sd">        parameters will be passed to the extension&#39;s __init__.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">base_kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve_alias</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">kind</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s">&#39;kind&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">base_kwargs</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">,</span> <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">)</span>
+        <span class="n">cls</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_extension_class</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="p">)</span>
+        <span class="n">extension</span> <span class="o">=</span> <span class="n">_instantiate</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">extension</span><span class="o">.</span><span class="n">load_modules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">extension</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.get_default_config"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.get_default_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_default_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ext_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the default configuration for the specified extension name. The name may be an alias,</span>
+<span class="sd">        in which case, the returned config will be augmented with appropriate alias overrides.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">real_name</span><span class="p">,</span> <span class="n">alias_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve_alias</span><span class="p">(</span><span class="n">ext_name</span><span class="p">)</span>
+        <span class="n">base_default_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_extension_class</span><span class="p">(</span><span class="n">real_name</span><span class="p">)</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">base_default_config</span><span class="p">,</span> <span class="n">alias_config</span><span class="p">,</span> <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;last&#39;</span><span class="p">,</span> <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.list_extensions"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.list_extensions">[docs]</a>    <span class="k">def</span> <span class="nf">list_extensions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        List discovered extension classes. Optionally, only list extensions of a</span>
+<span class="sd">        particular type.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">kind</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">kind</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Unknown extension type: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">kind</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_store</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="p">[</span><span class="n">kind</span><span class="p">])</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.has_extension"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.has_extension">[docs]</a>    <span class="k">def</span> <span class="nf">has_extension</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns ``True`` if an extensions with the specified ``name`` has been</span>
+<span class="sd">        discovered by the loader. If ``kind`` was specified, only returns ``True``</span>
+<span class="sd">        if the extension has been found, *and* it is of the specified kind.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_extension_class</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">except</span> <span class="n">NotFoundError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+</div>
+<div class="viewcode-block" id="ExtensionLoader.resolve_alias"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.extension_loader.ExtensionLoader.resolve_alias">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_alias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alias_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Try to resolve the specified name as an extension alias. Returns a</span>
+<span class="sd">        two-tuple, the first value of which is actual extension name, and the</span>
+<span class="sd">        second is a dict of parameter values for this alias. If the name passed</span>
+<span class="sd">        is already an extension name, then the result is ``(alias_name, {})``.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">alias_name</span> <span class="o">=</span> <span class="n">identifier</span><span class="p">(</span><span class="n">alias_name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">alias_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">alias_name</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">if</span> <span class="n">alias_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">:</span>
+            <span class="n">alias</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">[</span><span class="n">alias_name</span><span class="p">]</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">alias</span><span class="o">.</span><span class="n">extension_name</span><span class="p">,</span> <span class="n">alias</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="s">&#39;Could not find extension or alias &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">alias_name</span><span class="p">))</span>
+
+    <span class="c"># Internal methods.</span>
+</div>
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This resolves methods for specific extensions types based on corresponding</span>
+<span class="sd">        generic extension methods. So it&#39;s possible to say things like ::</span>
+
+<span class="sd">            loader.get_device(&#39;foo&#39;)</span>
+
+<span class="sd">        instead of ::</span>
+
+<span class="sd">            loader.get_extension(&#39;foo&#39;, kind=&#39;device&#39;)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;get_&#39;</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;get_&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_extension</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;list_&#39;</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;list_&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s">&#39;s&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">list_extensions</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;has_&#39;</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;has_&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">has_extension</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_store</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ext</span><span class="p">):</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ext</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="n">ext</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;_&#39;</span> <span class="o">+</span> <span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_load_from_packages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">packages</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">package</span> <span class="ow">in</span> <span class="n">packages</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">module</span> <span class="ow">in</span> <span class="n">walk_modules</span><span class="p">(</span><span class="n">package</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_load_module</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Problem loading extensions from package {}: {}&#39;</span>
+            <span class="k">raise</span> <span class="n">LoaderError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">package</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_load_from_paths</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">paths</span><span class="p">,</span> <span class="n">ignore_paths</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Loading from paths.&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Checking path </span><span class="si">%s</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">followlinks</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+                <span class="n">should_skip</span> <span class="o">=</span> <span class="bp">False</span>
+                <span class="k">for</span> <span class="n">igpath</span> <span class="ow">in</span> <span class="n">ignore_paths</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">root</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">igpath</span><span class="p">):</span>
+                        <span class="n">should_skip</span> <span class="o">=</span> <span class="bp">True</span>
+                        <span class="k">break</span>
+                <span class="k">if</span> <span class="n">should_skip</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">fname</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s">&#39;.py&#39;</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">fname</span><span class="p">)</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">modname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filepath</span><span class="p">[</span><span class="mi">1</span><span class="p">:])[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="n">MODNAME_TRANS</span><span class="p">)</span>
+                        <span class="n">module</span> <span class="o">=</span> <span class="n">imp</span><span class="o">.</span><span class="n">load_source</span><span class="p">(</span><span class="n">modname</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_load_module</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">keep_going</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Failed to load {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Got: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="n">LoaderError</span><span class="p">(</span><span class="s">&#39;Failed to load {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">),</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+
+    <span class="k">def</span> <span class="nf">_load_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">):</span>  <span class="c"># NOQA pylint: disable=too-many-branches</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Checking module </span><span class="si">%s</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">obj</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">(</span><span class="n">module</span><span class="p">)</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">inspect</span><span class="o">.</span><span class="n">isclass</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">Extension</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension_kinds</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                        <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">ext</span><span class="o">.</span><span class="n">cls</span><span class="p">):</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_add_found_extension</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">ext</span><span class="p">)</span>
+                            <span class="k">break</span>
+                    <span class="k">else</span><span class="p">:</span>  <span class="c"># did not find a matching Extension type</span>
+                        <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Unknown extension type for {} (type: {})&#39;</span>
+                        <span class="k">raise</span> <span class="n">LoaderError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+                <span class="k">except</span> <span class="n">LoaderError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">keep_going</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">e</span>
+
+    <span class="k">def</span> <span class="nf">_add_found_extension</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">ext</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            :obj: Found extension class</span>
+<span class="sd">            :ext: matching extension item.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Adding </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">identifier</span><span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">ext</span><span class="o">.</span><span class="n">name</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span> <span class="ow">or</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">LoaderError</span><span class="p">(</span><span class="s">&#39;{} {} already exists.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="c"># Extensions are tracked both, in a common extensions</span>
+        <span class="c"># dict, and in per-extension kind dict (as retrieving</span>
+        <span class="c"># extensions by kind is a common use case.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">obj</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_store</span><span class="p">(</span><span class="n">ext</span><span class="p">)</span>
+        <span class="n">store</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">obj</span>
+        <span class="k">for</span> <span class="n">alias</span> <span class="ow">in</span> <span class="n">obj</span><span class="o">.</span><span class="n">aliases</span><span class="p">:</span>
+            <span class="n">alias_id</span> <span class="o">=</span> <span class="n">identifier</span><span class="p">(</span><span class="n">alias</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">alias_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span> <span class="ow">or</span> <span class="n">alias_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">LoaderError</span><span class="p">(</span><span class="s">&#39;{} {} already exists.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ext</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">[</span><span class="n">alias_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">alias</span>
+
+        <span class="c"># Update global aliases list. If a global alias is already in the list,</span>
+        <span class="c"># then make sure this extension is in the same parent/child hierarchy</span>
+        <span class="c"># as the one already found.</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">obj</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">param</span><span class="o">.</span><span class="n">global_alias</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">param</span><span class="o">.</span><span class="n">global_alias</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_param_aliases</span><span class="p">:</span>
+                    <span class="n">ga</span> <span class="o">=</span> <span class="n">GlobalParameterAlias</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">global_alias</span><span class="p">)</span>
+                    <span class="n">ga</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">global_param_aliases</span><span class="p">[</span><span class="n">ga</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">ga</span>
+                <span class="k">else</span><span class="p">:</span>  <span class="c"># global alias already exists.</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">global_param_aliases</span><span class="p">[</span><span class="n">param</span><span class="o">.</span><span class="n">global_alias</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+
+<span class="c"># Utility functions.</span>
+</div>
+<span class="k">def</span> <span class="nf">_instantiate</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span> <span class="k">if</span> <span class="n">args</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">args</span>
+    <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{}</span> <span class="k">if</span> <span class="n">kwargs</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">kwargs</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cls</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">LoaderError</span><span class="p">(</span><span class="s">&#39;Could not load {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="p">),</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

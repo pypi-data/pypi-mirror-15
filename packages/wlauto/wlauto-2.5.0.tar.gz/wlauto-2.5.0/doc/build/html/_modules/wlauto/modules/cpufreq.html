@@ -1,0 +1,541 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.modules.cpufreq &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.modules.cpufreq</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Module</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">DeviceError</span>
+
+
+<span class="c"># a dict of governor name and a list of it tunables that can&#39;t be read</span>
+<span class="n">WRITE_ONLY_TUNABLES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;interactive&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;boostpulse&#39;</span><span class="p">]</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="CpufreqModule"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule">[docs]</a><span class="k">class</span> <span class="nc">CpufreqModule</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;devcpufreq&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    cpufreq-related functionality module for the device. Query and set frequencies, governors, etc.</span>
+
+<span class="s">    APIs in this module break down into three categories: those that operate on cpus, those that</span>
+<span class="s">    operate on cores, and those that operate on clusters.</span>
+
+<span class="s">    &quot;cpu&quot; APIs expect a cpufreq CPU id, which could be either an integer or or a string of the</span>
+<span class="s">    form &quot;cpu0&quot;.</span>
+
+<span class="s">    &quot;cluster&quot; APIs expect a cluster ID. This is an integer as defined by the</span>
+<span class="s">    ``device.core_clusters`` list.</span>
+
+<span class="s">    &quot;core&quot; APIs expect a core name, as defined by ``device.core_names`` list.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">capabilities</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;cpufreq&#39;</span><span class="p">]</span>
+
+<div class="viewcode-block" id="CpufreqModule.probe"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.probe">[docs]</a>    <span class="k">def</span> <span class="nf">probe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>  <span class="c"># pylint: disable=no-self-use</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/cpu{}/cpufreq&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">online_cpus</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">device</span><span class="o">.</span><span class="n">file_exists</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="c"># pylint: disable=W0201</span>
+        <span class="n">CpufreqModule</span><span class="o">.</span><span class="n">_available_governors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">CpufreqModule</span><span class="o">.</span><span class="n">_available_governor_tunables</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">CpufreqModule</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_owner</span>
+
+<div class="viewcode-block" id="CpufreqModule.list_available_cpu_governors"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.list_available_cpu_governors">[docs]</a>    <span class="k">def</span> <span class="nf">list_available_cpu_governors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of governors supported by the cpu.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cpu</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_available_governors</span><span class="p">:</span>
+            <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_available_governors&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_available_governors</span><span class="p">[</span><span class="n">cpu</span><span class="p">]</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>  <span class="c"># pylint: disable=E1103</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_available_governors</span><span class="p">[</span><span class="n">cpu</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cpu_governor"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cpu_governor">[docs]</a>    <span class="k">def</span> <span class="nf">get_cpu_governor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the governor currently set for the specified CPU.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_governor&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cpu_governor"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cpu_governor">[docs]</a>    <span class="k">def</span> <span class="nf">set_cpu_governor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set the governor for the specified CPU.</span>
+<span class="sd">        See https://www.kernel.org/doc/Documentation/cpu-freq/governors.txt</span>
+
+<span class="sd">        :param cpu: The CPU for which the governor is to be set. This must be</span>
+<span class="sd">                    the full name as it appears in sysfs, e.g. &quot;cpu0&quot;.</span>
+<span class="sd">        :param governor: The name of the governor to be used. This must be</span>
+<span class="sd">                         supported by the specific device.</span>
+
+<span class="sd">        Additional keyword arguments can be used to specify governor tunables for</span>
+<span class="sd">        governors that support them.</span>
+
+<span class="sd">        :note: On big.LITTLE all cores in a cluster must be using the same governor.</span>
+<span class="sd">               Setting the governor on any core in a cluster will also set it on all</span>
+<span class="sd">               other cores in that cluster.</span>
+
+<span class="sd">        :raises: ConfigError if governor is not supported by the CPU.</span>
+<span class="sd">        :raises: DeviceError if, for some reason, the governor could not be set.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">supported</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_governors</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">governor</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">supported</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Governor {} not supported for cpu {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">governor</span><span class="p">,</span> <span class="n">cpu</span><span class="p">))</span>
+        <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_governor&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">,</span> <span class="n">governor</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_cpu_governor_tunables</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.list_available_cpu_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.list_available_cpu_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">list_available_cpu_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of tunables available for the governor on the specified CPU.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">governor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_governor</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">governor</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_available_governor_tunables</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">tunables_path</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">governor</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_available_governor_tunables</span><span class="p">[</span><span class="n">governor</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">tunables_path</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>  <span class="c"># probably an older kernel</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">tunables_path</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/cpufreq/{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">governor</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_available_governor_tunables</span><span class="p">[</span><span class="n">governor</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">tunables_path</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>  <span class="c"># governor does not support tunables</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_available_governor_tunables</span><span class="p">[</span><span class="n">governor</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_available_governor_tunables</span><span class="p">[</span><span class="n">governor</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cpu_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cpu_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">get_cpu_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">governor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_governor</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">tunables</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">tunable</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_governor_tunables</span><span class="p">(</span><span class="n">cpu</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">tunable</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">WRITE_ONLY_TUNABLES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">governor</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">path</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/{}/{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="n">tunable</span><span class="p">)</span>
+                    <span class="n">tunables</span><span class="p">[</span><span class="n">tunable</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>  <span class="c"># May be an older kernel</span>
+                    <span class="n">path</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/cpufreq/{}/{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">governor</span><span class="p">,</span> <span class="n">tunable</span><span class="p">)</span>
+                    <span class="n">tunables</span><span class="p">[</span><span class="n">tunable</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tunables</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cpu_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cpu_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">set_cpu_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set tunables for the specified governor. Tunables should be specified as</span>
+<span class="sd">        keyword arguments. Which tunables and values are valid depends on the</span>
+<span class="sd">        governor.</span>
+
+<span class="sd">        :param cpu: The cpu for which the governor will be set. This must be the</span>
+<span class="sd">                    full cpu name as it appears in sysfs, e.g. ``cpu0``.</span>
+<span class="sd">        :param governor: The name of the governor. Must be all lower case.</span>
+
+<span class="sd">        The rest should be keyword parameters mapping tunable name onto the value to</span>
+<span class="sd">        be set for it.</span>
+
+<span class="sd">        :raises: ConfigError if governor specified is not a valid governor name, or if</span>
+<span class="sd">                 a tunable specified is not valid for the governor.</span>
+<span class="sd">        :raises: DeviceError if could not set tunable.</span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">valid_tunables</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_governor_tunables</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">tunable</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">tunable</span> <span class="ow">in</span> <span class="n">valid_tunables</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">path</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/{}/{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="n">tunable</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>  <span class="c"># May be an older kernel</span>
+                    <span class="n">path</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/cpufreq/{}/{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">governor</span><span class="p">,</span> <span class="n">tunable</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Unexpected tunable {} for governor {} on {}.</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">tunable</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="n">cpu</span><span class="p">)</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="s">&#39;Available tunables are: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">valid_tunables</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.list_available_core_frequencies"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.list_available_core_frequencies">[docs]</a>    <span class="k">def</span> <span class="nf">list_available_core_frequencies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_online_cpu</span><span class="p">(</span><span class="n">core</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_frequencies</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.list_available_cpu_frequencies"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.list_available_cpu_frequencies">[docs]</a>    <span class="k">def</span> <span class="nf">list_available_cpu_frequencies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of frequencies supported by the cpu or an empty list</span>
+<span class="sd">        if not could be found.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cmd</span> <span class="o">=</span> <span class="s">&#39;cat /sys/devices/system/cpu/{}/cpufreq/scaling_available_frequencies&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span>
+            <span class="c">#available_frequencies = map(int, output.strip().split())  # pylint: disable=E1103</span>
+            <span class="n">available_frequencies</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">output</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">():</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">available_frequencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                    <span class="k">pass</span>
+        <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>
+            <span class="c"># On some devices scaling_available_frequencies  is not generated.</span>
+            <span class="c"># http://adrynalyne-teachtofish.blogspot.co.uk/2011/11/how-to-enable-scalingavailablefrequenci.html</span>
+            <span class="c"># Fall back to parsing stats/time_in_state</span>
+            <span class="n">cmd</span> <span class="o">=</span> <span class="s">&#39;cat /sys/devices/system/cpu/{}/cpufreq/stats/time_in_state&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+            <span class="n">out_iter</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+            <span class="n">available_frequencies</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">reversed</span><span class="p">([</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">out_iter</span><span class="p">,</span> <span class="n">out_iter</span><span class="p">)]))</span>
+        <span class="k">return</span> <span class="n">available_frequencies</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cpu_min_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cpu_min_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_cpu_min_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the min frequency currently set for the specified CPU.</span>
+
+<span class="sd">        Warning, this method does not check if the cpu is online or not. It will</span>
+<span class="sd">        try to read the minimum frequency and the following exception will be</span>
+<span class="sd">        raised ::</span>
+
+<span class="sd">        :raises: DeviceError if for some reason the frequency could not be read.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_min_freq&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cpu_min_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cpu_min_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_cpu_min_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">,</span> <span class="n">frequency</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set&#39;s the minimum value for CPU frequency. Actual frequency will</span>
+<span class="sd">        depend on the Governor used and may vary during execution. The value should be</span>
+<span class="sd">        either an int or a string representing an integer. The Value must also be</span>
+<span class="sd">        supported by the device. The available frequencies can be obtained by calling</span>
+<span class="sd">        get_available_frequencies() or examining</span>
+
+<span class="sd">        /sys/devices/system/cpu/cpuX/cpufreq/scaling_available_frequencies</span>
+
+<span class="sd">        on the device.</span>
+
+<span class="sd">        :raises: ConfigError if the frequency is not supported by the CPU.</span>
+<span class="sd">        :raises: DeviceError if, for some reason, frequency could not be set.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">available_frequencies</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_frequencies</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">frequency</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">available_frequencies</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_frequencies</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Can</span><span class="se">\&#39;</span><span class="s">t set {} frequency to {}</span><span class="se">\n</span><span class="s">must be in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span>
+                                                                                        <span class="n">value</span><span class="p">,</span>
+                                                                                        <span class="n">available_frequencies</span><span class="p">))</span>
+            <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_min_freq&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;value must be an integer; got: &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cpu_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cpu_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_cpu_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the current frequency currently set for the specified CPU.</span>
+
+<span class="sd">        Warning, this method does not check if the cpu is online or not. It will</span>
+<span class="sd">        try to read the current frequency and the following exception will be</span>
+<span class="sd">        raised ::</span>
+
+<span class="sd">        :raises: DeviceError if for some reason the frequency could not be read.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_cur_freq&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cpu_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cpu_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_cpu_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">,</span> <span class="n">frequency</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set&#39;s the minimum value for CPU frequency. Actual frequency will</span>
+<span class="sd">        depend on the Governor used and may vary during execution. The value should be</span>
+<span class="sd">        either an int or a string representing an integer.</span>
+
+<span class="sd">        If ``exact`` flag is set (the default), the Value must also be supported by</span>
+<span class="sd">        the device. The available frequencies can be obtained by calling</span>
+<span class="sd">        get_available_frequencies() or examining</span>
+
+<span class="sd">        /sys/devices/system/cpu/cpuX/cpufreq/scaling_available_frequencies</span>
+
+<span class="sd">        on the device (if it exists).</span>
+
+<span class="sd">        :raises: ConfigError if the frequency is not supported by the CPU.</span>
+<span class="sd">        :raises: DeviceError if, for some reason, frequency could not be set.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">frequency</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">exact</span><span class="p">:</span>
+                <span class="n">available_frequencies</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_frequencies</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">available_frequencies</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_frequencies</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Can</span><span class="se">\&#39;</span><span class="s">t set {} frequency to {}</span><span class="se">\n</span><span class="s">must be in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span>
+                                                                                            <span class="n">value</span><span class="p">,</span>
+                                                                                            <span class="n">available_frequencies</span><span class="p">))</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_governor</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span> <span class="o">!=</span> <span class="s">&#39;userspace&#39;</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Can</span><span class="se">\&#39;</span><span class="s">t set {} frequency; governor must be &quot;userspace&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">))</span>
+            <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_setspeed&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;frequency must be an integer; got: &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cpu_max_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cpu_max_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_cpu_max_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the max frequency currently set for the specified CPU.</span>
+
+<span class="sd">        Warning, this method does not check if the cpu is online or not. It will</span>
+<span class="sd">        try to read the maximum frequency and the following exception will be</span>
+<span class="sd">        raised ::</span>
+
+<span class="sd">        :raises: DeviceError if for some reason the frequency could not be read.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_max_freq&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cpu_max_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cpu_max_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_cpu_max_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu</span><span class="p">,</span> <span class="n">frequency</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set&#39;s the minimum value for CPU frequency. Actual frequency will</span>
+<span class="sd">        depend on the Governor used and may vary during execution. The value should be</span>
+<span class="sd">        either an int or a string representing an integer. The Value must also be</span>
+<span class="sd">        supported by the device. The available frequencies can be obtained by calling</span>
+<span class="sd">        get_available_frequencies() or examining</span>
+
+<span class="sd">        /sys/devices/system/cpu/cpuX/cpufreq/scaling_available_frequencies</span>
+
+<span class="sd">        on the device.</span>
+
+<span class="sd">        :raises: ConfigError if the frequency is not supported by the CPU.</span>
+<span class="sd">        :raises: DeviceError if, for some reason, frequency could not be set.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">cpu</span> <span class="o">=</span> <span class="s">&#39;cpu{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="n">available_frequencies</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_frequencies</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">frequency</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">available_frequencies</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_frequencies</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Can</span><span class="se">\&#39;</span><span class="s">t set {} frequency to {}</span><span class="se">\n</span><span class="s">must be in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span>
+                                                                                        <span class="n">value</span><span class="p">,</span>
+                                                                                        <span class="n">available_frequencies</span><span class="p">))</span>
+            <span class="n">sysfile</span> <span class="o">=</span> <span class="s">&#39;/sys/devices/system/cpu/{}/cpufreq/scaling_max_freq&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="n">sysfile</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;value must be an integer; got: &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="c"># Core- and cluster-level mapping for the above cpu-level APIs above. The</span>
+    <span class="c"># APIs make the following assumptions, which were True for all devices that</span>
+    <span class="c"># existed at the time of writing:</span>
+    <span class="c">#   1. A cluster can only contain cores of one type.</span>
+    <span class="c">#   2. All cores in a cluster are tied to the same DVFS domain, therefore</span>
+    <span class="c">#      changes to cpufreq for a core will affect all other cores on the</span>
+    <span class="c">#      same cluster.</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_core_clusters"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_core_clusters">[docs]</a>    <span class="k">def</span> <span class="nf">get_core_clusters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the list of clusters  that contain the specified core. if ``strict``</span>
+<span class="sd">        is ``True``, raises ValueError if no clusters has been found (returns empty list</span>
+<span class="sd">        if ``strict`` is ``False``).&quot;&quot;&quot;</span>
+        <span class="n">core_indexes</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">)</span> <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="n">core</span><span class="p">]</span>
+        <span class="n">clusters</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_clusters</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">core_indexes</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="n">strict</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">clusters</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;No active clusters for core {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">core</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">clusters</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cluster_active_cpu"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cluster_active_cpu">[docs]</a>    <span class="k">def</span> <span class="nf">get_cluster_active_cpu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the first *active* cpu for the cluster. If the entire cluster</span>
+<span class="sd">        has been hotplugged, this will raise a ``ValueError``.&quot;&quot;&quot;</span>
+        <span class="n">cpu_indexes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_clusters</span><span class="p">)</span> <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="n">cluster</span><span class="p">])</span>
+        <span class="n">active_cpus</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">cpu_indexes</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">online_cpus</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">active_cpus</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;All cpus for cluster {} are offline&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cluster</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">active_cpus</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.list_available_core_governors"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.list_available_core_governors">[docs]</a>    <span class="k">def</span> <span class="nf">list_available_core_governors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_online_cpu</span><span class="p">(</span><span class="n">core</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_governors</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.list_available_cluster_governors"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.list_available_cluster_governors">[docs]</a>    <span class="k">def</span> <span class="nf">list_available_cluster_governors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_governors</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_core_governor"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_core_governor">[docs]</a>    <span class="k">def</span> <span class="nf">get_core_governor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_online_cpu</span><span class="p">(</span><span class="n">core</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_governor</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_core_governor"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_core_governor">[docs]</a>    <span class="k">def</span> <span class="nf">set_core_governor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">tunables</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_clusters</span><span class="p">(</span><span class="n">core</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_cluster_governor</span><span class="p">(</span><span class="n">cluster</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">tunables</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cluster_governor"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cluster_governor">[docs]</a>    <span class="k">def</span> <span class="nf">get_cluster_governor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_governor</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cluster_governor"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cluster_governor">[docs]</a>    <span class="k">def</span> <span class="nf">set_cluster_governor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">tunables</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_cpu_governor</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">tunables</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.list_available_cluster_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.list_available_cluster_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">list_available_cluster_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_governor_tunables</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cluster_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cluster_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">get_cluster_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_governor_tunables</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cluster_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cluster_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">set_cluster_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">tunables</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_cpu_governor_tunables</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">tunables</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cluster_min_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cluster_min_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_cluster_min_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_min_frequency</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cluster_min_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cluster_min_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_cluster_min_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">freq</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_cpu_min_frequency</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cluster_cur_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cluster_cur_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_cluster_cur_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_cur_frequency</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cluster_cur_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cluster_cur_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_cluster_cur_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">freq</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_cpu_frequency</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_cluster_max_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_cluster_max_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_cluster_max_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_max_frequency</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_cluster_max_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_cluster_max_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_cluster_max_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">freq</span><span class="p">):</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_cpu_max_frequency</span><span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_core_online_cpu"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_core_online_cpu">[docs]</a>    <span class="k">def</span> <span class="nf">get_core_online_cpu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_clusters</span><span class="p">(</span><span class="n">core</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_active_cpu</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;No active CPUs found for core {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">core</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.list_available_core_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.list_available_core_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">list_available_core_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_available_cpu_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_core_online_cpu</span><span class="p">(</span><span class="n">core</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_core_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_core_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">get_core_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_core_online_cpu</span><span class="p">(</span><span class="n">core</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_core_governor_tunables"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_core_governor_tunables">[docs]</a>    <span class="k">def</span> <span class="nf">set_core_governor_tunables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">,</span> <span class="n">tunables</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_clusters</span><span class="p">(</span><span class="n">core</span><span class="p">):</span>
+            <span class="n">governor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster_governor</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_cluster_governor_tunables</span><span class="p">(</span><span class="n">cluster</span><span class="p">,</span> <span class="n">governor</span><span class="p">,</span> <span class="o">**</span><span class="n">tunables</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_core_min_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_core_min_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_core_min_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_min_frequency</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_core_online_cpu</span><span class="p">(</span><span class="n">core</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_core_min_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_core_min_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_core_min_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">,</span> <span class="n">freq</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_clusters</span><span class="p">(</span><span class="n">core</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_cluster_min_frequency</span><span class="p">(</span><span class="n">cluster</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_core_cur_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_core_cur_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_core_cur_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_cur_frequency</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_core_online_cpu</span><span class="p">(</span><span class="n">core</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_core_cur_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_core_cur_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_core_cur_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">,</span> <span class="n">freq</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_clusters</span><span class="p">(</span><span class="n">core</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_cluster_cur_frequency</span><span class="p">(</span><span class="n">cluster</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.get_core_max_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.get_core_max_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">get_core_max_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cpu_max_frequency</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_core_online_cpu</span><span class="p">(</span><span class="n">core</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="CpufreqModule.set_core_max_frequency"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.cpufreq.CpufreqModule.set_core_max_frequency">[docs]</a>    <span class="k">def</span> <span class="nf">set_core_max_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">core</span><span class="p">,</span> <span class="n">freq</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_core_clusters</span><span class="p">(</span><span class="n">core</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_cluster_max_frequency</span><span class="p">(</span><span class="n">cluster</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

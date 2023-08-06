@@ -1,0 +1,208 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.commands.run &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.commands.run</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+
+<span class="kn">import</span> <span class="nn">wlauto</span>
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Command</span><span class="p">,</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.agenda</span> <span class="kn">import</span> <span class="n">Agenda</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.execution</span> <span class="kn">import</span> <span class="n">Executor</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.log</span> <span class="kn">import</span> <span class="n">add_log_file</span>
+
+
+<div class="viewcode-block" id="RunCommand"><a class="viewcode-back" href="../../../api/wlauto.commands.html#wlauto.commands.run.RunCommand">[docs]</a><span class="k">class</span> <span class="nc">RunCommand</span><span class="p">(</span><span class="n">Command</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;run&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&#39;Execute automated workloads on a remote device and process the resulting output.&#39;</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;agenda&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;AGENDA&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                                 Agenda for this workload automation run. This defines which</span>
+<span class="s">                                 workloads will be executed, how many times, with which</span>
+<span class="s">                                 tunables, etc.  See example agendas in {} for an example of</span>
+<span class="s">                                 how this file should be structured.</span>
+<span class="s">                                 &quot;&quot;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">wlauto</span><span class="o">.</span><span class="n">__file__</span><span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-d&#39;</span><span class="p">,</span> <span class="s">&#39;--output-directory&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;DIR&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                                 Specify a directory where the output will be generated. If</span>
+<span class="s">                                 the directory already exists, the script will abort unless -f</span>
+<span class="s">                                 option (see below) is used, in which case the contents of the</span>
+<span class="s">                                 directory will be overwritten. If this option is not specified,</span>
+<span class="s">                                 then {} will be used instead.</span>
+<span class="s">                                 &quot;&quot;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-f&#39;</span><span class="p">,</span> <span class="s">&#39;--force&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                                 Overwrite output directory if it exists. By default, the script</span>
+<span class="s">                                 will abort in this situation to prevent accidental data loss.</span>
+<span class="s">                                 &quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--id&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;append&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&#39;only_run_ids&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;ID&#39;</span><span class="p">,</span>
+                                 <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                                 Specify a workload spec ID from an agenda to run. If this is</span>
+<span class="s">                                 specified, only that particular spec will be run, and other</span>
+<span class="s">                                 workloads in the agenda will be ignored. This option may be</span>
+<span class="s">                                 used to specify multiple IDs.</span>
+<span class="s">                                 &quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--disable&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;append&#39;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&#39;instruments_to_disable&#39;</span><span class="p">,</span>
+                                 <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;INSTRUMENT&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                                 Specify an instrument to disable from the command line. This</span>
+<span class="s">                                 equivalent to adding &quot;~{metavar}&quot; to the instrumentation list in</span>
+<span class="s">                                 the agenda. This can be used to temporarily disable a troublesome</span>
+<span class="s">                                 instrument for a particular run without introducing permanent</span>
+<span class="s">                                 change to the config (which one might then forget to revert).</span>
+<span class="s">                                 This option may be specified multiple times.</span>
+<span class="s">                                 &quot;&quot;&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RunCommand.execute"><a class="viewcode-back" href="../../../api/wlauto.commands.html#wlauto.commands.run.RunCommand.execute">[docs]</a>    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>  <span class="c"># NOQA</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_up_output_directory</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">add_log_file</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">log_file</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">agenda</span><span class="p">):</span>
+            <span class="n">agenda</span> <span class="o">=</span> <span class="n">Agenda</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">agenda</span><span class="p">)</span>
+            <span class="n">settings</span><span class="o">.</span><span class="n">agenda</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">agenda</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">agenda</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">meta_directory</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;{} is not a file; assuming workload name.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">agenda</span><span class="p">))</span>
+            <span class="n">agenda</span> <span class="o">=</span> <span class="n">Agenda</span><span class="p">()</span>
+            <span class="n">agenda</span><span class="o">.</span><span class="n">add_workload_entry</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">agenda</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">instruments_to_disable</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s">&#39;instrumentation&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">agenda</span><span class="o">.</span><span class="n">config</span><span class="p">:</span>
+                <span class="n">agenda</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s">&#39;instrumentation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">itd</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">instruments_to_disable</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Updating agenda to disable {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">itd</span><span class="p">))</span>
+                <span class="n">agenda</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s">&#39;instrumentation&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;~{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">itd</span><span class="p">))</span>
+
+        <span class="n">basename</span> <span class="o">=</span> <span class="s">&#39;config_&#39;</span>
+        <span class="k">for</span> <span class="n">file_number</span><span class="p">,</span> <span class="n">path</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">get_config_paths</span><span class="p">(),</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="n">file_ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">path</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">meta_directory</span><span class="p">,</span>
+                                           <span class="n">basename</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">file_number</span><span class="p">)</span> <span class="o">+</span> <span class="n">file_ext</span><span class="p">))</span>
+
+        <span class="n">executor</span> <span class="o">=</span> <span class="n">Executor</span><span class="p">()</span>
+        <span class="n">executor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">agenda</span><span class="p">,</span> <span class="n">selectors</span><span class="o">=</span><span class="p">{</span><span class="s">&#39;ids&#39;</span><span class="p">:</span> <span class="n">args</span><span class="o">.</span><span class="n">only_run_ids</span><span class="p">})</span>
+</div>
+<div class="viewcode-block" id="RunCommand.set_up_output_directory"><a class="viewcode-back" href="../../../api/wlauto.commands.html#wlauto.commands.run.RunCommand.set_up_output_directory">[docs]</a>    <span class="k">def</span> <span class="nf">set_up_output_directory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">output_directory</span><span class="p">:</span>
+            <span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">output_directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Using output directory: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">force</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Removing existing output directory.&#39;</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Output directory {} exists.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Please specify another location, or use -f option to overwrite.</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating output directory.&#39;</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">meta_directory</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

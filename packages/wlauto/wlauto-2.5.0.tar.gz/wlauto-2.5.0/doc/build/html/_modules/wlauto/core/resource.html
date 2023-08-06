@@ -1,0 +1,277 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.resource &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.resource</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.core.bootstrap</span> <span class="kn">import</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.extension</span> <span class="kn">import</span> <span class="n">Extension</span>
+
+
+<div class="viewcode-block" id="GetterPriority"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.resource.GetterPriority">[docs]</a><span class="k">class</span> <span class="nc">GetterPriority</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Enumerates standard ResourceGetter priorities. In general, getters should register</span>
+<span class="sd">    under one of these, rather than specifying other priority values.</span>
+
+
+<span class="sd">    :cached: The cached version of the resource. Look here first. This priority also implies</span>
+<span class="sd">             that the resource at this location is a &quot;cache&quot; and is not the only version of the</span>
+<span class="sd">             resource, so it may be cleared without losing access to the resource.</span>
+<span class="sd">    :preferred: Take this resource in favour of the environment resource.</span>
+<span class="sd">    :environment: Found somewhere under ~/.workload_automation/ or equivalent, or</span>
+<span class="sd">                    from environment variables, external configuration files, etc.</span>
+<span class="sd">                    These will override resource supplied with the package.</span>
+<span class="sd">    :external_package: Resource provided by another package.</span>
+<span class="sd">    :package: Resource provided with the package.</span>
+<span class="sd">    :remote: Resource will be downloaded from a remote location (such as an HTTP server</span>
+<span class="sd">                or a samba share). Try this only if no other getter was successful.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cached</span> <span class="o">=</span> <span class="mi">20</span>
+    <span class="n">preferred</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">remote</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">environment</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">external_package</span> <span class="o">=</span> <span class="o">-</span><span class="mi">5</span>
+    <span class="n">package</span> <span class="o">=</span> <span class="o">-</span><span class="mi">10</span>
+
+</div>
+<div class="viewcode-block" id="Resource"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.resource.Resource">[docs]</a><span class="k">class</span> <span class="nc">Resource</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Represents a resource that needs to be resolved. This can be pretty much</span>
+<span class="sd">    anything: a file, environment variable, a Python object, etc. The only thing</span>
+<span class="sd">    a resource *has* to have is an owner (which would normally be the</span>
+<span class="sd">    Workload/Instrument/Device/etc object that needs the resource). In addition,</span>
+<span class="sd">    a resource have any number of attributes to identify, but all of them are resource</span>
+<span class="sd">    type specific.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">owner</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">owner</span> <span class="o">=</span> <span class="n">owner</span>
+
+<div class="viewcode-block" id="Resource.delete"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.resource.Resource.delete">[docs]</a>    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Delete an instance of this resource type. This must be implemented by the concrete</span>
+<span class="sd">        subclasses based on what the resource looks like, e.g. deleting a file or a directory</span>
+<span class="sd">        tree, or removing an entry from a database.</span>
+
+<span class="sd">        :note: Implementation should *not* contain any logic for deciding whether or not</span>
+<span class="sd">               a resource should be deleted, only the actual deletion. The assumption is</span>
+<span class="sd">               that if this method is invoked, then the decision has already been made.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;&lt;{}</span><span class="se">\&#39;</span><span class="s">s {}&gt;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">owner</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ResourceGetter"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.resource.ResourceGetter">[docs]</a><span class="k">class</span> <span class="nc">ResourceGetter</span><span class="p">(</span><span class="n">Extension</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for implementing resolvers. Defines resolver interface. Resolvers are</span>
+<span class="sd">    responsible for discovering resources (such as particular kinds of files) they know</span>
+<span class="sd">    about based on the parameters that are passed to them. Each resolver also has a dict of</span>
+<span class="sd">    attributes that describe it&#39;s operation, and may be used to determine which get invoked.</span>
+<span class="sd">    There is no pre-defined set of attributes and resolvers may define their own.</span>
+
+<span class="sd">    Class attributes:</span>
+
+<span class="sd">    :name: Name that uniquely identifies this getter. Must be set by any concrete subclass.</span>
+<span class="sd">    :resource_type: Identifies resource type(s) that this getter can handle. This must</span>
+<span class="sd">                    be either a string (for a single type) or a list of strings for</span>
+<span class="sd">                    multiple resource types. This must be set by any concrete subclass.</span>
+<span class="sd">    :priority: Priority with which this getter will be invoked. This should be one of</span>
+<span class="sd">                the standard priorities specified in ``GetterPriority`` enumeration. If not</span>
+<span class="sd">                set, this will default to ``GetterPriority.environment``.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">priority</span> <span class="o">=</span> <span class="n">GetterPriority</span><span class="o">.</span><span class="n">environment</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resolver</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ResourceGetter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resolver</span> <span class="o">=</span> <span class="n">resolver</span>
+
+<div class="viewcode-block" id="ResourceGetter.register"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.resource.ResourceGetter.register">[docs]</a>    <span class="k">def</span> <span class="nf">register</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Registers with a resource resolver. Concrete implementations must override this</span>
+<span class="sd">        to invoke ``self.resolver.register()`` method to register ``self`` for specific</span>
+<span class="sd">        resource types.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;No resource type specified for {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">rt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">priority</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">priority</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ResourceGetter.unregister"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.resource.ResourceGetter.unregister">[docs]</a>    <span class="k">def</span> <span class="nf">unregister</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Unregister from a resource resolver.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;No resource type specified for {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">rt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rt</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ResourceGetter.get"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.resource.ResourceGetter.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This will get invoked by the resolver when attempting to resolve a resource, passing</span>
+<span class="sd">        in the resource to be resolved as the first parameter. Any additional parameters would</span>
+<span class="sd">        be specific to a particular resource type.</span>
+
+<span class="sd">        This method will only be invoked for resource types that the getter has registered for.</span>
+
+<span class="sd">        :param resource: an instance of :class:`wlauto.core.resource.Resource`.</span>
+
+<span class="sd">        :returns: Implementations of this method must return either the discovered resource or</span>
+<span class="sd">                  ``None`` if the resource could not be discovered.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="ResourceGetter.delete"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.resource.ResourceGetter.delete">[docs]</a>    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Delete the resource if it is discovered. All arguments are passed to a call</span>
+<span class="sd">        to``self.get()``. If that call returns a resource, it is deleted.</span>
+
+<span class="sd">        :returns: ``True`` if the specified resource has been discovered and deleted,</span>
+<span class="sd">                  and ``False`` otherwise.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">discovered</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">resource</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">discovered</span><span class="p">:</span>
+            <span class="n">resource</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">discovered</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;&lt;ResourceGetter {}&gt;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+</div>
+<span class="k">class</span> <span class="nc">__NullOwner</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Represents an owner for a resource not owned by anyone.&quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;noone&#39;</span>
+    <span class="n">dependencies_directory</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">dependencies_directory</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;no-one&#39;</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+
+<span class="n">NO_ONE</span> <span class="o">=</span> <span class="n">__NullOwner</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

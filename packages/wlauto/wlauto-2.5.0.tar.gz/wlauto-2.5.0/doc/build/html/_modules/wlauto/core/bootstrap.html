@@ -1,0 +1,306 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.bootstrap &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.bootstrap</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">namedtuple</span><span class="p">,</span> <span class="n">OrderedDict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">merge_dicts</span><span class="p">,</span> <span class="n">normalize</span><span class="p">,</span> <span class="n">unique</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">load_struct_from_yaml</span><span class="p">,</span> <span class="n">load_struct_from_python</span><span class="p">,</span> <span class="n">LoadSyntaxError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">identifier</span>
+
+
+<span class="n">_this_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+<span class="n">_user_home</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="s">&#39;~&#39;</span><span class="p">)</span>
+
+<span class="c"># loading our external packages over those from the environment</span>
+<span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_this_dir</span><span class="p">,</span> <span class="s">&#39;..&#39;</span><span class="p">,</span> <span class="s">&#39;external&#39;</span><span class="p">))</span>
+
+
+<span class="c"># Defines extension points for the WA framework. This table is used by the</span>
+<span class="c"># ExtensionLoader (among other places) to identify extensions it should look</span>
+<span class="c"># for.</span>
+<span class="c"># Parameters that need to be specified in a tuple for each extension type:</span>
+<span class="c">#     name: The name of the extension type. This will be used to resolve get_</span>
+<span class="c">#           and list_methods in the extension loader.</span>
+<span class="c">#     class: The base class for the extension type. Extension loader will check</span>
+<span class="c">#            whether classes it discovers are subclassed from this.</span>
+<span class="c">#     default package: This is the package that will be searched for extensions</span>
+<span class="c">#                      of that type by default (if not other packages are</span>
+<span class="c">#                      specified when creating the extension loader). This</span>
+<span class="c">#                      package *must* exist.</span>
+<span class="c">#    default path: This is the subdirectory under the environment_root which</span>
+<span class="c">#                  will be searched for extensions of this type by default (if</span>
+<span class="c">#                  no other paths are specified when creating the extension</span>
+<span class="c">#                  loader). This directory will be automatically created if it</span>
+<span class="c">#                  does not exist.</span>
+
+<span class="c">#pylint: disable=C0326</span>
+<span class="n">_EXTENSION_TYPE_TABLE</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="c"># name,               class,                                    default package,            default path</span>
+    <span class="p">(</span><span class="s">&#39;command&#39;</span><span class="p">,</span>           <span class="s">&#39;wlauto.core.command.Command&#39;</span><span class="p">,</span>            <span class="s">&#39;wlauto.commands&#39;</span><span class="p">,</span>          <span class="s">&#39;commands&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;device&#39;</span><span class="p">,</span>            <span class="s">&#39;wlauto.core.device.Device&#39;</span><span class="p">,</span>              <span class="s">&#39;wlauto.devices&#39;</span><span class="p">,</span>           <span class="s">&#39;devices&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;instrument&#39;</span><span class="p">,</span>        <span class="s">&#39;wlauto.core.instrumentation.Instrument&#39;</span><span class="p">,</span> <span class="s">&#39;wlauto.instrumentation&#39;</span><span class="p">,</span>   <span class="s">&#39;instruments&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;module&#39;</span><span class="p">,</span>            <span class="s">&#39;wlauto.core.extension.Module&#39;</span><span class="p">,</span>           <span class="s">&#39;wlauto.modules&#39;</span><span class="p">,</span>           <span class="s">&#39;modules&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;resource_getter&#39;</span><span class="p">,</span>   <span class="s">&#39;wlauto.core.resource.ResourceGetter&#39;</span><span class="p">,</span>    <span class="s">&#39;wlauto.resource_getters&#39;</span><span class="p">,</span>  <span class="s">&#39;resource_getters&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;result_processor&#39;</span><span class="p">,</span>  <span class="s">&#39;wlauto.core.result.ResultProcessor&#39;</span><span class="p">,</span>     <span class="s">&#39;wlauto.result_processors&#39;</span><span class="p">,</span> <span class="s">&#39;result_processors&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;workload&#39;</span><span class="p">,</span>          <span class="s">&#39;wlauto.core.workload.Workload&#39;</span><span class="p">,</span>          <span class="s">&#39;wlauto.workloads&#39;</span><span class="p">,</span>         <span class="s">&#39;workloads&#39;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">_Extension</span> <span class="o">=</span> <span class="n">namedtuple</span><span class="p">(</span><span class="s">&#39;_Extension&#39;</span><span class="p">,</span> <span class="s">&#39;name, cls, default_package, default_path&#39;</span><span class="p">)</span>
+<span class="n">_extensions</span> <span class="o">=</span> <span class="p">[</span><span class="n">_Extension</span><span class="o">.</span><span class="n">_make</span><span class="p">(</span><span class="n">ext</span><span class="p">)</span> <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">_EXTENSION_TYPE_TABLE</span><span class="p">]</span>  <span class="c"># pylint: disable=W0212</span>
+
+
+<div class="viewcode-block" id="ConfigLoader"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.bootstrap.ConfigLoader">[docs]</a><span class="k">class</span> <span class="nc">ConfigLoader</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This class is responsible for loading and validating config files.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_loaded</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">loaded_files</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">environment_root</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="s">&#39;wa_output&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reboot_after_each_iteration</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dependencies_directory</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">agenda</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extension_packages</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extension_paths</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extensions</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">package_directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">_this_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">commands</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">meta_directory</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;__meta&#39;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">log_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;run.log&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ConfigLoader.update"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.bootstrap.ConfigLoader.update">[docs]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update_from_dict</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config_count</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update_from_file</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ConfigLoader.update_from_file"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.bootstrap.ConfigLoader.update_from_file">[docs]</a>    <span class="k">def</span> <span class="nf">update_from_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+        <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">source</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>  <span class="c"># pylint: disable=redefined-outer-name</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">ext</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;.py&#39;</span><span class="p">,</span> <span class="s">&#39;.pyo&#39;</span><span class="p">,</span> <span class="s">&#39;.pyc&#39;</span><span class="p">]:</span>
+                <span class="n">new_config</span> <span class="o">=</span> <span class="n">load_struct_from_python</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&#39;.yaml&#39;</span><span class="p">:</span>
+                <span class="n">new_config</span> <span class="o">=</span> <span class="n">load_struct_from_yaml</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Unknown config format: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">))</span>
+        <span class="k">except</span> <span class="n">LoadSyntaxError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">,</span> <span class="n">new_config</span><span class="p">,</span>
+                                   <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;first&#39;</span><span class="p">,</span>
+                                   <span class="n">match_types</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                   <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">loaded_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_loaded</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+<div class="viewcode-block" id="ConfigLoader.update_from_dict"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.bootstrap.ConfigLoader.update_from_dict">[docs]</a>    <span class="k">def</span> <span class="nf">update_from_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+        <span class="n">normalized_source</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">((</span><span class="n">identifier</span><span class="p">(</span><span class="n">k</span><span class="p">),</span> <span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">source</span><span class="o">.</span><span class="n">iteritems</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">,</span> <span class="n">normalized_source</span><span class="p">,</span> <span class="n">list_duplicates</span><span class="o">=</span><span class="s">&#39;first&#39;</span><span class="p">,</span>
+                                   <span class="n">match_types</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">dict_type</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_loaded</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+<div class="viewcode-block" id="ConfigLoader.get_config_paths"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.bootstrap.ConfigLoader.get_config_paths">[docs]</a>    <span class="k">def</span> <span class="nf">get_config_paths</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">lf</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s">&#39;c&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">lf</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">loaded_files</span><span class="p">]</span>
+</div>
+    <span class="k">def</span> <span class="nf">_check_loaded</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loaded</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Config file not loaded.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_loaded</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">normalize</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="init_environment"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.bootstrap.init_environment">[docs]</a><span class="k">def</span> <span class="nf">init_environment</span><span class="p">(</span><span class="n">env_root</span><span class="p">,</span> <span class="n">dep_dir</span><span class="p">,</span> <span class="n">extension_paths</span><span class="p">,</span> <span class="n">overwrite_existing</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>  <span class="c"># pylint: disable=R0914</span>
+    <span class="sd">&quot;&quot;&quot;Initialise a fresh user environment creating the workload automation&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">env_root</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">overwrite_existing</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Environment {} already exists.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">env_root</span><span class="p">))</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">env_root</span><span class="p">)</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">env_root</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_this_dir</span><span class="p">,</span> <span class="s">&#39;..&#39;</span><span class="p">,</span> <span class="s">&#39;config_example.py&#39;</span><span class="p">))</span> <span class="k">as</span> <span class="n">rf</span><span class="p">:</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;&quot;&quot;&quot;.*?&quot;&quot;&quot;&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">rf</span><span class="o">.</span><span class="n">read</span><span class="p">(),</span> <span class="mi">1</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">DOTALL</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_env_root</span><span class="p">,</span> <span class="s">&#39;config.py&#39;</span><span class="p">),</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wf</span><span class="p">:</span>
+            <span class="n">wf</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">dep_dir</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">extension_paths</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;USER&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s">&#39;root&#39;</span><span class="p">:</span>
+        <span class="c"># If running with sudo on POSIX, change the ownership to the real user.</span>
+        <span class="n">real_user</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;SUDO_USER&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">real_user</span><span class="p">:</span>
+            <span class="kn">import</span> <span class="nn">pwd</span>  <span class="c"># done here as module won&#39;t import on win32</span>
+            <span class="n">user_entry</span> <span class="o">=</span> <span class="n">pwd</span><span class="o">.</span><span class="n">getpwnam</span><span class="p">(</span><span class="n">real_user</span><span class="p">)</span>
+            <span class="n">uid</span><span class="p">,</span> <span class="n">gid</span> <span class="o">=</span> <span class="n">user_entry</span><span class="o">.</span><span class="n">pw_uid</span><span class="p">,</span> <span class="n">user_entry</span><span class="o">.</span><span class="n">pw_gid</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">chown</span><span class="p">(</span><span class="n">env_root</span><span class="p">,</span> <span class="n">uid</span><span class="p">,</span> <span class="n">gid</span><span class="p">)</span>
+            <span class="c"># why, oh why isn&#39;t there a recusive=True option for os.chown?</span>
+            <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">env_root</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dirs</span><span class="p">:</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">chown</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="n">uid</span><span class="p">,</span> <span class="n">gid</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>  <span class="c"># pylint: disable=W0621</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">chown</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">f</span><span class="p">),</span> <span class="n">uid</span><span class="p">,</span> <span class="n">gid</span><span class="p">)</span>
+
+</div>
+<span class="n">_env_root</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;WA_USER_DIRECTORY&#39;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_user_home</span><span class="p">,</span> <span class="s">&#39;.workload_automation&#39;</span><span class="p">))</span>
+<span class="n">_dep_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_env_root</span><span class="p">,</span> <span class="s">&#39;dependencies&#39;</span><span class="p">)</span>
+<span class="n">_extension_paths</span> <span class="o">=</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_env_root</span><span class="p">,</span> <span class="n">ext</span><span class="o">.</span><span class="n">default_path</span><span class="p">)</span> <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">_extensions</span><span class="p">]</span>
+<span class="n">_env_var_paths</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;WA_EXTENSION_PATHS&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">_env_var_paths</span><span class="p">:</span>
+    <span class="n">_extension_paths</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_env_var_paths</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">pathsep</span><span class="p">))</span>
+
+<span class="n">_env_configs</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;config.py&#39;</span><span class="p">,</span> <span class="s">&#39;config.yaml&#39;</span><span class="p">]:</span>
+    <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_env_root</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+        <span class="n">_env_configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">_env_root</span><span class="p">):</span>
+    <span class="n">init_environment</span><span class="p">(</span><span class="n">_env_root</span><span class="p">,</span> <span class="n">_dep_dir</span><span class="p">,</span> <span class="n">_extension_paths</span><span class="p">)</span>
+<span class="k">elif</span> <span class="ow">not</span> <span class="n">_env_configs</span><span class="p">:</span>
+    <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_env_root</span><span class="p">,</span> <span class="s">&#39;config.py&#39;</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_this_dir</span><span class="p">,</span> <span class="s">&#39;..&#39;</span><span class="p">,</span> <span class="s">&#39;config_example.py&#39;</span><span class="p">))</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f_text</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;&quot;&quot;&quot;.*?&quot;&quot;&quot;&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">(),</span> <span class="mi">1</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">DOTALL</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">f_text</span><span class="p">)</span>
+        <span class="n">_env_configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+<span class="n">settings</span> <span class="o">=</span> <span class="n">ConfigLoader</span><span class="p">()</span>
+<span class="n">settings</span><span class="o">.</span><span class="n">environment_root</span> <span class="o">=</span> <span class="n">_env_root</span>
+<span class="n">settings</span><span class="o">.</span><span class="n">dependencies_directory</span> <span class="o">=</span> <span class="n">_dep_dir</span>
+<span class="n">settings</span><span class="o">.</span><span class="n">extension_paths</span> <span class="o">=</span> <span class="n">_extension_paths</span>
+<span class="n">settings</span><span class="o">.</span><span class="n">extensions</span> <span class="o">=</span> <span class="n">_extensions</span>
+
+<span class="n">_packages_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_env_root</span><span class="p">,</span> <span class="s">&#39;packages&#39;</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">_packages_file</span><span class="p">):</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">_packages_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="n">settings</span><span class="o">.</span><span class="n">extension_packages</span> <span class="o">=</span> <span class="n">unique</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+
+<span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="n">_env_configs</span><span class="p">:</span>
+    <span class="n">settings</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

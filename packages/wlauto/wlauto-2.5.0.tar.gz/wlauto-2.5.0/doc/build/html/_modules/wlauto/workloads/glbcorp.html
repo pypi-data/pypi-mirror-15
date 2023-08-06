@@ -1,0 +1,307 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.workloads.glbcorp &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.workloads.glbcorp</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101,W0201,E0203</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">select</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">ApkWorkload</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Alias</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">WorkloadError</span>
+
+
+<span class="n">DELAY</span> <span class="o">=</span> <span class="mi">2</span>
+
+
+<div class="viewcode-block" id="GlbCorp"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbCorp">[docs]</a><span class="k">class</span> <span class="nc">GlbCorp</span><span class="p">(</span><span class="n">ApkWorkload</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;glb_corporate&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    GFXBench GL (a.k.a. GLBench) v3.0 Corporate version.</span>
+
+<span class="s">    This is a version of GLBench available through a corporate license (distinct</span>
+<span class="s">    from the version available in Google Play store).</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="n">package</span> <span class="o">=</span> <span class="s">&#39;net.kishonti.gfxbench&#39;</span>
+    <span class="n">activity</span> <span class="o">=</span> <span class="s">&#39;net.kishonti.benchui.TestActivity&#39;</span>
+
+    <span class="n">result_start_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;I/TfwActivity\s*\(\s*\d+\):\s+\S+\s+result: {&#39;</span><span class="p">)</span>
+    <span class="n">preamble_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;I/TfwActivity\s*\(\s*\d+\):\s+&#39;</span><span class="p">)</span>
+
+    <span class="n">valid_test_ids</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s">&#39;gl_alu&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_alu_off&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_blending&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_blending_off&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_driver&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_driver_off&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_fill&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_fill_off&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_manhattan&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_manhattan_off&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_trex&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_trex_battery&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_trex_off&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_trex_qmatch&#39;</span><span class="p">,</span>
+        <span class="s">&#39;gl_trex_qmatch_highp&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="n">supported_resolutions</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;720p&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s">&#39;-ei -w&#39;</span><span class="p">:</span> <span class="mi">1280</span><span class="p">,</span>
+            <span class="s">&#39;-ei -h&#39;</span><span class="p">:</span> <span class="mi">720</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s">&#39;1080p&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s">&#39;-ei -w&#39;</span><span class="p">:</span> <span class="mi">1920</span><span class="p">,</span>
+            <span class="s">&#39;-ei -h&#39;</span><span class="p">:</span> <span class="mi">1080</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;times&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">constraint</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;Specifies the number of times the benchmark will be run in a &quot;tight &#39;</span>
+                               <span class="s">&#39;loop&quot;, i.e. without performaing setup/teardown inbetween.&#39;</span><span class="p">)),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;resolution&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;720p&#39;</span><span class="p">,</span> <span class="s">&#39;1080p&#39;</span><span class="p">,</span> <span class="s">&#39;720&#39;</span><span class="p">,</span> <span class="s">&#39;1080&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;Explicitly specifies the resultion under which the benchmark will &#39;</span>
+                               <span class="s">&#39;be run. If not specfied, device</span><span class="se">\&#39;</span><span class="s">s native resoution will used.&#39;</span><span class="p">)),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;test_id&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;gl_manhattan_off&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="n">valid_test_ids</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;ID of the GFXBench test to be run.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;run_timeout&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span> <span class="o">*</span> <span class="mi">60</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Time out for workload execution. The workload will be killed if it hasn&#39;t completed</span>
+<span class="s">                  withint this period.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">aliases</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;manhattan&#39;</span><span class="p">,</span> <span class="n">test_id</span><span class="o">=</span><span class="s">&#39;gl_manhattan&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;manhattan_off&#39;</span><span class="p">,</span> <span class="n">test_id</span><span class="o">=</span><span class="s">&#39;gl_manhattan_off&#39;</span><span class="p">),</span>
+        <span class="n">Alias</span><span class="p">(</span><span class="s">&#39;manhattan_offscreen&#39;</span><span class="p">,</span> <span class="n">test_id</span><span class="o">=</span><span class="s">&#39;gl_manhattan_off&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+<div class="viewcode-block" id="GlbCorp.setup"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbCorp.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">GlbCorp</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_command</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">monitor</span> <span class="o">=</span> <span class="n">GlbRunMonitor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">monitor</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="GlbCorp.start_activity"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbCorp.start_activity">[docs]</a>    <span class="k">def</span> <span class="nf">start_activity</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Unlike with most other APK workloads, we&#39;re invoking the use case</span>
+        <span class="c"># directly by starting the activity with appropriate parameters on the</span>
+        <span class="c"># command line during execution, so we dont&#39; need to start activity</span>
+        <span class="c"># during setup.</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="GlbCorp.run"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbCorp.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">times</span><span class="p">):</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run_timeout</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s">&#39;FAILURE&#39;</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">WorkloadError</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">DELAY</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">monitor</span><span class="o">.</span><span class="n">wait_for_run_end</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="GlbCorp.update_result"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbCorp.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># NOQA</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">GlbCorp</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update_result</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">monitor</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+        <span class="n">iteration</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">logcat_log</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">line</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+                <span class="n">result_lines</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">result_start_regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">):</span>
+                        <span class="n">result_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;{&#39;</span><span class="p">)</span>
+                        <span class="n">line</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+                        <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">preamble_regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">):</span>
+                            <span class="n">result_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preamble_regex</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">line</span><span class="p">))</span>
+                            <span class="n">line</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">result</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result_lines</span><span class="p">))</span>
+                            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="n">iteration</span><span class="p">:</span>
+                                <span class="n">suffix</span> <span class="o">=</span> <span class="s">&#39;_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iteration</span><span class="p">)</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">suffix</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+                            <span class="k">for</span> <span class="n">sub_result</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s">&#39;results&#39;</span><span class="p">]:</span>
+                                <span class="n">frames</span> <span class="o">=</span> <span class="n">sub_result</span><span class="p">[</span><span class="s">&#39;score&#39;</span><span class="p">]</span>
+                                <span class="n">elapsed_time</span> <span class="o">=</span> <span class="n">sub_result</span><span class="p">[</span><span class="s">&#39;elapsed_time&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="mi">1000</span>
+                                <span class="n">fps</span> <span class="o">=</span> <span class="n">frames</span> <span class="o">/</span> <span class="n">elapsed_time</span>
+                                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;score&#39;</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">,</span> <span class="n">frames</span><span class="p">,</span> <span class="s">&#39;frames&#39;</span><span class="p">)</span>
+                                <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="s">&#39;fps&#39;</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">,</span> <span class="n">fps</span><span class="p">)</span>
+                        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Could not parse result for iteration {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iteration</span><span class="p">))</span>
+                        <span class="n">result_lines</span> <span class="o">=</span> <span class="p">[]</span>
+                        <span class="n">iteration</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">line</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">StopIteration</span><span class="p">:</span>
+                <span class="k">pass</span>  <span class="c"># EOF</span>
+        <span class="k">if</span> <span class="n">results</span><span class="p">:</span>
+            <span class="n">outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;glb-results.json&#39;</span><span class="p">)</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">outfile</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+                <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">wfh</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_build_command</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">command_params</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">command_params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;-e test_ids &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test_id</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolution</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolution</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;p&#39;</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">resolution</span> <span class="o">+=</span> <span class="s">&#39;p&#39;</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">supported_resolutions</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">resolution</span><span class="p">]</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                <span class="n">command_params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;{} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">))</span>
+        <span class="k">return</span> <span class="s">&#39;am start -W -S -n {}/{} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">,</span>
+                                                   <span class="bp">self</span><span class="o">.</span><span class="n">activity</span><span class="p">,</span>
+                                                   <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">command_params</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="GlbRunMonitor"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbRunMonitor">[docs]</a><span class="k">class</span> <span class="nc">GlbRunMonitor</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+
+    <span class="n">regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;I/Runner\s+\(\s*\d+\): finished:&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">GlbRunMonitor</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">daemon</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_ended</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_event</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="c"># Not using clear_logcat() because command collects directly, i.e. will</span>
+        <span class="c"># ignore poller.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;logcat -c&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">adb_name</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;adb&#39;</span><span class="p">,</span> <span class="s">&#39;-s&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;logcat&#39;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;adb&#39;</span><span class="p">,</span> <span class="s">&#39;logcat&#39;</span><span class="p">]</span>
+
+<div class="viewcode-block" id="GlbRunMonitor.run"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbRunMonitor.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">proc</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span> <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">stop_event</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_ended</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">DELAY</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">ready</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">select</span><span class="o">.</span><span class="n">select</span><span class="p">([</span><span class="n">proc</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="n">proc</span><span class="o">.</span><span class="n">stderr</span><span class="p">],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="mi">2</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">ready</span><span class="p">:</span>
+                    <span class="n">line</span> <span class="o">=</span> <span class="n">ready</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">run_ended</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="GlbRunMonitor.stop"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbRunMonitor.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_event</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="GlbRunMonitor.wait_for_run_end"><a class="viewcode-back" href="../../../api/wlauto.workloads.glbcorp.html#wlauto.workloads.glbcorp.GlbRunMonitor.wait_for_run_end">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_run_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_ended</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_ended</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

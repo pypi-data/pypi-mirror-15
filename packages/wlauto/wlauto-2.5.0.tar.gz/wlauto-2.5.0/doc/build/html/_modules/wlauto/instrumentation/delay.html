@@ -1,0 +1,293 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.instrumentation.delay &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="wlauto.instrumentation" href="../instrumentation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" accesskey="U">wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.instrumentation.delay</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="c">#pylint: disable=W0613,E1101,E0203,W0201</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Instrument</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">InstrumentError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span>
+
+
+<div class="viewcode-block" id="DelayInstrument"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.delay.html#wlauto.instrumentation.delay.DelayInstrument">[docs]</a><span class="k">class</span> <span class="nc">DelayInstrument</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;delay&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    This instrument introduces a delay before executing either an iteration</span>
+<span class="s">    or all iterations for a spec.</span>
+
+<span class="s">    The delay may be specified as either a fixed period or a temperature</span>
+<span class="s">    threshold that must be reached.</span>
+
+<span class="s">    Optionally, if an active cooling solution is employed to speed up temperature drop between</span>
+<span class="s">    runs, it may be controlled using this instrument.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;temperature_file&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/sys/devices/virtual/thermal/thermal_zone0/temp&#39;</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;thermal_temp_file&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;Full path to the sysfile on the device that contains the device&#39;s</span>
+<span class="s">                  temperature.&quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;temperature_timeout&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">600</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;thermal_timeout&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  The timeout after which the instrument will stop waiting even if the specified threshold</span>
+<span class="s">                  temperature is not reached. If this timeout is hit, then a warning will be logged stating</span>
+<span class="s">                  the actual temperature at which the timeout has ended.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;temperature_poll_period&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;thermal_sleep_time&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;How long to sleep (in seconds) between polling current device temperature.&quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;temperature_between_specs&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;thermal_threshold_between_specs&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Temperature (in device-specific units) the device must cool down to before</span>
+<span class="s">                  the iteration spec will be run.</span>
+
+<span class="s">                  .. note:: This cannot be specified at the same time as ``fixed_between_specs``</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;temperature_between_iterations&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;thermal_threshold_between_iterations&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Temperature (in device-specific units) the device must cool down to before</span>
+<span class="s">                  the next spec will be run.</span>
+
+<span class="s">                  .. note:: This cannot be specified at the same time as ``fixed_between_iterations``</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;temperature_before_start&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;thermal_threshold_before_start&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Temperature (in device-specific units) the device must cool down to just before</span>
+<span class="s">                  the actual workload execution (after setup has been performed).</span>
+
+<span class="s">                  .. note:: This cannot be specified at the same time as ``fixed_between_iterations``</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;fixed_between_specs&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;fixed_delay_between_specs&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  How long to sleep (in seconds) after all iterations for a workload spec have</span>
+<span class="s">                  executed.</span>
+
+<span class="s">                  .. note:: This cannot be specified at the same time as ``temperature_between_specs``</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;fixed_between_iterations&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;fixed_delay_between_iterations&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  How long to sleep (in seconds) after each iterations for a workload spec has</span>
+<span class="s">                  executed.</span>
+
+<span class="s">                  .. note:: This cannot be specified at the same time as ``temperature_between_iterations``</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;fixed_before_start&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;fixed_delay_before_start&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+
+<span class="s">                  How long to sleep (in seconds) after setup for an iteration has been perfromed but</span>
+<span class="s">                  before running the workload.</span>
+
+<span class="s">                  .. note:: This cannot be specified at the same time as ``temperature_before_start``</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;active_cooling&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;thermal_active_cooling&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  This instrument supports an active cooling solution while waiting for the device temperature</span>
+<span class="s">                  to drop to the threshold. The solution involves an mbed controlling a fan. The mbed is signaled</span>
+<span class="s">                  over a serial port. If this solution is present in the setup, this should be set to ``True``.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_iterations</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">temp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_file</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Setting temperature threshold between iterations to {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_iterations</span> <span class="o">=</span> <span class="n">temp</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_specs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">temp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_file</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Setting temperature threshold between workload specs to {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_specs</span> <span class="o">=</span> <span class="n">temp</span>
+
+<div class="viewcode-block" id="DelayInstrument.very_slow_on_iteration_start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.delay.html#wlauto.instrumentation.delay.DelayInstrument.very_slow_on_iteration_start">[docs]</a>    <span class="k">def</span> <span class="nf">very_slow_on_iteration_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_cooling</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">stop_active_cooling</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fixed_between_iterations</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for a fixed period after iteration...&#39;</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fixed_between_iterations</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_iterations</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for temperature drop before iteration...&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_temperature</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_iterations</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DelayInstrument.very_slow_on_spec_start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.delay.html#wlauto.instrumentation.delay.DelayInstrument.very_slow_on_spec_start">[docs]</a>    <span class="k">def</span> <span class="nf">very_slow_on_spec_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_cooling</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">stop_active_cooling</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fixed_between_specs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for a fixed period after spec execution...&#39;</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fixed_between_specs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_specs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for temperature drop before spec execution...&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_temperature</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_specs</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DelayInstrument.very_slow_start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.delay.html#wlauto.instrumentation.delay.DelayInstrument.very_slow_start">[docs]</a>    <span class="k">def</span> <span class="nf">very_slow_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_cooling</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">stop_active_cooling</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fixed_before_start</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for a fixed period after iteration...&#39;</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fixed_before_start</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature_before_start</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for temperature drop before commencing execution...&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_temperature</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_before_start</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DelayInstrument.wait_for_temperature"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.delay.html#wlauto.instrumentation.delay.DelayInstrument.wait_for_temperature">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_temperature</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">temperature</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_cooling</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">start_active_cooling</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">do_wait_for_temperature</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">stop_active_cooling</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">do_wait_for_temperature</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DelayInstrument.do_wait_for_temperature"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.delay.html#wlauto.instrumentation.delay.DelayInstrument.do_wait_for_temperature">[docs]</a>    <span class="k">def</span> <span class="nf">do_wait_for_temperature</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">temperature</span><span class="p">):</span>
+        <span class="n">reading</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_file</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+        <span class="n">waiting_start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">while</span> <span class="n">reading</span> <span class="o">&gt;</span> <span class="n">temperature</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Device temperature: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">reading</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">waiting_start_time</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature_timeout</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Reached timeout; current temperature: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">reading</span><span class="p">))</span>
+                <span class="k">break</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_poll_period</span><span class="p">)</span>
+            <span class="n">reading</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_file</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_specs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fixed_between_specs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Both fixed delay and thermal threshold specified for specs.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_iterations</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fixed_between_iterations</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Both fixed delay and thermal threshold specified for iterations.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_before_start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fixed_before_start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Both fixed delay and thermal threshold specified before start.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_specs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fixed_between_specs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature_before_start</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">temperature_between_iterations</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fixed_between_iterations</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">fixed_before_start</span><span class="p">]):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;delay instrument is enabled, but no delay is specified.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_cooling</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">has</span><span class="p">(</span><span class="s">&#39;active_cooling&#39;</span><span class="p">):</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Your device does not support active cooling. Did you configure it with an approprite module?&#39;</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" >wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

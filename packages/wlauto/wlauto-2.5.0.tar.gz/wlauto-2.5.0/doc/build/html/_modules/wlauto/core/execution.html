@@ -1,0 +1,939 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.execution &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.execution</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=no-member</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module contains the execution logic for Workload Automation. It defines the</span>
+<span class="sd">following actors:</span>
+
+<span class="sd">    WorkloadSpec: Identifies the workload to be run and defines parameters under</span>
+<span class="sd">                  which it should be executed.</span>
+
+<span class="sd">    Executor: Responsible for the overall execution process. It instantiates</span>
+<span class="sd">              and/or intialises the other actors, does any necessary vaidation</span>
+<span class="sd">              and kicks off the whole process.</span>
+
+<span class="sd">    Execution Context: Provides information about the current state of run</span>
+<span class="sd">                       execution to instrumentation.</span>
+
+<span class="sd">    RunInfo: Information about the current run.</span>
+
+<span class="sd">    Runner: This executes workload specs that are passed to it. It goes through</span>
+<span class="sd">            stages of execution, emitting an appropriate signal at each step to</span>
+<span class="sd">            allow instrumentation to do its stuff.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">uuid</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">copy</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">contextmanager</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">Counter</span><span class="p">,</span> <span class="n">defaultdict</span><span class="p">,</span> <span class="n">OrderedDict</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">izip_longest</span>
+
+<span class="kn">import</span> <span class="nn">wlauto.core.signal</span> <span class="kn">as</span> <span class="nn">signal</span>
+<span class="kn">from</span> <span class="nn">wlauto.core</span> <span class="kn">import</span> <span class="n">instrumentation</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.bootstrap</span> <span class="kn">import</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.extension</span> <span class="kn">import</span> <span class="n">Artifact</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.configuration</span> <span class="kn">import</span> <span class="n">RunConfiguration</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.extension_loader</span> <span class="kn">import</span> <span class="n">ExtensionLoader</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.resolver</span> <span class="kn">import</span> <span class="n">ResourceResolver</span>
+<span class="kn">from</span> <span class="nn">wlauto.core.result</span> <span class="kn">import</span> <span class="n">ResultManager</span><span class="p">,</span> <span class="n">IterationResult</span><span class="p">,</span> <span class="n">RunResult</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="p">(</span><span class="n">WAError</span><span class="p">,</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">TimeoutError</span><span class="p">,</span> <span class="n">InstrumentError</span><span class="p">,</span>
+                               <span class="n">DeviceError</span><span class="p">,</span> <span class="n">DeviceNotRespondingError</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">ensure_directory_exists</span> <span class="k">as</span> <span class="n">_d</span><span class="p">,</span> <span class="n">get_traceback</span><span class="p">,</span> <span class="n">merge_dicts</span><span class="p">,</span> <span class="n">format_duration</span>
+
+
+<span class="c"># The maximum number of reboot attempts for an iteration.</span>
+<span class="n">MAX_REBOOT_ATTEMPTS</span> <span class="o">=</span> <span class="mi">3</span>
+
+<span class="c"># If something went wrong during device initialization, wait this</span>
+<span class="c"># long (in seconds) before retrying. This is necessary, as retrying</span>
+<span class="c"># immediately may not give the device enough time to recover to be able</span>
+<span class="c"># to reboot.</span>
+<span class="n">REBOOT_DELAY</span> <span class="o">=</span> <span class="mi">3</span>
+
+
+<div class="viewcode-block" id="RunInfo"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.RunInfo">[docs]</a><span class="k">class</span> <span class="nc">RunInfo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Information about the current run, such as it&#39;s unique ID, run</span>
+<span class="sd">    time, etc.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uuid</span> <span class="o">=</span> <span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">end_time</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">project</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project_stage</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">project_stage</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_name</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">run_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">notes</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_properties</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="RunInfo.to_dict"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.RunInfo.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">)</span>
+        <span class="n">d</span><span class="p">[</span><span class="s">&#39;uuid&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uuid</span><span class="p">)</span>
+        <span class="k">del</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;config&#39;</span><span class="p">]</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">to_dict</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">d</span>
+
+</div></div>
+<div class="viewcode-block" id="ExecutionContext"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext">[docs]</a><span class="k">class</span> <span class="nc">ExecutionContext</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Provides a context for instrumentation. Keeps track of things like</span>
+<span class="sd">    current workload and iteration.</span>
+
+<span class="sd">    This class also provides two status members that can be used by workloads</span>
+<span class="sd">    and instrumentation to keep track of arbitrary state. ``result``</span>
+<span class="sd">    is reset on each new iteration of a workload; run_status is maintained</span>
+<span class="sd">    throughout a Workload Automation run.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># These are the artifacts generated by the core framework.</span>
+    <span class="n">default_run_artifacts</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Artifact</span><span class="p">(</span><span class="s">&#39;runlog&#39;</span><span class="p">,</span> <span class="s">&#39;run.log&#39;</span><span class="p">,</span> <span class="s">&#39;log&#39;</span><span class="p">,</span> <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">description</span><span class="o">=</span><span class="s">&#39;The log for the entire run.&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">current_iteration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">:</span>
+            <span class="n">spec_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_iteration_counts</span><span class="p">[</span><span class="n">spec_id</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">job_status</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">workload</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span> <span class="s">&#39;workload&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">spec</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">,</span> <span class="s">&#39;spec&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">result</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">,</span> <span class="s">&#39;result&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_result</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reboot_policy</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">reboot_policy</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resolver</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_error</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_info</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_result</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_output_directory</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">host_working_directory</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">meta_directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iteration_artifacts</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_artifacts</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_run_artifacts</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_iteration_counts</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aborted</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runner</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">agenda</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run_artifacts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Artifact</span><span class="p">(</span><span class="s">&#39;agenda&#39;</span><span class="p">,</span>
+                                               <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span>
+                                                            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">agenda</span><span class="p">)),</span>
+                                               <span class="s">&#39;meta&#39;</span><span class="p">,</span>
+                                               <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                               <span class="n">description</span><span class="o">=</span><span class="s">&#39;Agenda for this run.&#39;</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">filepath</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">loaded_files</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;config_{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span>
+                                <span class="n">name</span> <span class="o">+</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filepath</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run_artifacts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Artifact</span><span class="p">(</span><span class="n">name</span><span class="p">,</span>
+                                               <span class="n">path</span><span class="p">,</span>
+                                               <span class="n">kind</span><span class="o">=</span><span class="s">&#39;meta&#39;</span><span class="p">,</span>
+                                               <span class="n">mandatory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                               <span class="n">description</span><span class="o">=</span><span class="s">&#39;Config file used for the run.&#39;</span><span class="p">))</span>
+
+<div class="viewcode-block" id="ExecutionContext.initialize"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_output_directory</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_output_directory</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_output_directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resolver</span> <span class="o">=</span> <span class="n">ResourceResolver</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_info</span> <span class="o">=</span> <span class="n">RunInfo</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_result</span> <span class="o">=</span> <span class="n">RunResult</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_info</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_output_directory</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ExecutionContext.next_job"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext.next_job">[docs]</a>    <span class="k">def</span> <span class="nf">next_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Invoked by the runner when starting a new iteration of workload execution.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span> <span class="o">=</span> <span class="n">job</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_iteration_counts</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">aborted</span><span class="p">:</span>
+            <span class="n">outdir_name</span> <span class="o">=</span> <span class="s">&#39;_&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_iteration</span><span class="p">]))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="n">_d</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_output_directory</span><span class="p">,</span> <span class="n">outdir_name</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">iteration_artifacts</span> <span class="o">=</span> <span class="p">[</span><span class="n">wa</span> <span class="k">for</span> <span class="n">wa</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload</span><span class="o">.</span><span class="n">artifacts</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">iteration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_iteration</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span>
+</div>
+<div class="viewcode-block" id="ExecutionContext.end_job"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext.end_job">[docs]</a>    <span class="k">def</span> <span class="nf">end_job</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">ABORTED</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aborted</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_output_directory</span>
+</div>
+<div class="viewcode-block" id="ExecutionContext.add_metric"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext.add_metric">[docs]</a>    <span class="k">def</span> <span class="nf">add_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ExecutionContext.add_artifact"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext.add_artifact">[docs]</a>    <span class="k">def</span> <span class="nf">add_artifact</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_run_artifact</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_iteration_artifact</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ExecutionContext.add_run_artifact"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext.add_run_artifact">[docs]</a>    <span class="k">def</span> <span class="nf">add_run_artifact</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">_check_artifact_path</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_output_directory</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_artifacts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Artifact</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">Artifact</span><span class="o">.</span><span class="n">ITERATION</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="ExecutionContext.add_iteration_artifact"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext.add_iteration_artifact">[docs]</a>    <span class="k">def</span> <span class="nf">add_iteration_artifact</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">_check_artifact_path</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iteration_artifacts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Artifact</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">Artifact</span><span class="o">.</span><span class="n">RUN</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="ExecutionContext.get_artifact"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ExecutionContext.get_artifact">[docs]</a>    <span class="k">def</span> <span class="nf">get_artifact</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteration_artifacts</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">art</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteration_artifacts</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">art</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">name</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">art</span>
+        <span class="k">for</span> <span class="n">art</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_artifacts</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">art</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">art</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+</div></div>
+<span class="k">def</span> <span class="nf">_check_artifact_path</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">rootpath</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">rootpath</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">rootpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">rootpath</span><span class="p">)</span>
+    <span class="n">full_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rootpath</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">full_path</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot add artifact because {} does not exist.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">full_path</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">full_path</span>
+
+
+<div class="viewcode-block" id="Executor"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.Executor">[docs]</a><span class="k">class</span> <span class="nc">Executor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The ``Executor``&#39;s job is to set up the execution context and pass to a ``Runner``</span>
+<span class="sd">    along with a loaded run specification. Once the ``Runner`` has done its thing,</span>
+<span class="sd">    the ``Executor`` performs some final reporint before returning.</span>
+
+<span class="sd">    The initial context set up involves combining configuration from various sources,</span>
+<span class="sd">    loading of requided workloads, loading and installation of instruments and result</span>
+<span class="sd">    processors, etc. Static validation of the combined configuration is also performed.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># pylint: disable=R0915</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;Executor&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">error_logged</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">warning_logged</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="Executor.execute"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.Executor.execute">[docs]</a>    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agenda</span><span class="p">,</span> <span class="n">selectors</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>  <span class="c"># NOQA</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute the run specified by an agenda. Optionally, selectors may be used to only</span>
+<span class="sd">        selecute a subset of the specified agenda.</span>
+
+<span class="sd">        Params::</span>
+
+<span class="sd">            :agenda: an ``Agenda`` instance to be executed.</span>
+<span class="sd">            :selectors: A dict mapping selector name to the coresponding values.</span>
+
+<span class="sd">        **Selectors**</span>
+
+<span class="sd">        Currently, the following seectors are supported:</span>
+
+<span class="sd">        ids</span>
+<span class="sd">            The value must be a sequence of workload specfication IDs to be executed. Note</span>
+<span class="sd">            that if sections are specified inthe agenda, the workload specifacation ID will</span>
+<span class="sd">            be a combination of the section and workload IDs.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_error_signalled_callback</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">ERROR_LOGGED</span><span class="p">)</span>
+        <span class="n">signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_warning_signalled_callback</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">WARNING_LOGGED</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span> <span class="o">=</span> <span class="n">ExtensionLoader</span><span class="p">(</span><span class="n">packages</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">extension_packages</span><span class="p">,</span>
+                                          <span class="n">paths</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">extension_paths</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Loading run configuration.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">RunConfiguration</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">filepath</span> <span class="ow">in</span> <span class="n">settings</span><span class="o">.</span><span class="n">get_config_paths</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">load_config</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_agenda</span><span class="p">(</span><span class="n">agenda</span><span class="p">,</span> <span class="n">selectors</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+        <span class="n">config_outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">meta_directory</span><span class="p">,</span> <span class="s">&#39;run_config.json&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">config_outfile</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">wfh</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="n">wfh</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initialising device configuration.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">device</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Make sure a device is specified in the config.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_device</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">device_config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">ExecutionContext</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Loading resource discoverers.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">add_artifact</span><span class="p">(</span><span class="s">&#39;run_config&#39;</span><span class="p">,</span> <span class="n">config_outfile</span><span class="p">,</span> <span class="s">&#39;meta&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Installing instrumentation&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">params</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="n">instrument</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_instrument</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span>
+            <span class="n">instrumentation</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="n">instrument</span><span class="p">)</span>
+        <span class="n">instrumentation</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Installing result processors&#39;</span><span class="p">)</span>
+        <span class="n">result_manager</span> <span class="o">=</span> <span class="n">ResultManager</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">params</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">result_processors</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="n">processor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="o">.</span><span class="n">get_result_processor</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span>
+            <span class="n">result_manager</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="n">processor</span><span class="p">)</span>
+        <span class="n">result_manager</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Loading workload specs&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">workload_spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">:</span>
+            <span class="n">workload_spec</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ext_loader</span><span class="p">)</span>
+            <span class="n">workload_spec</span><span class="o">.</span><span class="n">workload</span><span class="o">.</span><span class="n">init_resources</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+            <span class="n">workload_spec</span><span class="o">.</span><span class="n">workload</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">flashing_config</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">flasher</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;flashing_config specified for {} device that does not support flashing.&#39;</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Flashing the device&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">flasher</span><span class="o">.</span><span class="n">flash</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Running workloads&#39;</span><span class="p">)</span>
+        <span class="n">runner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_runner</span><span class="p">(</span><span class="n">result_manager</span><span class="p">)</span>
+        <span class="n">runner</span><span class="o">.</span><span class="n">init_queue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">)</span>
+        <span class="n">runner</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute_postamble</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Executor.execute_postamble"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.Executor.execute_postamble">[docs]</a>    <span class="k">def</span> <span class="nf">execute_postamble</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This happens after the run has completed. The overall results of the run are</span>
+<span class="sd">        summarised to the user.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">run_result</span>
+        <span class="n">counter</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">ir</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">iteration_results</span><span class="p">:</span>
+            <span class="n">counter</span><span class="p">[</span><span class="n">ir</span><span class="o">.</span><span class="n">status</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Done.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Run duration: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">format_duration</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">run_info</span><span class="o">.</span><span class="n">duration</span><span class="p">)))</span>
+        <span class="n">status_summary</span> <span class="o">=</span> <span class="s">&#39;Ran a total of {} iterations: &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">job_iteration_counts</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">counter</span><span class="p">:</span>
+                <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;{} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="n">status</span><span class="p">],</span> <span class="n">status</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">status_summary</span> <span class="o">+</span> <span class="s">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Results can be found in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">error_logged</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;There were errors during execution.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Please see {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">log_file</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">warning_logged</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;There were warnings during execution.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Please see {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">log_file</span><span class="p">))</span>
+</div>
+    <span class="k">def</span> <span class="nf">_get_runner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result_manager</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">execution_order</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">execution_order</span> <span class="o">==</span> <span class="s">&#39;by_iteration&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">reboot_policy</span> <span class="o">==</span> <span class="s">&#39;each_spec&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;each_spec reboot policy with the default by_iteration execution order is &#39;</span>
+                                 <span class="s">&#39;equivalent to each_iteration policy.&#39;</span><span class="p">)</span>
+            <span class="n">runnercls</span> <span class="o">=</span> <span class="n">ByIterationRunner</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">execution_order</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;classic&#39;</span><span class="p">,</span> <span class="s">&#39;by_spec&#39;</span><span class="p">]:</span>
+            <span class="n">runnercls</span> <span class="o">=</span> <span class="n">BySpecRunner</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">execution_order</span> <span class="o">==</span> <span class="s">&#39;by_section&#39;</span><span class="p">:</span>
+            <span class="n">runnercls</span> <span class="o">=</span> <span class="n">BySectionRunner</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">execution_order</span> <span class="o">==</span> <span class="s">&#39;random&#39;</span><span class="p">:</span>
+            <span class="n">runnercls</span> <span class="o">=</span> <span class="n">RandomRunner</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Unexpected execution order: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">execution_order</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">runnercls</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="n">result_manager</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_error_signalled_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">error_logged</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">signal</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_error_signalled_callback</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">ERROR_LOGGED</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_warning_signalled_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">warning_logged</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">signal</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_warning_signalled_callback</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">WARNING_LOGGED</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="RunnerJob"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.RunnerJob">[docs]</a><span class="k">class</span> <span class="nc">RunnerJob</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Represents a single execution of a ``RunnerJobDescription``. There will be one created for each iteration</span>
+<span class="sd">    specified by ``RunnerJobDescription.number_of_iterations``.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="n">retry</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">spec</span> <span class="o">=</span> <span class="n">spec</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">retry</span> <span class="o">=</span> <span class="n">retry</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iteration</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="Runner"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.Runner">[docs]</a><span class="k">class</span> <span class="nc">Runner</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This class is responsible for actually performing a workload automation</span>
+<span class="sd">    run. The main responsibility of this class is to emit appropriate signals</span>
+<span class="sd">    at the various stages of the run to allow things like traces an other</span>
+<span class="sd">    instrumentation to hook into the process.</span>
+
+<span class="sd">    This is an abstract base class that defines each step of the run, but not</span>
+<span class="sd">    the order in which those steps are executed, which is left to the concrete</span>
+<span class="sd">    derived classes.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">class</span> <span class="nc">_RunnerError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Internal runner error.&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">config</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">current_job</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">previous_job</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">completed_jobs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">completed_jobs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">next_job</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">spec_changed</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">previous_job</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>  <span class="c"># Start of run</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">previous_job</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>  <span class="c"># End of run</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">previous_job</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">spec_will_change</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">next_job</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>  <span class="c"># Start of run</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">next_job</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>  <span class="c"># End of run</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">next_job</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">id</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">result_manager</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result_manager</span> <span class="o">=</span> <span class="n">result_manager</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;Runner&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">completed_jobs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_initial_reset</span> <span class="o">=</span> <span class="bp">True</span>
+
+<div class="viewcode-block" id="Runner.init_queue"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.Runner.init_queue">[docs]</a>    <span class="k">def</span> <span class="nf">init_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">specs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Runner.run"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.Runner.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c"># pylint: disable=too-many-branches</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">RUN_START</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_initialize_run</span><span class="p">()</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_init_job</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_run_job</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">ABORTED</span>
+                    <span class="k">raise</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>  <span class="c"># pylint: disable=broad-except</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">FAILED</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">DeviceNotRespondingError</span><span class="p">):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Device appears to be unresponsive.&#39;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">reboot_policy</span><span class="o">.</span><span class="n">can_reboot</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">can</span><span class="p">(</span><span class="s">&#39;reset_power&#39;</span><span class="p">):</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Attempting to hard-reset the device...&#39;</span><span class="p">)</span>
+                            <span class="k">try</span><span class="p">:</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">boot</span><span class="p">(</span><span class="n">hard</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+                            <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>  <span class="c"># hard_boot not implemented for the device.</span>
+                                <span class="k">raise</span> <span class="n">e</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="n">e</span>
+                    <span class="k">else</span><span class="p">:</span>  <span class="c"># not a DeviceNotRespondingError</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                <span class="k">finally</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Got CTRL-C. Finalizing run... (CTRL-C again to abort).&#39;</span><span class="p">)</span>
+            <span class="c"># Skip through the remaining jobs.</span>
+            <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">next_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">ABORTED</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">DeviceNotRespondingError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Device unresponsive and recovery not possible. Skipping the rest of the run.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">aborted</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">next_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">SKIPPED</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job</span><span class="p">()</span>
+
+        <span class="n">instrumentation</span><span class="o">.</span><span class="n">enable_all</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_run</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_process_results</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">result_manager</span><span class="o">.</span><span class="n">finalize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">RUN_END</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_initialize_run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">runner</span> <span class="o">=</span> <span class="bp">self</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">run_info</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connect_to_device</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing device&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing workloads&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">workload_spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">:</span>
+            <span class="n">workload_spec</span><span class="o">.</span><span class="n">workload</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="n">props</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_properties</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">run_info</span><span class="o">.</span><span class="n">device_properties</span> <span class="o">=</span> <span class="n">props</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result_manager</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">RUN_INIT</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">instrumentation</span><span class="o">.</span><span class="n">check_failures</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;Detected failure(s) during instrumentation initialization.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_connect_to_device</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">reboot_policy</span><span class="o">.</span><span class="n">perform_initial_boot</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+            <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>  <span class="c"># device may be offline</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">can</span><span class="p">(</span><span class="s">&#39;reset_power&#39;</span><span class="p">):</span>
+                    <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_wrap</span><span class="p">(</span><span class="s">&#39;INITIAL_BOOT&#39;</span><span class="p">):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">boot</span><span class="p">(</span><span class="n">hard</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Cannot connect to device for initial reboot; &#39;</span>
+                                      <span class="s">&#39;and device does not support hard reset.&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c"># successfully connected</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Booting device&#39;</span><span class="p">)</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_wrap</span><span class="p">(</span><span class="s">&#39;INITIAL_BOOT&#39;</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_device</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Connecting to device&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_init_job</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">RUNNING</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">next_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_run_job</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>   <span class="c"># pylint: disable=too-many-branches</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">spec</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">spec</span><span class="o">.</span><span class="n">enabled</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Skipping workload </span><span class="si">%s</span><span class="s"> (iteration </span><span class="si">%s</span><span class="s">)&#39;</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">current_iteration</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">SKIPPED</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Running workload </span><span class="si">%s</span><span class="s"> (iteration </span><span class="si">%s</span><span class="s">)&#39;</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">current_iteration</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">flash</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">reboot_policy</span><span class="o">.</span><span class="n">can_reboot</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Cannot flash as reboot_policy does not permit rebooting.&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">can</span><span class="p">(</span><span class="s">&#39;flash&#39;</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Device does not support flashing.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_flash_device</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">flash</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">completed_jobs</span><span class="p">:</span>
+            <span class="c"># Never reboot on the very fist job of a run, as we would have done</span>
+            <span class="c"># the initial reboot if a reboot was needed.</span>
+            <span class="k">pass</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">reboot_policy</span><span class="o">.</span><span class="n">reboot_on_each_spec</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">spec_changed</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Rebooting on spec change.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_device</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">reboot_policy</span><span class="o">.</span><span class="n">reboot_on_each_iteration</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Rebooting on iteration.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_reboot_device</span><span class="p">()</span>
+
+        <span class="n">instrumentation</span><span class="o">.</span><span class="n">disable_all</span><span class="p">()</span>
+        <span class="n">instrumentation</span><span class="o">.</span><span class="n">enable</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spec_changed</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">WORKLOAD_SPEC_START</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">ITERATION_START</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">setup_ok</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="s">&#39;Setting up device parameters&#39;</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_runtime_parameters</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">runtime_parameters</span><span class="p">)</span>
+                <span class="n">setup_ok</span> <span class="o">=</span> <span class="bp">True</span>
+
+            <span class="k">if</span> <span class="n">setup_ok</span><span class="p">:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="s">&#39;running {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">workload</span><span class="o">.</span><span class="n">name</span><span class="p">)):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">RUNNING</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_run_workload_iteration</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">workload</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Skipping the rest of the iterations for this spec.&#39;</span><span class="p">)</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">enabled</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">ITERATION_END</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">WORKLOAD_SPEC_END</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">ITERATION_END</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spec_will_change</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">spec</span><span class="o">.</span><span class="n">enabled</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">WORKLOAD_SPEC_END</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_finalize_job</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">run_result</span><span class="o">.</span><span class="n">iteration_results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+        <span class="n">job</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">iteration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">current_iteration</span>
+        <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">retry_on_status</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">retry</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">max_retries</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Exceeded maxium number of retries. Abandoning job.&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Job status was {}. Retrying...&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span><span class="p">))</span>
+                <span class="n">retry_job</span> <span class="o">=</span> <span class="n">RunnerJob</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span> <span class="n">job</span><span class="o">.</span><span class="n">retry</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">retry_job</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">completed_jobs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">end_job</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_finalize_run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Finalizing workloads&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">workload_spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">workload_specs</span><span class="p">:</span>
+            <span class="n">workload_spec</span><span class="o">.</span><span class="n">workload</span><span class="o">.</span><span class="n">finalize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Finalizing.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">RUN_FIN</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="s">&#39;Disconnecting from the device&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+
+        <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">run_info</span>
+        <span class="n">info</span><span class="o">.</span><span class="n">end_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="n">info</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">end_time</span> <span class="o">-</span> <span class="n">info</span><span class="o">.</span><span class="n">start_time</span>
+
+    <span class="k">def</span> <span class="nf">_process_results</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Processing overall results&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_wrap</span><span class="p">(</span><span class="s">&#39;OVERALL_RESULTS_PROCESSING&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">instrumentation</span><span class="o">.</span><span class="n">check_failures</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">run_result</span><span class="o">.</span><span class="n">non_iteration_errors</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">result_manager</span><span class="o">.</span><span class="n">process_run_result</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">run_result</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_run_workload_iteration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workload</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Setting up&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_wrap</span><span class="p">(</span><span class="s">&#39;WORKLOAD_SETUP&#39;</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">workload</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Skipping the rest of the iterations for this spec.&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">enabled</span> <span class="o">=</span> <span class="bp">False</span>
+                <span class="k">raise</span>
+        <span class="k">try</span><span class="p">:</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Executing&#39;</span><span class="p">)</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="s">&#39;Running workload&#39;</span><span class="p">):</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_wrap</span><span class="p">(</span><span class="s">&#39;WORKLOAD_EXECUTION&#39;</span><span class="p">):</span>
+                    <span class="n">workload</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Processing result&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_WORKLOAD_RESULT_UPDATE</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">FAILED</span><span class="p">:</span>
+                    <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="s">&#39;Processing workload result&#39;</span><span class="p">,</span>
+                                             <span class="n">on_error_status</span><span class="o">=</span><span class="n">IterationResult</span><span class="o">.</span><span class="n">PARTIAL</span><span class="p">):</span>
+                        <span class="n">workload</span><span class="o">.</span><span class="n">update_result</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SUCCESSFUL_WORKLOAD_RESULT_UPDATE</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">RUNNING</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">IterationResult</span><span class="o">.</span><span class="n">OK</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_RESULT_UPDATE</span><span class="p">)</span>
+
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Tearing down&#39;</span><span class="p">)</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="s">&#39;Tearing down workload&#39;</span><span class="p">,</span>
+                                     <span class="n">on_error_status</span><span class="o">=</span><span class="n">IterationResult</span><span class="o">.</span><span class="n">NONCRITICAL</span><span class="p">):</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_wrap</span><span class="p">(</span><span class="s">&#39;WORKLOAD_TEARDOWN&#39;</span><span class="p">):</span>
+                    <span class="n">workload</span><span class="o">.</span><span class="n">teardown</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">result_manager</span><span class="o">.</span><span class="n">add_result</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_flash_device</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flashing_params</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_wrap</span><span class="p">(</span><span class="s">&#39;FLASHING&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">flash</span><span class="p">(</span><span class="o">**</span><span class="n">flashing_params</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_reboot_device</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_wrap</span><span class="p">(</span><span class="s">&#39;BOOT&#39;</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">reboot_attempts</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">MAX_REBOOT_ATTEMPTS</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">reboot_attempts</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Retrying...&#39;</span><span class="p">)</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_errors</span><span class="p">(</span><span class="s">&#39;Rebooting device&#39;</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">boot</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">boot_parameters</span><span class="p">)</span>
+                    <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Could not reboot device; max reboot attempts exceeded.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+        <span class="n">signal</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_take_screenshot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">:</span>
+            <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">capture_screen</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+    <span class="nd">@contextmanager</span>
+    <span class="k">def</span> <span class="nf">_handle_errors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">on_error_status</span><span class="o">=</span><span class="n">IterationResult</span><span class="o">.</span><span class="n">FAILED</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">action</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+            <span class="k">yield</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">KeyboardInterrupt</span><span class="p">,</span> <span class="n">DeviceNotRespondingError</span><span class="p">):</span>
+            <span class="k">raise</span>
+        <span class="k">except</span> <span class="p">(</span><span class="n">WAError</span><span class="p">,</span> <span class="n">TimeoutError</span><span class="p">),</span> <span class="n">we</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">ping</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">on_error_status</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">we</span><span class="p">))</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_take_screenshot</span><span class="p">(</span><span class="s">&#39;error.png&#39;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>  <span class="c"># pylint: disable=W0703</span>
+                <span class="c"># We&#39;re already in error state, so the fact that taking a</span>
+                <span class="c"># screenshot failed is not surprising...</span>
+                <span class="k">pass</span>
+            <span class="k">if</span> <span class="n">action</span><span class="p">:</span>
+                <span class="n">action</span> <span class="o">=</span> <span class="n">action</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">+</span> <span class="n">action</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Error while {}:</span><span class="se">\n\t</span><span class="s">{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">action</span><span class="p">,</span> <span class="n">we</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>  <span class="c"># pylint: disable=W0703</span>
+            <span class="n">error_text</span> <span class="o">=</span> <span class="s">&#39;{}(&quot;{}&quot;)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">on_error_status</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_job</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="n">error_text</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Error while {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">action</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">error_text</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Got:&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+            <span class="n">tb</span> <span class="o">=</span> <span class="n">get_traceback</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">tb</span><span class="p">)</span>
+
+    <span class="nd">@contextmanager</span>
+    <span class="k">def</span> <span class="nf">_signal_wrap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signal_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Wraps the suite in before/after signals, ensuring</span>
+<span class="sd">        that after signal is always sent.&quot;&quot;&quot;</span>
+        <span class="n">before_signal</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">signal</span><span class="p">,</span> <span class="s">&#39;BEFORE_&#39;</span> <span class="o">+</span> <span class="n">signal_name</span><span class="p">)</span>
+        <span class="n">success_signal</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">signal</span><span class="p">,</span> <span class="s">&#39;SUCCESSFUL_&#39;</span> <span class="o">+</span> <span class="n">signal_name</span><span class="p">)</span>
+        <span class="n">after_signal</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">signal</span><span class="p">,</span> <span class="s">&#39;AFTER_&#39;</span> <span class="o">+</span> <span class="n">signal_name</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">before_signal</span><span class="p">)</span>
+            <span class="k">yield</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">success_signal</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="n">after_signal</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="BySpecRunner"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.BySpecRunner">[docs]</a><span class="k">class</span> <span class="nc">BySpecRunner</span><span class="p">(</span><span class="n">Runner</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This is that &quot;classic&quot; implementation that executes all iterations of a workload</span>
+<span class="sd">    spec before proceeding onto the next spec.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="BySpecRunner.init_queue"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.BySpecRunner.init_queue">[docs]</a>    <span class="k">def</span> <span class="nf">init_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">specs</span><span class="p">):</span>
+        <span class="n">jobs</span> <span class="o">=</span> <span class="p">[[</span><span class="n">RunnerJob</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">number_of_iterations</span><span class="p">)]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">specs</span><span class="p">]</span>  <span class="c"># pylint: disable=unused-variable</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span> <span class="o">=</span> <span class="p">[</span><span class="n">j</span> <span class="k">for</span> <span class="n">spec_jobs</span> <span class="ow">in</span> <span class="n">jobs</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">spec_jobs</span><span class="p">]</span>
+
+</div></div>
+<div class="viewcode-block" id="BySectionRunner"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.BySectionRunner">[docs]</a><span class="k">class</span> <span class="nc">BySectionRunner</span><span class="p">(</span><span class="n">Runner</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Runs the first iteration for all benchmarks first, before proceeding to the next iteration,</span>
+<span class="sd">    i.e. A1, B1, C1, A2, B2, C2...  instead of  A1, A1, B1, B2, C1, C2...</span>
+
+<span class="sd">    If multiple sections where specified in the agenda, this will run all specs for the first section</span>
+<span class="sd">    followed by all specs for the seciod section, etc.</span>
+
+<span class="sd">    e.g. given sections X and Y, and global specs A and B, with 2 iterations, this will run</span>
+
+<span class="sd">    X.A1, X.B1, Y.A1, Y.B1, X.A2, X.B2, Y.A2, Y.B2</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="BySectionRunner.init_queue"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.BySectionRunner.init_queue">[docs]</a>    <span class="k">def</span> <span class="nf">init_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">specs</span><span class="p">):</span>
+        <span class="n">jobs</span> <span class="o">=</span> <span class="p">[[</span><span class="n">RunnerJob</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">number_of_iterations</span><span class="p">)]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">specs</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span> <span class="o">=</span> <span class="p">[</span><span class="n">j</span> <span class="k">for</span> <span class="n">spec_jobs</span> <span class="ow">in</span> <span class="n">izip_longest</span><span class="p">(</span><span class="o">*</span><span class="n">jobs</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">spec_jobs</span> <span class="k">if</span> <span class="n">j</span><span class="p">]</span>
+
+</div></div>
+<div class="viewcode-block" id="ByIterationRunner"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ByIterationRunner">[docs]</a><span class="k">class</span> <span class="nc">ByIterationRunner</span><span class="p">(</span><span class="n">Runner</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Runs the first iteration for all benchmarks first, before proceeding to the next iteration,</span>
+<span class="sd">    i.e. A1, B1, C1, A2, B2, C2...  instead of  A1, A1, B1, B2, C1, C2...</span>
+
+<span class="sd">    If multiple sections where specified in the agenda, this will run all sections for the first global</span>
+<span class="sd">    spec first, followed by all sections for the second spec, etc.</span>
+
+<span class="sd">    e.g. given sections X and Y, and global specs A and B, with 2 iterations, this will run</span>
+
+<span class="sd">    X.A1, Y.A1, X.B1, Y.B1, X.A2, Y.A2, X.B2, Y.B2</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ByIterationRunner.init_queue"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.ByIterationRunner.init_queue">[docs]</a>    <span class="k">def</span> <span class="nf">init_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">specs</span><span class="p">):</span>
+        <span class="n">sections</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">specs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">section_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">:</span>
+                <span class="n">sections</span><span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">section_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">sections</span><span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">section_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="n">specs</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">section_specs</span> <span class="ow">in</span> <span class="n">izip_longest</span><span class="p">(</span><span class="o">*</span><span class="n">sections</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">section_specs</span> <span class="k">if</span> <span class="n">s</span><span class="p">]</span>
+        <span class="n">jobs</span> <span class="o">=</span> <span class="p">[[</span><span class="n">RunnerJob</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">number_of_iterations</span><span class="p">)]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">specs</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span> <span class="o">=</span> <span class="p">[</span><span class="n">j</span> <span class="k">for</span> <span class="n">spec_jobs</span> <span class="ow">in</span> <span class="n">izip_longest</span><span class="p">(</span><span class="o">*</span><span class="n">jobs</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">spec_jobs</span> <span class="k">if</span> <span class="n">j</span><span class="p">]</span>
+
+</div></div>
+<div class="viewcode-block" id="RandomRunner"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.RandomRunner">[docs]</a><span class="k">class</span> <span class="nc">RandomRunner</span><span class="p">(</span><span class="n">Runner</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This will run specs in a random order.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="RandomRunner.init_queue"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.execution.RandomRunner.init_queue">[docs]</a>    <span class="k">def</span> <span class="nf">init_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">specs</span><span class="p">):</span>
+        <span class="n">jobs</span> <span class="o">=</span> <span class="p">[[</span><span class="n">RunnerJob</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">number_of_iterations</span><span class="p">)]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">specs</span><span class="p">]</span>  <span class="c"># pylint: disable=unused-variable</span>
+        <span class="n">all_jobs</span> <span class="o">=</span> <span class="p">[</span><span class="n">j</span> <span class="k">for</span> <span class="n">spec_jobs</span> <span class="ow">in</span> <span class="n">jobs</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">spec_jobs</span><span class="p">]</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">all_jobs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_queue</span> <span class="o">=</span> <span class="n">all_jobs</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

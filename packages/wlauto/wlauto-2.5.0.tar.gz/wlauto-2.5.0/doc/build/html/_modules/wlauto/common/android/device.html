@@ -1,0 +1,834 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.common.android.device &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.common.android.device</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=E1101</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">from</span> <span class="nn">subprocess</span> <span class="kn">import</span> <span class="n">CalledProcessError</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.core.extension</span> <span class="kn">import</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.common.linux.device</span> <span class="kn">import</span> <span class="n">BaseLinuxDevice</span><span class="p">,</span> <span class="n">PsEntry</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">DeviceError</span><span class="p">,</span> <span class="n">WorkerThreadError</span><span class="p">,</span> <span class="n">TimeoutError</span><span class="p">,</span> <span class="n">DeviceNotRespondingError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">convert_new_lines</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span><span class="p">,</span> <span class="n">regex</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.android</span> <span class="kn">import</span> <span class="p">(</span><span class="n">adb_shell</span><span class="p">,</span> <span class="n">adb_background_shell</span><span class="p">,</span> <span class="n">adb_list_devices</span><span class="p">,</span>
+                                  <span class="n">adb_command</span><span class="p">,</span> <span class="n">AndroidProperties</span><span class="p">,</span> <span class="n">ANDROID_VERSION_MAP</span><span class="p">)</span>
+
+
+<span class="n">SCREEN_STATE_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39;(?:mPowerState|mScreenOn)=([0-9]+|true|false)&#39;</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">I</span><span class="p">)</span>
+<span class="n">SCREEN_SIZE_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;mUnrestrictedScreen=\(\d+,\d+\)\s+(?P&lt;width&gt;\d+)x(?P&lt;height&gt;\d+)&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="AndroidDevice"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice">[docs]</a><span class="k">class</span> <span class="nc">AndroidDevice</span><span class="p">(</span><span class="n">BaseLinuxDevice</span><span class="p">):</span>  <span class="c"># pylint: disable=W0223</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Device running Android OS.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">platform</span> <span class="o">=</span> <span class="s">&#39;android&#39;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;adb_name&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The unique ID of the device as output by &quot;adb devices&quot;.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;android_prompt&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">regex</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39;^.*(shell|root)@.*:/\S* [#$] &#39;</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span><span class="p">),</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The format  of matching the shell prompt in Android.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;working_directory&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/sdcard/wa-working&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Directory that will be used WA on the device for output files etc.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;binaries_directory&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/system/bin&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Location of binaries on the device.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;package_data_directory&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/data/data&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Location of of data for an installed package (APK).&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;external_storage_directory&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/sdcard&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Mount point for external storage.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;connection&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;usb&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;usb&#39;</span><span class="p">,</span> <span class="s">&#39;ethernet&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Specified the nature of adb connection.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;logcat_poll_period&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  If specified and is not ``0``, logcat will be polled every</span>
+<span class="s">                  ``logcat_poll_period`` seconds, and buffered on the host. This</span>
+<span class="s">                  can be used if a lot of output is expected in logcat and the fixed</span>
+<span class="s">                  logcat buffer on the device is not big enough. The trade off is that</span>
+<span class="s">                  this introduces some minor runtime overhead. Not set by default.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;enable_screen_check&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specified whether the device should make sure that the screen is on</span>
+<span class="s">                  during initialization.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;swipe_to_unlock&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  If set to ``True``, a horisonal swipe will be performed 2/3 down the screen.</span>
+<span class="s">                  This should unlock the screen.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">default_timeout</span> <span class="o">=</span> <span class="mi">30</span>
+    <span class="n">delay</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">long_delay</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">delay</span>
+    <span class="n">ready_timeout</span> <span class="o">=</span> <span class="mi">60</span>
+
+    <span class="c"># Overwritten from Device. For documentation, see corresponding method in</span>
+    <span class="c"># Device.</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">is_rooted</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_rooted</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;su&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="s">&#39;not found&#39;</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_is_rooted</span> <span class="o">=</span> <span class="bp">False</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_is_rooted</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">except</span> <span class="n">TimeoutError</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_is_rooted</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">except</span> <span class="n">DeviceError</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_is_rooted</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_rooted</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">abi</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">getprop</span><span class="p">()[</span><span class="s">&#39;ro.product.cpu.abi&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;-&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">supported_eabi</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">props</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getprop</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">props</span><span class="p">[</span><span class="s">&#39;ro.product.cpu.abi&#39;</span><span class="p">]]</span>
+        <span class="k">if</span> <span class="s">&#39;ro.product.cpu.abi2&#39;</span> <span class="ow">in</span> <span class="n">props</span><span class="p">:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">props</span><span class="p">[</span><span class="s">&#39;ro.product.cpu.abi2&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="s">&#39;ro.product.cpu.abilist&#39;</span> <span class="ow">in</span> <span class="n">props</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">eabi</span> <span class="ow">in</span> <span class="n">props</span><span class="p">[</span><span class="s">&#39;ro.product.cpu.abilist&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">eabi</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">eabi</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">AndroidDevice</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="AndroidDevice.reset"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_just_rebooted</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;reboot&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.hard_reset"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.hard_reset">[docs]</a>    <span class="k">def</span> <span class="nf">hard_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">AndroidDevice</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">hard_reset</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_just_rebooted</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.boot"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.boot">[docs]</a>    <span class="k">def</span> <span class="nf">boot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">hard</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hard_reset</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.connect"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.connect">[docs]</a>    <span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c"># NOQA pylint: disable=R0912</span>
+        <span class="n">iteration_number</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">max_iterations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ready_timeout</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">delay</span>
+        <span class="n">available</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Polling for device {}...&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">))</span>
+        <span class="k">while</span> <span class="n">iteration_number</span> <span class="o">&lt;</span> <span class="n">max_iterations</span><span class="p">:</span>
+            <span class="n">devices</span> <span class="o">=</span> <span class="n">adb_list_devices</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">device</span> <span class="ow">in</span> <span class="n">devices</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">device</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="ow">and</span> <span class="n">device</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="s">&#39;offline&#39;</span><span class="p">:</span>
+                        <span class="n">available</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c"># adb_name not set</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">available</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;More than one device is connected and adb_name is not set.&#39;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">available</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+                <span class="n">iteration_number</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Could not boot {} ({}).&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">))</span>
+
+        <span class="k">while</span> <span class="n">iteration_number</span> <span class="o">&lt;</span> <span class="n">max_iterations</span><span class="p">:</span>
+            <span class="n">available</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="s">&#39;0&#39;</span> <span class="o">+</span> <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;getprop sys.boot_completed&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)))</span>
+            <span class="k">if</span> <span class="n">available</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+                <span class="n">iteration_number</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Could not boot {} ({}).&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_just_rebooted</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for boot to complete...&#39;</span><span class="p">)</span>
+            <span class="c"># On some devices, adb connection gets reset some time after booting.</span>
+            <span class="c"># This  causes errors during execution. To prevent this, open a shell</span>
+            <span class="c"># session and wait for it to be killed. Once its killed, give adb</span>
+            <span class="c"># enough time to restart, and then the device should be ready.</span>
+            <span class="c"># TODO: This is more of a work-around rather than an actual solution.</span>
+            <span class="c">#       Need to figure out what is going on the &quot;proper&quot; way of handling it.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>  <span class="c"># give adb time to re-initialize</span>
+            <span class="k">except</span> <span class="n">TimeoutError</span><span class="p">:</span>
+                <span class="k">pass</span>  <span class="c"># timed out waiting for the session to be killed -- assume not going to be.</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Boot completed.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_just_rebooted</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;mkdir -p {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">working_directory</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">busybox</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">deploy_busybox</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">disable_screen_lock</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">disable_selinux</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_screen_check</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ensure_screen_is_on</span><span class="p">()</span>
+
+<div class="viewcode-block" id="AndroidDevice.disconnect"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.disconnect">[docs]</a>    <span class="k">def</span> <span class="nf">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.ping"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.ping">[docs]</a>    <span class="k">def</span> <span class="nf">ping</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c"># May be triggered inside initialize()</span>
+            <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;ls /&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="n">TimeoutError</span><span class="p">,</span> <span class="n">CalledProcessError</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">DeviceNotRespondingError</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.start"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">logcat_poll_period</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span> <span class="o">=</span> <span class="n">_LogcatPoller</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">logcat_poll_period</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.stop"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.get_android_version"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.get_android_version">[docs]</a>    <span class="k">def</span> <span class="nf">get_android_version</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">ANDROID_VERSION_MAP</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_sdk_version</span><span class="p">(),</span> <span class="bp">None</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.get_android_id"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.get_android_id">[docs]</a>    <span class="k">def</span> <span class="nf">get_android_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the device&#39;s ANDROID_ID. Which is</span>
+
+<span class="sd">            &quot;A 64-bit number (as a hex string) that is randomly generated when the user</span>
+<span class="sd">            first sets up the device and should remain constant for the lifetime of the</span>
+<span class="sd">            user&#39;s device.&quot;</span>
+
+<span class="sd">        .. note:: This will get reset on userdata erasure.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;settings get secure android_id&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.get_sdk_version"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.get_sdk_version">[docs]</a>    <span class="k">def</span> <span class="nf">get_sdk_version</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getprop</span><span class="p">(</span><span class="s">&#39;ro.build.version.sdk&#39;</span><span class="p">))</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">None</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.get_installed_package_version"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.get_installed_package_version">[docs]</a>    <span class="k">def</span> <span class="nf">get_installed_package_version</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">package</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the version (versionName) of the specified package if it is installed</span>
+<span class="sd">        on the device, or ``None`` otherwise.</span>
+
+<span class="sd">        Added in version 2.1.4</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;dumpsys package {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">package</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">convert_new_lines</span><span class="p">(</span><span class="n">output</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="s">&#39;versionName&#39;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;=&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">None</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.list_packages"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.list_packages">[docs]</a>    <span class="k">def</span> <span class="nf">list_packages</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        List packages installed on the device.</span>
+
+<span class="sd">        Added in version 2.1.4</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;pm list packages&#39;</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;package:&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.package_is_installed"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.package_is_installed">[docs]</a>    <span class="k">def</span> <span class="nf">package_is_installed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">package_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns ``True`` the if a package with the specified name is installed on</span>
+<span class="sd">        the device, and ``False`` otherwise.</span>
+
+<span class="sd">        Added in version 2.1.4</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">package_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_packages</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.executable_is_installed"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.executable_is_installed">[docs]</a>    <span class="k">def</span> <span class="nf">executable_is_installed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">executable_name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">executable_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">binaries_directory</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.is_installed"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.is_installed">[docs]</a>    <span class="k">def</span> <span class="nf">is_installed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">executable_is_installed</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">package_is_installed</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.listdir"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.listdir">[docs]</a>    <span class="k">def</span> <span class="nf">listdir</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">contents</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;ls {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="n">as_root</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">contents</span><span class="o">.</span><span class="n">split</span><span class="p">()]</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.push_file"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.push_file">[docs]</a>    <span class="k">def</span> <span class="nf">push_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">default_timeout</span><span class="p">):</span>  <span class="c"># pylint: disable=W0221</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Modified in version 2.1.4: added  ``as_root`` parameter.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">as_root</span><span class="p">:</span>
+                <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&quot;push &#39;{}&#39; &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">device_tempfile</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_transfer_cache</span><span class="p">,</span> <span class="n">source</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;mkdir -p {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">device_tempfile</span><span class="p">)))</span>
+                <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&quot;push &#39;{}&#39; &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">device_tempfile</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;cp {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">device_tempfile</span><span class="p">,</span> <span class="n">dest</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.pull_file"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.pull_file">[docs]</a>    <span class="k">def</span> <span class="nf">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">default_timeout</span><span class="p">):</span>  <span class="c"># pylint: disable=W0221</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Modified in version 2.1.4: added  ``as_root`` parameter.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">as_root</span><span class="p">:</span>
+                <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&quot;pull &#39;{}&#39; &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">device_tempfile</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_transfer_cache</span><span class="p">,</span> <span class="n">source</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;mkdir -p {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">device_tempfile</span><span class="p">)))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;cp {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">device_tempfile</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&quot;pull &#39;{}&#39; &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">device_tempfile</span><span class="p">,</span> <span class="n">dest</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.delete_file"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.delete_file">[docs]</a>    <span class="k">def</span> <span class="nf">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>  <span class="c"># pylint: disable=W0221</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&quot;rm &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="n">as_root</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.file_exists"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.file_exists">[docs]</a>    <span class="k">def</span> <span class="nf">file_exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;if [ -e </span><span class="se">\&#39;</span><span class="s">{}</span><span class="se">\&#39;</span><span class="s"> ]; then echo 1; else echo 0; fi&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">),</span>
+                           <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">output</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.install"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.install">[docs]</a>    <span class="k">def</span> <span class="nf">install</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">default_timeout</span><span class="p">,</span> <span class="n">with_name</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>  <span class="c"># pylint: disable=W0221</span>
+        <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filepath</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&#39;.apk&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">install_apk</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">install_executable</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">with_name</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.install_apk"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.install_apk">[docs]</a>    <span class="k">def</span> <span class="nf">install_apk</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">default_timeout</span><span class="p">):</span>  <span class="c"># pylint: disable=W0221</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filepath</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&#39;.apk&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&quot;install {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Can</span><span class="se">\&#39;</span><span class="s">t install {}: unsupported format.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.install_executable"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.install_executable">[docs]</a>    <span class="k">def</span> <span class="nf">install_executable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">with_name</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Installs a binary executable on device. Requires root access. Returns</span>
+<span class="sd">        the path to the installed binary, or ``None`` if the installation has failed.</span>
+<span class="sd">        Optionally, ``with_name`` parameter may be used to specify a different name under</span>
+<span class="sd">        which the executable will be installed.</span>
+
+<span class="sd">        Added in version 2.1.3.</span>
+<span class="sd">        Updated in version 2.1.5 with ``with_name`` parameter.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_binaries_directory_is_writable</span><span class="p">()</span>
+        <span class="n">executable_name</span> <span class="o">=</span> <span class="n">with_name</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+        <span class="n">on_device_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">executable_name</span><span class="p">)</span>
+        <span class="n">on_device_executable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">binaries_directory</span><span class="p">,</span> <span class="n">executable_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">push_file</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">on_device_file</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;cp {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_file</span><span class="p">,</span> <span class="n">on_device_executable</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;chmod 0777 {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_executable</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">on_device_executable</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.uninstall"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.uninstall">[docs]</a>    <span class="k">def</span> <span class="nf">uninstall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">package</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&quot;uninstall {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">package</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.uninstall_executable"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.uninstall_executable">[docs]</a>    <span class="k">def</span> <span class="nf">uninstall_executable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">executable_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Requires root access.</span>
+
+<span class="sd">        Added in version 2.1.3.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">on_device_executable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">binaries_directory</span><span class="p">,</span> <span class="n">executable_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_binaries_directory_is_writable</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="n">on_device_executable</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.execute"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.execute">[docs]</a>    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">default_timeout</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">background</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">busybox</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute the specified command on the device using adb.</span>
+
+<span class="sd">        Parameters:</span>
+
+<span class="sd">            :param command: The command to be executed. It should appear exactly</span>
+<span class="sd">                            as if you were typing it into a shell.</span>
+<span class="sd">            :param timeout: Time, in seconds, to wait for adb to return before aborting</span>
+<span class="sd">                            and raising an error. Defaults to ``AndroidDevice.default_timeout``.</span>
+<span class="sd">            :param check_exit_code: If ``True``, the return code of the command on the Device will</span>
+<span class="sd">                                    be check and exception will be raised if it is not 0.</span>
+<span class="sd">                                    Defaults to ``True``.</span>
+<span class="sd">            :param background: If ``True``, will execute adb in a subprocess, and will return</span>
+<span class="sd">                               immediately, not waiting for adb to return. Defaults to ``False``</span>
+<span class="sd">            :param busybox: If ``True``, will use busybox to execute the command. Defaults to ``False``.</span>
+
+<span class="sd">                            Added in version 2.1.3</span>
+
+<span class="sd">                            .. note:: The device must be rooted to be able to use busybox.</span>
+
+<span class="sd">            :param as_root: If ``True``, will attempt to execute command in privileged mode. The device</span>
+<span class="sd">                            must be rooted, otherwise an error will be raised. Defaults to ``False``.</span>
+
+<span class="sd">                            Added in version 2.1.3</span>
+
+<span class="sd">        :returns: If ``background`` parameter is set to ``True``, the subprocess object will</span>
+<span class="sd">                  be returned; otherwise, the contents of STDOUT from the device will be returned.</span>
+
+<span class="sd">        :raises: DeviceError if adb timed out  or if the command returned non-zero exit</span>
+<span class="sd">                 code on the device, or if attempting to execute a command in privileged mode on an</span>
+<span class="sd">                 unrooted device.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">as_root</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Attempting to execute &quot;{}&quot; as root on unrooted device.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">busybox</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">:</span>
+                <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Attempting to execute &quot;{}&quot; with busybox. &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">)</span> <span class="o">+</span>
+                            <span class="s">&#39;Busybox can only be deployed to rooted devices.&#39;</span><span class="p">)</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">busybox</span><span class="p">,</span> <span class="n">command</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">background</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">adb_background_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="n">as_root</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="p">,</span> <span class="n">as_root</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.kick_off"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.kick_off">[docs]</a>    <span class="k">def</span> <span class="nf">kick_off</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Like execute but closes adb session and returns immediately, leaving the command running on the</span>
+<span class="sd">        device (this is different from execute(background=True) which keeps adb connection open and returns</span>
+<span class="sd">        a subprocess object).</span>
+
+<span class="sd">        .. note:: This relies on busybox&#39;s nohup applet and so won&#39;t work on unrooted devices.</span>
+
+<span class="sd">        Added in version 2.1.4</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;kick_off uses busybox</span><span class="se">\&#39;</span><span class="s">s nohup applet and so can only be run a rooted device.&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;cd {} &amp;&amp; busybox nohup {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">command</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">TimeoutError</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Background command exited before timeout; got &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">output</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.get_pids_of"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.get_pids_of">[docs]</a>    <span class="k">def</span> <span class="nf">get_pids_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">process_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of PIDs of all processes with the specified name.&quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;ps {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">process_name</span><span class="p">[</span><span class="o">-</span><span class="mi">15</span><span class="p">:]),</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">and</span> <span class="s">&#39;not found&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.ps"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.ps">[docs]</a>    <span class="k">def</span> <span class="nf">ps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the list of running processes on the device. Keyword arguments may</span>
+<span class="sd">        be used to specify simple filters for columns.</span>
+
+<span class="sd">        Added in version 2.1.4</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">convert_new_lines</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;ps&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">))</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>  <span class="c"># header</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+            <span class="n">parts</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">parts</span><span class="p">:</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">PsEntry</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="p">])</span> <span class="o">+</span> <span class="n">parts</span><span class="p">[</span><span class="mi">5</span><span class="p">:])))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">filtered_result</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span> <span class="o">==</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()):</span>
+                    <span class="n">filtered_result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">filtered_result</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.get_properties"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.get_properties">[docs]</a>    <span class="k">def</span> <span class="nf">get_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Captures and saves the information from /system/build.prop and /proc/version&quot;&quot;&quot;</span>
+        <span class="n">props</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">AndroidDevice</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_properties</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_android_properties</span><span class="p">(</span><span class="n">context</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">props</span>
+</div>
+    <span class="k">def</span> <span class="nf">_get_android_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">props</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">props</span><span class="p">[</span><span class="s">&#39;android_id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_android_id</span><span class="p">()</span>
+        <span class="n">buildprop_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="s">&#39;build.prop&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">buildprop_file</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="s">&#39;/system/build.prop&#39;</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_update_build_properties</span><span class="p">(</span><span class="n">buildprop_file</span><span class="p">,</span> <span class="n">props</span><span class="p">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">add_run_artifact</span><span class="p">(</span><span class="s">&#39;build_properties&#39;</span><span class="p">,</span> <span class="n">buildprop_file</span><span class="p">,</span> <span class="s">&#39;export&#39;</span><span class="p">)</span>
+
+        <span class="n">dumpsys_target_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="s">&#39;window.dumpsys&#39;</span><span class="p">)</span>
+        <span class="n">dumpsys_host_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">host_working_directory</span><span class="p">,</span> <span class="s">&#39;window.dumpsys&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;{} &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s">&#39;dumpsys window&#39;</span><span class="p">,</span> <span class="n">dumpsys_target_file</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="n">dumpsys_target_file</span><span class="p">,</span> <span class="n">dumpsys_host_file</span><span class="p">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">add_run_artifact</span><span class="p">(</span><span class="s">&#39;dumpsys_window&#39;</span><span class="p">,</span> <span class="n">dumpsys_host_file</span><span class="p">,</span> <span class="s">&#39;meta&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">props</span>
+
+<div class="viewcode-block" id="AndroidDevice.getprop"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.getprop">[docs]</a>    <span class="k">def</span> <span class="nf">getprop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prop</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns parsed output of Android getprop command. If a property is</span>
+<span class="sd">        specified, only the value for that property will be returned (with</span>
+<span class="sd">        ``None`` returned if the property doesn&#39;t exist. Otherwise,</span>
+<span class="sd">        ``wlauto.utils.android.AndroidProperties`` will be returned, which is</span>
+<span class="sd">        a dict-like object.&quot;&quot;&quot;</span>
+        <span class="n">props</span> <span class="o">=</span> <span class="n">AndroidProperties</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;getprop&#39;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">prop</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">props</span><span class="p">[</span><span class="n">prop</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">props</span>
+
+    <span class="c"># Android-specific methods. These either rely on specifics of adb or other</span>
+    <span class="c"># Android-only concepts in their interface and/or implementation.</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.forward_port"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.forward_port">[docs]</a>    <span class="k">def</span> <span class="nf">forward_port</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_port</span><span class="p">,</span> <span class="n">to_port</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Forward a port on the device to a port on localhost.</span>
+
+<span class="sd">        :param from_port: Port on the device which to forward.</span>
+<span class="sd">        :param to_port: Port on the localhost to which the device port will be forwarded.</span>
+
+<span class="sd">        Ports should be specified using adb spec. See the &quot;adb forward&quot; section in &quot;adb help&quot;.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;forward {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">from_port</span><span class="p">,</span> <span class="n">to_port</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.dump_logcat"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.dump_logcat">[docs]</a>    <span class="k">def</span> <span class="nf">dump_logcat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outfile</span><span class="p">,</span> <span class="n">filter_spec</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Dump the contents of logcat, for the specified filter spec to the</span>
+<span class="sd">        specified output file.</span>
+<span class="sd">        See http://developer.android.com/tools/help/logcat.html</span>
+
+<span class="sd">        :param outfile: Output file on the host into which the contents of the</span>
+<span class="sd">                        log will be written.</span>
+<span class="sd">        :param filter_spec: Logcat filter specification.</span>
+<span class="sd">                            see http://developer.android.com/tools/debugging/debugging-log.html#filteringOutput</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="o">.</span><span class="n">write_log</span><span class="p">(</span><span class="n">outfile</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">filter_spec</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;logcat -d -s {} &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filter_spec</span><span class="p">,</span> <span class="n">outfile</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;logcat -d &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">outfile</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.clear_logcat"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.clear_logcat">[docs]</a>    <span class="k">def</span> <span class="nf">clear_logcat</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Clear (flush) logcat log.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="o">.</span><span class="n">clear_buffer</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;logcat -c&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.get_screen_size"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.get_screen_size">[docs]</a>    <span class="k">def</span> <span class="nf">get_screen_size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;dumpsys window&#39;</span><span class="p">)</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">SCREEN_SIZE_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;width&#39;</span><span class="p">)),</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;height&#39;</span><span class="p">)))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.swipe_to_unlock"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.swipe_to_unlock">[docs]</a>    <span class="k">def</span> <span class="nf">swipe_to_unlock</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_screen_size</span><span class="p">()</span>
+        <span class="n">swipe_heigh</span> <span class="o">=</span> <span class="n">height</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">//</span> <span class="mi">3</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="mi">100</span>
+        <span class="n">stop</span> <span class="o">=</span> <span class="n">width</span> <span class="o">-</span> <span class="n">start</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;input swipe {} {} {} {}&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">command</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">swipe_heigh</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">swipe_heigh</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.capture_screen"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.capture_screen">[docs]</a>    <span class="k">def</span> <span class="nf">capture_screen</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Caputers the current device screen into the specified file in a PNG format.&quot;&quot;&quot;</span>
+        <span class="n">on_device_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="s">&#39;screen_capture.png&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;screencap -p  {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_file</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="n">on_device_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="n">on_device_file</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.is_screen_on"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.is_screen_on">[docs]</a>    <span class="k">def</span> <span class="nf">is_screen_on</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns ``True`` if the device screen is currently on, ``False`` otherwise.&quot;&quot;&quot;</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;dumpsys power&#39;</span><span class="p">)</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">SCREEN_STATE_REGEX</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">boolean</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Could not establish screen state.&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.ensure_screen_is_on"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.ensure_screen_is_on">[docs]</a>    <span class="k">def</span> <span class="nf">ensure_screen_is_on</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_screen_on</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;input keyevent 26&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.disable_screen_lock"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.disable_screen_lock">[docs]</a>    <span class="k">def</span> <span class="nf">disable_screen_lock</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Attempts to disable he screen lock on the device.</span>
+
+<span class="sd">        .. note:: This does not always work...</span>
+
+<span class="sd">        Added inversion 2.1.4</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">lockdb</span> <span class="o">=</span> <span class="s">&#39;/data/system/locksettings.db&#39;</span>
+        <span class="n">sqlcommand</span> <span class="o">=</span> <span class="s">&quot;update locksettings set value=</span><span class="se">\\</span><span class="s">&#39;0</span><span class="se">\\</span><span class="s">&#39; where name=</span><span class="se">\\</span><span class="s">&#39;screenlock.disabled</span><span class="se">\\</span><span class="s">&#39;;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;sqlite3 {} &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">lockdb</span><span class="p">,</span> <span class="n">sqlcommand</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="AndroidDevice.disable_selinux"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.AndroidDevice.disable_selinux">[docs]</a>    <span class="k">def</span> <span class="nf">disable_selinux</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># This may be invoked from intialize() so we can&#39;t use execute() or the</span>
+        <span class="c"># standard API for doing this.</span>
+        <span class="n">api_level</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="s">&#39;getprop ro.build.version.sdk&#39;</span><span class="p">,</span>
+                                  <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default_timeout</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+        <span class="c"># SELinux was added in Android 4.3 (API level 18). Trying to</span>
+        <span class="c"># &#39;getenforce&#39; in earlier versions will produce an error.</span>
+        <span class="k">if</span> <span class="n">api_level</span> <span class="o">&gt;=</span> <span class="mi">18</span><span class="p">:</span>
+            <span class="n">se_status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;getenforce&#39;</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">se_status</span> <span class="o">==</span> <span class="s">&#39;Enforcing&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;setenforce 0&#39;</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="c"># Internal methods: do not use outside of the class.</span>
+</div>
+    <span class="k">def</span> <span class="nf">_update_build_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">props</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+                    <span class="n">line</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;#.*&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">line</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;=&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+                    <span class="n">props</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Could not parse build.prop.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_update_versions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">props</span><span class="p">):</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="n">props</span><span class="p">[</span><span class="s">&#39;version&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">text</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;#.*&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">r&#39;^(Linux version .*?)\s*\((gcc version .*)\)$&#39;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">props</span><span class="p">[</span><span class="s">&#39;linux_version&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="n">props</span><span class="p">[</span><span class="s">&#39;gcc_version&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Could not parse version string.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_ensure_binaries_directory_is_writable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_file_systems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">binaries_directory</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s">&#39;/&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">mount_point</span><span class="p">):</span>
+                <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">matched</span><span class="p">:</span>
+            <span class="n">entry</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">matched</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">mount_point</span><span class="p">))[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s">&#39;rw&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">entry</span><span class="o">.</span><span class="n">options</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;mount -o rw,remount {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">mount_point</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Could not find mount point for binaries directory {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">binaries_directory</span><span class="p">))</span>
+
+</div>
+<span class="k">class</span> <span class="nc">_LogcatPoller</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+
+    <span class="n">join_timeout</span> <span class="o">=</span> <span class="mi">5</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">period</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">_LogcatPoller</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">adb_device</span> <span class="o">=</span> <span class="n">device</span><span class="o">.</span><span class="n">adb_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">device</span><span class="o">.</span><span class="n">logger</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">period</span> <span class="o">=</span> <span class="n">period</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">=</span> <span class="n">timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_signal</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">RLock</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">buffer_file</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mktemp</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_poll</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">daemon</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">exc</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Starting logcat polling.&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">stop_signal</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+                    <span class="k">break</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+                    <span class="n">current_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">current_time</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_poll</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">period</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_poll</span><span class="p">()</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c"># pylint: disable=W0703</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">exc</span> <span class="o">=</span> <span class="n">WorkerThreadError</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Logcat polling stopped.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Stopping logcat polling.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_signal</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">join_timeout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_alive</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Could not join logcat poller thread.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">exc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="bp">self</span><span class="o">.</span><span class="n">exc</span>  <span class="c"># pylint: disable=E0702</span>
+
+    <span class="k">def</span> <span class="nf">clear_buffer</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Clearing logcat buffer.&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+            <span class="n">adb_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_device</span><span class="p">,</span> <span class="s">&#39;logcat -c&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">_</span><span class="p">:</span>  <span class="c"># NOQA</span>
+                <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">write_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outfile</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Writing logbuffer to {}.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">outfile</span><span class="p">))</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_poll</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_file</span><span class="p">):</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_file</span><span class="p">,</span> <span class="n">outfile</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c"># there was no logcat trace at this time</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">outfile</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">_</span><span class="p">:</span>  <span class="c"># NOQA</span>
+                    <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Closing logcat poller.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_file</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_file</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_poll</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_poll</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_device</span><span class="p">,</span> <span class="s">&#39;logcat -d &gt;&gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_file</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="n">adb_command</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_device</span><span class="p">,</span> <span class="s">&#39;logcat -c&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="BigLittleDevice"><a class="viewcode-back" href="../../../../api/wlauto.common.android.html#wlauto.common.android.device.BigLittleDevice">[docs]</a><span class="k">class</span> <span class="nc">BigLittleDevice</span><span class="p">(</span><span class="n">AndroidDevice</span><span class="p">):</span>  <span class="c"># pylint: disable=W0223</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;scheduler&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;hmp&#39;</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+    <span class="p">]</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

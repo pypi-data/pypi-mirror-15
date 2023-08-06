@@ -1,0 +1,298 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.devices.android.gem5 &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.devices.android.gem5</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># Original implementation by Rene de Jong. Updated by Sascha Bischoff.</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">AndroidDevice</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.common.gem5.device</span> <span class="kn">import</span> <span class="n">BaseGem5Device</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">DeviceError</span>
+
+
+<div class="viewcode-block" id="Gem5AndroidDevice"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice">[docs]</a><span class="k">class</span> <span class="nc">Gem5AndroidDevice</span><span class="p">(</span><span class="n">BaseGem5Device</span><span class="p">,</span> <span class="n">AndroidDevice</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Implements gem5 Android device.</span>
+
+<span class="sd">    This class allows a user to connect WA to a simulation using gem5. The</span>
+<span class="sd">    connection to the device is made using the telnet connection of the</span>
+<span class="sd">    simulator, and is used for all commands. The simulator does not have ADB</span>
+<span class="sd">    support, and therefore we need to fall back to using standard shell</span>
+<span class="sd">    commands.</span>
+
+<span class="sd">    Files are copied into the simulation using a VirtIO 9P device in gem5. Files</span>
+<span class="sd">    are copied out of the simulated environment using the m5 writefile command</span>
+<span class="sd">    within the simulated system.</span>
+
+<span class="sd">    When starting the workload run, the simulator is automatically started by</span>
+<span class="sd">    Workload Automation, and a connection to the simulator is established. WA</span>
+<span class="sd">    will then wait for Android to boot on the simulated system (which can take</span>
+<span class="sd">    hours), prior to executing any other commands on the device. It is also</span>
+<span class="sd">    possible to resume from a checkpoint when starting the simulation. To do</span>
+<span class="sd">    this, please append the relevant checkpoint commands from the gem5</span>
+<span class="sd">    simulation script to the gem5_discription argument in the agenda.</span>
+
+<span class="sd">    Host system requirements:</span>
+<span class="sd">        * VirtIO support. We rely on diod on the host system. This can be</span>
+<span class="sd">          installed on ubuntu using the following command:</span>
+
+<span class="sd">                sudo apt-get install diod</span>
+
+<span class="sd">    Guest requirements:</span>
+<span class="sd">        * VirtIO support. We rely on VirtIO to move files into the simulation.</span>
+<span class="sd">          Please make sure that the following are set in the kernel</span>
+<span class="sd">          configuration:</span>
+
+<span class="sd">                CONFIG_NET_9P=y</span>
+
+<span class="sd">                CONFIG_NET_9P_VIRTIO=y</span>
+
+<span class="sd">                CONFIG_9P_FS=y</span>
+
+<span class="sd">                CONFIG_9P_FS_POSIX_ACL=y</span>
+
+<span class="sd">                CONFIG_9P_FS_SECURITY=y</span>
+
+<span class="sd">                CONFIG_VIRTIO_BLK=y</span>
+
+<span class="sd">        * m5 binary. Please make sure that the m5 binary is on the device and</span>
+<span class="sd">          can by found in the path.</span>
+<span class="sd">        * Busybox. Due to restrictions, we assume that busybox is installed in</span>
+<span class="sd">          the guest system, and can be found in the path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;gem5_android&#39;</span>
+    <span class="n">platform</span> <span class="o">=</span> <span class="s">&#39;android&#39;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;core_names&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">[],</span> <span class="n">override</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;core_clusters&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">[],</span> <span class="n">override</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="c"># Overwritten from Device. For documentation, see corresponding method in</span>
+    <span class="c"># Device.</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;Gem5AndroidDevice&#39;</span><span class="p">)</span>
+        <span class="n">AndroidDevice</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">BaseGem5Device</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Gem5AndroidDevice.login_to_device"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.login_to_device">[docs]</a>    <span class="k">def</span> <span class="nf">login_to_device</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.wait_for_boot"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.wait_for_boot">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_boot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Waiting for Android to boot...&quot;</span><span class="p">)</span>
+        <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">booted</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="s">&#39;0&#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;getprop sys.boot_completed&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)))</span>
+                <span class="n">anim_finished</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="s">&#39;0&#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;getprop service.bootanim.exit&#39;</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">False</span><span class="p">)))</span>
+                <span class="k">if</span> <span class="n">booted</span> <span class="ow">and</span> <span class="n">anim_finished</span><span class="p">:</span>
+                    <span class="k">break</span>
+            <span class="k">except</span> <span class="p">(</span><span class="n">DeviceError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+                <span class="k">pass</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">60</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Android booted&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.install"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.install">[docs]</a>    <span class="k">def</span> <span class="nf">install</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="mi">3600</span><span class="p">):</span>  <span class="c"># pylint: disable=W0221</span>
+        <span class="sd">&quot;&quot;&quot; Install an APK or a normal executable &quot;&quot;&quot;</span>
+        <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filepath</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&#39;.apk&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">install_apk</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">install_executable</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.install_apk"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.install_apk">[docs]</a>    <span class="k">def</span> <span class="nf">install_apk</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="mi">3600</span><span class="p">):</span>  <span class="c"># pylint: disable=W0221</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Install an APK on the gem5 device</span>
+
+<span class="sd">        The APK is pushed to the device. Then the file and folder permissions</span>
+<span class="sd">        are changed to ensure that the APK can be correctly installed. The APK</span>
+<span class="sd">        is then installed on the device using &#39;pm&#39;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Installing {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+        <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filepath</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&#39;.apk&#39;</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+            <span class="n">on_device_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&#39;/data/local/tmp&#39;</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">push_file</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">on_device_path</span><span class="p">)</span>
+            <span class="c"># We need to make sure that the folder permissions are set</span>
+            <span class="c"># correctly, else the APK does not install correctly.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;busybox chmod 775 /data/local/tmp&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;busybox chmod 774 {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_path</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Actually installing the APK: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_path</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;pm install {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_path</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Can</span><span class="se">\&#39;</span><span class="s">t install {}: unsupported format.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filepath</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.install_executable"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.install_executable">[docs]</a>    <span class="k">def</span> <span class="nf">install_executable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">,</span> <span class="n">with_name</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Install an executable &quot;&quot;&quot;</span>
+        <span class="n">executable_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+        <span class="n">on_device_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">executable_name</span><span class="p">)</span>
+        <span class="n">on_device_executable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">binaries_directory</span><span class="p">,</span> <span class="n">executable_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">push_file</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">on_device_file</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;busybox cp {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_file</span><span class="p">,</span> <span class="n">on_device_executable</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;busybox chmod 0777 {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">on_device_executable</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">on_device_executable</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.uninstall"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.uninstall">[docs]</a>    <span class="k">def</span> <span class="nf">uninstall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">package</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_ready</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&quot;pm uninstall {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">package</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.dump_logcat"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.dump_logcat">[docs]</a>    <span class="k">def</span> <span class="nf">dump_logcat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outfile</span><span class="p">,</span> <span class="n">filter_spec</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Extract logcat from simulation &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Extracting logcat from the simulated system&quot;</span><span class="p">)</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">outfile</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;logcat -d &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="s">&quot;{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">),</span> <span class="n">outfile</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.clear_logcat"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.clear_logcat">[docs]</a>    <span class="k">def</span> <span class="nf">clear_logcat</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Clear (flush) logcat log.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_logcat_poller</span><span class="o">.</span><span class="n">clear_buffer</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;logcat -c&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.disable_selinux"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.disable_selinux">[docs]</a>    <span class="k">def</span> <span class="nf">disable_selinux</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Disable SELinux. Overridden as parent implementation uses ADB &quot;&quot;&quot;</span>
+        <span class="n">api_level</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gem5_shell</span><span class="p">(</span><span class="s">&#39;getprop ro.build.version.sdk&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+
+        <span class="c"># SELinux was added in Android 4.3 (API level 18). Trying to</span>
+        <span class="c"># &#39;getenforce&#39; in earlier versions will produce an error.</span>
+        <span class="k">if</span> <span class="n">api_level</span> <span class="o">&gt;=</span> <span class="mi">18</span><span class="p">:</span>
+            <span class="n">se_status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;getenforce&#39;</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">se_status</span> <span class="o">==</span> <span class="s">&#39;Enforcing&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;setenforce 0&#39;</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.get_properties"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.get_properties">[docs]</a>    <span class="k">def</span> <span class="nf">get_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=R0801</span>
+        <span class="sd">&quot;&quot;&quot; Get the property files from the device &quot;&quot;&quot;</span>
+        <span class="n">BaseGem5Device</span><span class="o">.</span><span class="n">get_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="n">props</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_android_properties</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">props</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.disable_screen_lock"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.disable_screen_lock">[docs]</a>    <span class="k">def</span> <span class="nf">disable_screen_lock</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Attempts to disable he screen lock on the device.</span>
+
+<span class="sd">        Overridden here as otherwise we have issues with too many backslashes.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">lockdb</span> <span class="o">=</span> <span class="s">&#39;/data/system/locksettings.db&#39;</span>
+        <span class="n">sqlcommand</span> <span class="o">=</span> <span class="s">&quot;update locksettings set value=</span><span class="se">\&#39;</span><span class="s">0</span><span class="se">\&#39;</span><span class="s"> where name=</span><span class="se">\&#39;</span><span class="s">screenlock.disabled</span><span class="se">\&#39;</span><span class="s">;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;sqlite3 {} &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">lockdb</span><span class="p">,</span> <span class="n">sqlcommand</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Gem5AndroidDevice.capture_screen"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.gem5.html#wlauto.devices.android.gem5.Gem5AndroidDevice.capture_screen">[docs]</a>    <span class="k">def</span> <span class="nf">capture_screen</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">BaseGem5Device</span><span class="o">.</span><span class="n">capture_screen</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="c"># If we didn&#39;t manage to do the above, call the parent class.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&quot;capture_screen: falling back to parent class implementation&quot;</span><span class="p">)</span>
+        <span class="n">AndroidDevice</span><span class="o">.</span><span class="n">capture_screen</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

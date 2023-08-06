@@ -1,0 +1,469 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.result_processors.dvfs &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.result_processors.dvfs</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">csv</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">ResultProcessor</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">instrumentation</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">ResultProcessorError</span>
+
+
+<div class="viewcode-block" id="DVFS"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS">[docs]</a><span class="k">class</span> <span class="nc">DVFS</span><span class="p">(</span><span class="n">ResultProcessor</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;dvfs&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Reports DVFS state residency data form ftrace power events.</span>
+
+<span class="s">    This generates a ``dvfs.csv`` in the top-level results directory that,</span>
+<span class="s">    for each workload iteration, reports the percentage of time each CPU core</span>
+<span class="s">    spent in each of the DVFS frequency states (P-states), as well as percentage</span>
+<span class="s">    of the time spent in idle, during the execution of the workload.</span>
+
+<span class="s">    .. note:: ``trace-cmd`` instrument *MUST* be enabled in the instrumentation,</span>
+<span class="s">              and at least ``&#39;power*&#39;`` events must be enabled.</span>
+
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DVFS</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">infile</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outfile</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_frequency_of_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state_time_map</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c"># hold state at timestamp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpuid_time_map</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c"># hold cpuid at timestamp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">power_state</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">UNKNOWNSTATE</span> <span class="o">=</span> <span class="mi">4294967295</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">multiply_factor</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">corename_of_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">numberofcores_in_cluster</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">minimum_frequency_cluster</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">idlestate_description</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">instrumentation</span><span class="o">.</span><span class="n">instrument_is_installed</span><span class="p">(</span><span class="s">&#39;trace-cmd&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;&quot;dvfs&quot; works only if &quot;trace_cmd&quot; in enabled in instrumentation&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=R0912</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">device</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">has</span><span class="p">(</span><span class="s">&#39;cpuidle&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Device does not appear to have cpuidle capability; is the right module installed?&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Device does not specify its core types (core_names/core_clusters not set in device_config).&#39;</span>
+            <span class="k">raise</span> <span class="n">ResultProcessorError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="n">number_of_clusters</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_clusters</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="c"># In IKS devices, actual number of cores is double</span>
+        <span class="c"># from what we get from device.number_of_cores</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">==</span> <span class="s">&#39;iks&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">multiply_factor</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">==</span> <span class="s">&#39;unknown&#39;</span><span class="p">:</span>
+            <span class="c"># Device doesn&#39;t specify its scheduler type. It could be IKS, in</span>
+            <span class="c"># which case reporeted values would be wrong, so error out.</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;The Device doesn not specify it</span><span class="se">\&#39;</span><span class="s">s scheduler type. If you are &#39;</span>
+                       <span class="s">&#39;using a generic device interface, please make sure to set the &#39;</span>
+                       <span class="s">&#39;&quot;scheduler&quot; parameter in the device config.&#39;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">ResultProcessorError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">multiply_factor</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="c"># separate out the cores in each cluster</span>
+        <span class="c"># It is list of list of cores in cluster</span>
+        <span class="n">listof_cores_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">number_of_clusters</span><span class="p">):</span>
+            <span class="n">listof_cores_clusters</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">core</span> <span class="k">for</span> <span class="n">core</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_clusters</span> <span class="k">if</span> <span class="n">core</span> <span class="o">==</span> <span class="n">cluster</span><span class="p">])</span>
+        <span class="c"># Extract minimum frequency of each cluster and</span>
+        <span class="c"># the idle power state with its descriptive name</span>
+        <span class="c">#</span>
+        <span class="n">total_cores</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">current_cores</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">cores_list</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">listof_cores_clusters</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">corename_of_clusters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">core_names</span><span class="p">[</span><span class="n">total_cores</span><span class="p">])</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">!=</span> <span class="s">&#39;iks&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">idlestate_description</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">s</span><span class="o">.</span><span class="n">id</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">desc</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_cpuidle_states</span><span class="p">(</span><span class="n">total_cores</span><span class="p">)})</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">idlestate_description</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">s</span><span class="o">.</span><span class="n">id</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">desc</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_cpuidle_states</span><span class="p">()})</span>
+            <span class="n">total_cores</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cores_list</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">numberofcores_in_cluster</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">cores_list</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">current_cores</span><span class="p">,</span> <span class="n">total_cores</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">online_cpus</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">minimum_frequency_cluster</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_cpu_min_frequency</span><span class="p">(</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))))</span>
+                    <span class="k">break</span>
+            <span class="n">current_cores</span> <span class="o">=</span> <span class="n">total_cores</span>
+        <span class="n">length_frequency_cluster</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minimum_frequency_cluster</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">length_frequency_cluster</span> <span class="o">!=</span> <span class="n">number_of_clusters</span><span class="p">:</span>
+            <span class="n">diff</span> <span class="o">=</span> <span class="n">number_of_clusters</span> <span class="o">-</span> <span class="n">length_frequency_cluster</span>
+            <span class="n">offline_value</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">diff</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">!=</span> <span class="s">&#39;iks&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">minimum_frequency_cluster</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">offline_value</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">minimum_frequency_cluster</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">iks_switch_frequency</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DVFS.process_iteration_result"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.process_iteration_result">[docs]</a>    <span class="k">def</span> <span class="nf">process_iteration_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parse the trace.txt for each iteration,  calculate DVFS residency state/frequencies</span>
+<span class="sd">        and dump the result in csv and flush the data for next iteration.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">infile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;trace.txt&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">infile</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Running result_processor &quot;dvfs&quot;&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">outfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="s">&#39;dvfs.csv&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">flush_parse_initialize</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">calculate</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">percentage</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">generate_csv</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Completed result_processor &quot;dvfs&quot;&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;trace.txt not found.&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DVFS.flush_parse_initialize"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.flush_parse_initialize">[docs]</a>    <span class="k">def</span> <span class="nf">flush_parse_initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Store state, cpu_id for each timestamp from trace.txt and flush all the values for</span>
+<span class="sd">        next iterations.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_frequency_of_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state_time_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpuid_time_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parse</span><span class="p">()</span>  <span class="c"># Parse trace.txt generated from trace-cmd instrumentation</span>
+        <span class="c"># Initialize the states of each core of clusters and frequency of</span>
+        <span class="c"># each clusters with its minimum freq</span>
+        <span class="c"># cpu_id is assigned for each of clusters.</span>
+        <span class="c"># For IKS devices cpuid remains same in other clusters</span>
+        <span class="c"># and for other it will increment by 1</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">cores_number</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numberofcores_in_cluster</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">dummy</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cores_number</span><span class="p">)])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_frequency_of_clusters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minimum_frequency_cluster</span><span class="p">[</span><span class="n">cluster</span><span class="p">])</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">==</span> <span class="s">&#39;iks&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">j</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cores_number</span><span class="p">)])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">count</span> <span class="o">+</span> <span class="n">cores_number</span><span class="p">))</span>
+                <span class="n">count</span> <span class="o">+=</span> <span class="n">cores_number</span>
+
+        <span class="c"># Initialize the time spent in each state/frequency for each core.</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">number_of_cores</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">multiply_factor</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">unique_freq</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="c"># To determine offline -1 state is added</span>
+            <span class="n">offline_value</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)][</span><span class="n">offline_value</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="mi">0</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">unique_freq</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)][</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+</div>
+<div class="viewcode-block" id="DVFS.update_cluster_freq"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.update_cluster_freq">[docs]</a>    <span class="k">def</span> <span class="nf">update_cluster_freq</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">cpu_id</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Update the cluster frequency and current cluster&quot;&quot;&quot;</span>
+        <span class="c"># For IKS devices cluster changes only possible when</span>
+        <span class="c"># freq changes, for other it is determine by cpu_id.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">!=</span> <span class="s">&#39;iks&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster</span><span class="p">(</span><span class="n">cpu_id</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_state_name</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">==</span> <span class="s">&quot;freqstate&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cluster</span><span class="p">(</span><span class="n">cpu_id</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_frequency_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span>
+</div>
+<div class="viewcode-block" id="DVFS.get_cluster"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.get_cluster">[docs]</a>    <span class="k">def</span> <span class="nf">get_cluster</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cpu_id</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="c"># For IKS if current state is greater than switch</span>
+        <span class="c"># freq then it is in cluster2 else cluster1</span>
+        <span class="c"># For other, Look the current cpu_id and check this id</span>
+        <span class="c"># belong to which cluster.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">==</span> <span class="s">&#39;iks&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">state</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">iks_switch_frequency</span> <span class="k">else</span> <span class="mi">0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">cpuids_list</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">cpu_id</span> <span class="ow">in</span> <span class="n">cpuids_list</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">cluster</span>
+</div>
+<div class="viewcode-block" id="DVFS.get_cluster_freq"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.get_cluster_freq">[docs]</a>    <span class="k">def</span> <span class="nf">get_cluster_freq</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_frequency_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="DVFS.update_state"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.update_state">[docs]</a>    <span class="k">def</span> <span class="nf">update_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">cpu_id</span><span class="p">):</span>  <span class="c"># pylint: disable=R0912</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Update state of each cores in every cluster.</span>
+<span class="sd">        This is done for each timestamp.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">POWERDOWN</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="n">offline_value</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="c"># if state is in unknowstate, then change state of current cpu_id</span>
+        <span class="c"># with cluster freq of current cluster.</span>
+        <span class="c"># if state is in powerstate then change state with that power state.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_state_name</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&quot;unknownstate&quot;</span><span class="p">,</span> <span class="s">&quot;powerstate&quot;</span><span class="p">]:</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">])):</span>
+                <span class="k">if</span> <span class="n">cpu_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">][</span><span class="n">i</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_state_name</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">==</span> <span class="s">&quot;unknownstate&quot;</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_frequency_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">]</span>
+                    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_state_name</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">==</span> <span class="s">&quot;powerstate&quot;</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span>
+        <span class="c"># If state is in freqstate then update the state with current state.</span>
+        <span class="c"># For IKS, if all cores is in power down and current state is freqstate</span>
+        <span class="c"># then update the all the cores in current cluster to current state</span>
+        <span class="c"># and other state cluster changed to Power down.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_state_name</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">==</span> <span class="s">&quot;freqstate&quot;</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">]):</span>
+                <span class="k">if</span> <span class="n">j</span> <span class="o">!=</span> <span class="n">offline_value</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span>
+                <span class="k">if</span> <span class="n">cpu_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">][</span><span class="n">i</span><span class="p">]:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">==</span> <span class="s">&#39;iks&#39;</span><span class="p">:</span>
+                <span class="n">check</span> <span class="o">=</span> <span class="bp">False</span>  <span class="c"># All core in cluster is power down</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">])):</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="n">POWERDOWN</span><span class="p">:</span>
+                        <span class="n">check</span> <span class="o">=</span> <span class="bp">True</span>
+                        <span class="k">break</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">check</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">])):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_frequency_of_clusters</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">state_list</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">cluster</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_cluster</span><span class="p">:</span>
+                        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">state_list</span><span class="p">)):</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">POWERDOWN</span>
+</div>
+<div class="viewcode-block" id="DVFS.unique_freq"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.unique_freq">[docs]</a>    <span class="k">def</span> <span class="nf">unique_freq</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Determine the unique Frequency and state&quot;&quot;&quot;</span>
+        <span class="n">unique_freq</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_time_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">unique_freq</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_time_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">UNKNOWNSTATE</span><span class="p">:</span>
+                <span class="n">unique_freq</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state_time_map</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">minimum_frequency_cluster</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">unique_freq</span><span class="p">:</span>
+                <span class="n">unique_freq</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">unique_freq</span>
+</div>
+<div class="viewcode-block" id="DVFS.parse"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parse the trace.txt ::</span>
+
+<span class="sd">            store timestamp, state, cpu_id</span>
+<span class="sd">            ---------------------------------------------------------------------------------</span>
+<span class="sd">                                |timestamp|                       |state|        |cpu_id|</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554380: cpu_idle:             state=4294967295 cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554454: power_start:          type=1 state=0 cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554458: cpu_idle:             state=0 cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554464: power_end:            cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554471: cpu_idle:             state=4294967295 cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554590: power_start:          type=1 state=0 cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554593: cpu_idle:             state=0 cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554636: power_end:            cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554639: cpu_idle:             state=4294967295 cpu_id=1</span>
+<span class="sd">            &lt;idle&gt;-0     [001]   294.554669: power_start:          type=1 state=0 cpu_id=1</span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">pattern</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;\s+(?P&lt;time&gt;\S+)\S+\s*(?P&lt;desc&gt;(cpu_idle:|cpu_frequency:))\s*state=(?P&lt;state&gt;\d+)\s*cpu_id=(?P&lt;cpu_id&gt;\d+)&#39;</span><span class="p">)</span>
+        <span class="n">start_trace</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">stop_trace</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">infile</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+                <span class="c">#Start collecting data from label &quot;TRACE_MARKER_START&quot; and</span>
+                <span class="c">#stop with label &quot;TRACE_MARKER_STOP&quot;</span>
+                <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;TRACE_MARKER_START&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                    <span class="n">start_trace</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;TRACE_MARKER_STOP&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                    <span class="n">stop_trace</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">if</span> <span class="n">start_trace</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">stop_trace</span><span class="p">:</span>
+                    <span class="n">match</span> <span class="o">=</span> <span class="n">pattern</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;time&#39;</span><span class="p">)))</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">state_time_map</span><span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;time&#39;</span><span class="p">))]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;state&#39;</span><span class="p">))</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">cpuid_time_map</span><span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;time&#39;</span><span class="p">))]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s">&#39;cpu_id&#39;</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="DVFS.get_state_name"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.get_state_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_state_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">power_state</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&quot;powerstate&quot;</span>
+        <span class="k">elif</span> <span class="n">state</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">UNKNOWNSTATE</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&quot;unknownstate&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&quot;freqstate&quot;</span>
+</div>
+<div class="viewcode-block" id="DVFS.populate"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.populate">[docs]</a>    <span class="k">def</span> <span class="nf">populate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time1</span><span class="p">,</span> <span class="n">time2</span><span class="p">):</span>
+        <span class="n">diff</span> <span class="o">=</span> <span class="n">time2</span> <span class="o">-</span> <span class="n">time1</span>
+        <span class="k">for</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">states_list</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">states_list</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">scheduler</span> <span class="o">==</span> <span class="s">&#39;iks&#39;</span> <span class="ow">and</span> <span class="n">cluster</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span><span class="p">[</span><span class="n">cluster</span><span class="p">][</span><span class="n">k</span><span class="p">]</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">[</span><span class="mi">0</span><span class="p">]))][</span><span class="n">j</span><span class="p">]</span> <span class="o">+=</span> <span class="n">diff</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cpuids_of_clusters</span><span class="p">[</span><span class="n">cluster</span><span class="p">][</span><span class="n">k</span><span class="p">])][</span><span class="n">j</span><span class="p">]</span> <span class="o">+=</span> <span class="n">diff</span>
+</div>
+<div class="viewcode-block" id="DVFS.calculate"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.calculate">[docs]</a>    <span class="k">def</span> <span class="nf">calculate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update_cluster_freq</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state_time_map</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">[</span><span class="n">i</span><span class="p">]],</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpuid_time_map</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">[</span><span class="n">i</span><span class="p">]])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state_time_map</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">[</span><span class="n">i</span><span class="p">]],</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpuid_time_map</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">[</span><span class="n">i</span><span class="p">]])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">populate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="DVFS.percentage"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.percentage">[docs]</a>    <span class="k">def</span> <span class="nf">percentage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Normalize the result with total execution time.&quot;&quot;&quot;</span>
+        <span class="n">temp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">:</span>
+            <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
+                <span class="n">total</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="n">total</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">temp</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpu_freq_time_spent</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="mi">100</span> <span class="o">/</span> <span class="n">total</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">temp</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">return</span> <span class="n">temp</span>
+</div>
+<div class="viewcode-block" id="DVFS.generate_csv"><a class="viewcode-back" href="../../../api/wlauto.result_processors.html#wlauto.result_processors.dvfs.DVFS.generate_csv">[docs]</a>    <span class="k">def</span> <span class="nf">generate_csv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># pylint: disable=R0912,R0914</span>
+        <span class="sd">&quot;&quot;&quot; generate the &#39;&#39;&#39;dvfs.csv&#39;&#39;&#39; with the state, frequency and cores &quot;&quot;&quot;</span>
+        <span class="n">temp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">percentage</span><span class="p">()</span>
+        <span class="n">total_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">unique_freq</span><span class="p">()</span>
+        <span class="n">offline_value</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">ghz_conversion</span> <span class="o">=</span> <span class="mi">1000000</span>
+        <span class="n">mhz_conversion</span> <span class="o">=</span> <span class="mi">1000</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">,</span> <span class="s">&#39;a+&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;,&#39;</span><span class="p">)</span>
+            <span class="n">reader</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+            <span class="c"># Create the header in the format below</span>
+            <span class="c"># workload name, iteration, state, A7 CPU0,A7 CPU1,A7 CPU2,A7 CPU3,A15 CPU4,A15 CPU5</span>
+            <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">reader</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">header_row</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;workload&#39;</span><span class="p">,</span> <span class="s">&#39;iteration&#39;</span><span class="p">,</span> <span class="s">&#39;state&#39;</span><span class="p">]</span>
+                <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">for</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">states_list</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentstates_of_clusters</span><span class="p">):</span>
+                    <span class="k">for</span> <span class="n">dummy_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">states_list</span><span class="p">)):</span>
+                        <span class="n">header_row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;{} CPU{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">corename_of_clusters</span><span class="p">[</span><span class="n">cluster</span><span class="p">],</span> <span class="n">count</span><span class="p">))</span>
+                        <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">header_row</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">offline_value</span> <span class="ow">in</span> <span class="n">total_state</span><span class="p">:</span>
+                <span class="n">total_state</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">offline_value</span><span class="p">)</span>  <span class="c"># remove the offline state</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">total_state</span><span class="p">):</span>
+                <span class="n">temprow</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">temprow</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">iteration</span><span class="p">])</span>
+                <span class="k">if</span> <span class="s">&quot;state{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">idlestate_description</span><span class="p">:</span>
+                    <span class="n">temprow</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">idlestate_description</span><span class="p">[</span><span class="s">&quot;state{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">state_value</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">state_value</span> <span class="o">/</span> <span class="n">ghz_conversion</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
+                        <span class="n">temprow</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;{} Ghz&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">state_value</span> <span class="o">/</span> <span class="n">ghz_conversion</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">temprow</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;{} Mhz&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">state_value</span> <span class="o">/</span> <span class="n">mhz_conversion</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">number_of_cores</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">multiply_factor</span><span class="p">):</span>
+                    <span class="n">temprow</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;{0:.3f}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">j</span><span class="p">)][</span><span class="n">i</span><span class="p">]))</span>
+                <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">temprow</span><span class="p">)</span>
+            <span class="n">check_off</span> <span class="o">=</span> <span class="bp">True</span>  <span class="c"># Checking whether core is OFFLINE</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">number_of_cores</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">multiply_factor</span><span class="p">):</span>
+                <span class="n">temp_val</span> <span class="o">=</span> <span class="s">&quot;{0:.3f}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)][</span><span class="n">offline_value</span><span class="p">])</span>
+                <span class="k">if</span> <span class="nb">float</span><span class="p">(</span><span class="n">temp_val</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">check_off</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">check_off</span> <span class="ow">is</span> <span class="bp">False</span><span class="p">:</span>
+                <span class="n">temprow</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">temprow</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">iteration</span><span class="p">])</span>
+                <span class="n">temprow</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;OFFLINE&quot;</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">number_of_cores</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">multiply_factor</span><span class="p">):</span>
+                    <span class="n">temprow</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;{0:.3f}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp</span><span class="p">[</span><span class="s">&quot;cpu{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)][</span><span class="n">offline_value</span><span class="p">]))</span>
+                <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">temprow</span><span class="p">)</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

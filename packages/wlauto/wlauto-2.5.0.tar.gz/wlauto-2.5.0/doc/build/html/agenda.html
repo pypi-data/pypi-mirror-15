@@ -1,0 +1,696 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Agenda &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="index.html" />
+    <link rel="next" title="Configuration" href="configuration.html" />
+    <link rel="prev" title="Commands" href="invocation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="configuration.html" title="Configuration"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="invocation.html" title="Commands"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="agenda">
+<span id="id1"></span><h1>Agenda<a class="headerlink" href="#agenda" title="Permalink to this headline">¶</a></h1>
+<p>An agenda specifies what is to be done during a Workload Automation run,
+including which workloads will be run, with what configuration, which
+instruments and result processors will be enabled, etc. Agenda syntax is
+designed to be both succinct and expressive.</p>
+<p>Agendas are specified using <a class="reference external" href="http://en.wikipedia.org/wiki/YAML">YAML</a> notation. It is recommended that you
+familiarize yourself with the linked page.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Earlier versions of WA have supported CSV-style agendas. These were
+there to facilitate transition from WA1 scripts. The format was more
+awkward and supported only a limited subset of the features. Support
+for it has now been removed.</p>
+</div>
+<div class="section" id="specifying-which-workloads-to-run">
+<h2>Specifying which workloads to run<a class="headerlink" href="#specifying-which-workloads-to-run" title="Permalink to this headline">¶</a></h2>
+<p>The central purpose of an agenda is to specify what workloads to run. A
+minimalist agenda contains a single entry at the top level called &#8220;workloads&#8221;
+that maps onto a list of workload names to run:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">dhrystone</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">memcpy</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">cyclictest</span>
+</pre></div>
+</div>
+<p>This specifies a WA run consisting of <code class="docutils literal"><span class="pre">dhrystone</span></code> followed by <code class="docutils literal"><span class="pre">memcpy</span></code>, followed by
+<code class="docutils literal"><span class="pre">cyclictest</span></code> workloads, and using instruments and result processors specified in
+config.py (see <a class="reference internal" href="configuration.html#configuration-specification"><span>Configuration</span></a> section).</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>If you&#8217;re familiar with YAML, you will recognize the above as a single-key
+associative array mapping onto a list. YAML has two notations for both
+associative arrays and lists: block notation (seen above) and also
+in-line notation. This means that the above agenda can also be
+written in a single line as</p>
+<div class="highlight-python"><div class="highlight"><pre>workloads: [dhrystone, memcpy, cyclictest]
+</pre></div>
+</div>
+<p>(with the list in-lined), or</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">{</span><span class="n">workloads</span><span class="p">:</span> <span class="p">[</span><span class="n">dhrystone</span><span class="p">,</span> <span class="n">memcpy</span><span class="p">,</span> <span class="n">cyclictest</span><span class="p">]}</span>
+</pre></div>
+</div>
+<p class="last">(with both the list and the associative array in-line). WA doesn&#8217;t
+care which of the notations is used as they all get parsed into the
+same structure by the YAML parser. You can use whatever format you
+find easier/clearer.</p>
+</div>
+<div class="section" id="multiple-iterations">
+<h3>Multiple iterations<a class="headerlink" href="#multiple-iterations" title="Permalink to this headline">¶</a></h3>
+<p>There will normally be some variability in workload execution when running on a
+real device. In order to quantify it, multiple iterations of the same workload
+are usually performed. You can specify the number of iterations for each
+workload by adding <code class="docutils literal"><span class="pre">iterations</span></code> field to the workload specifications (or
+&#8220;specs&#8221;):</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">memcpy</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+</pre></div>
+</div>
+<p>Now that we&#8217;re specifying both the workload name and the number of iterations in
+each spec, we have to explicitly name each field of the spec.</p>
+<p>It is often the case that, as in in the example above, you will want to run all
+workloads for the same number of iterations. Rather than having to specify it
+for each and every spec, you can do with a single entry by adding a <code class="docutils literal"><span class="pre">global</span></code>
+section to your agenda:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">dhrystone</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">memcpy</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">cyclictest</span>
+</pre></div>
+</div>
+<p>The global section can contain the same fields as a workload spec. The
+fields in the global section will get added to each spec. If the same field is
+defined both in global section and in a spec, then the value in the spec will
+overwrite the global value. For example, suppose we wanted to run all our workloads
+for five iterations, except cyclictest which we want to run for ten (e.g.
+because we know it to be particularly unstable). This can be specified like
+this:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">dhrystone</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">memcpy</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+<p>Again, because we are now specifying two fields for cyclictest spec, we have to
+explicitly name them.</p>
+</div>
+<div class="section" id="configuring-workloads">
+<h3>Configuring workloads<a class="headerlink" href="#configuring-workloads" title="Permalink to this headline">¶</a></h3>
+<p>Some workloads accept configuration parameters that modify their behavior. These
+parameters are specific to a particular workload and can alter the workload in
+any number of ways, e.g. set the duration for which to run, or specify a media
+file to be used, etc. The vast majority of workload parameters will have some
+default value, so it is only necessary to specify the name of the workload in
+order for WA to run it. However, sometimes you want more control over how a
+workload runs.</p>
+<p>For example, by default, dhrystone will execute 10 million loops across four
+threads. Suppose you device has six cores available and you want the workload to
+load them all. You also want to increase the total number of loops accordingly
+to 15 million. You can specify this using dhrystone&#8217;s parameters:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">memcpy</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>You can find out what parameters a workload accepts by looking it up
+in the <a class="reference internal" href="extensions/workloads.html#workloads"><span>Workloads</span></a> section. You can also look it up using WA itself
+with &#8220;show&#8221; command:</p>
+<div class="highlight-python"><div class="highlight"><pre>wa show dhrystone
+</pre></div>
+</div>
+<p class="last">see the <a class="reference internal" href="invocation.html#invocation"><span>Commands</span></a> section for details.</p>
+</div>
+<p>In addition to configuring the workload itself, we can also specify
+configuration for the underlying device. This can be done by setting runtime
+parameters in the workload spec. For example, suppose we want to ensure the
+maximum score for our benchmarks, at the expense of power consumption, by
+setting the cpufreq governor to &#8220;performance&#8221; on cpu0 (assuming all our cores
+are in the same DVFS domain and so setting the governor for cpu0 will affect all
+cores). This can be done like this:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance</span>
+          <span class="l-Scalar-Plain">workload_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">memcpy</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+<p>Here, we&#8217;re specifying <code class="docutils literal"><span class="pre">sysfile_values</span></code> runtime parameter for the device. The
+value for this parameter is a mapping (an associative array, in YAML) of file
+paths onto values that should be written into those files. <code class="docutils literal"><span class="pre">sysfile_values</span></code> is
+the only runtime parameter that is available for any (Linux) device. Other
+runtime parameters will depend on the specifics of the device used (e.g. its
+CPU cores configuration). I&#8217;ve renamed <code class="docutils literal"><span class="pre">params</span></code> to   <code class="docutils literal"><span class="pre">workload_params</span></code> for
+clarity, but that wasn&#8217;t strictly necessary as <code class="docutils literal"><span class="pre">params</span></code> is interpreted as
+<code class="docutils literal"><span class="pre">workload_params</span></code> inside a workload spec.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><code class="docutils literal"><span class="pre">params</span></code> field is interpreted differently depending on whether it&#8217;s in a
+workload spec or the global section. In a workload spec, it translates to
+<code class="docutils literal"><span class="pre">workload_params</span></code>, in the global section it translates to <code class="docutils literal"><span class="pre">runtime_params</span></code>.</p>
+</div>
+<p>Runtime parameters do not automatically reset at the end of workload spec
+execution, so all subsequent iterations will also be affected unless they
+explicitly change the parameter (in the example above, performance governor will
+also be used for <code class="docutils literal"><span class="pre">memcpy</span></code> and <code class="docutils literal"><span class="pre">cyclictest</span></code>. There are two ways around this:
+either set <code class="docutils literal"><span class="pre">reboot_policy</span></code> WA setting (see <a class="reference internal" href="configuration.html#configuration-specification"><span>Configuration</span></a> section) such that
+the device gets rebooted between spec executions, thus being returned to its
+initial state, or set the default runtime parameter values in the <code class="docutils literal"><span class="pre">global</span></code>
+section of the agenda so that they get set for every spec that doesn&#8217;t
+explicitly override them.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">&#8220;In addition to <code class="docutils literal"><span class="pre">runtime_params</span></code> there are also <code class="docutils literal"><span class="pre">boot_params</span></code> that
+work in a similar way, but they get passed to the device when it
+reboots. At the moment <code class="docutils literal"><span class="pre">TC2</span></code> is the only device that defines a boot
+parameter, which is explained in <code class="docutils literal"><span class="pre">TC2</span></code> documentation, so boot
+parameters will not be mentioned further.</p>
+</div>
+</div>
+<div class="section" id="ids-and-labels">
+<h3>IDs and Labels<a class="headerlink" href="#ids-and-labels" title="Permalink to this headline">¶</a></h3>
+<p>It is possible to list multiple specs with the same workload in an agenda. You
+may wish to this if you want to run a workload with different parameter values
+or under different runtime configurations of the device. The workload name
+therefore does not uniquely identify a spec. To be able to distinguish between
+different specs (e.g. in reported results), each spec has an ID which is unique
+to all specs within an agenda (and therefore with a single WA run). If an ID
+isn&#8217;t explicitly specified using <code class="docutils literal"><span class="pre">id</span></code> field (note that the field name is in
+lower case), one will be automatically assigned to the spec at the beginning of
+the WA run based on the position of the spec within the list. The first spec
+<em>without an explicit ID</em> will be assigned ID <code class="docutils literal"><span class="pre">1</span></code>, the second spec <em>without an
+explicit ID</em>  will be assigned ID <code class="docutils literal"><span class="pre">2</span></code>, and so forth.</p>
+<p>Numerical IDs aren&#8217;t particularly easy to deal with, which is why it is
+recommended that, for non-trivial agendas, you manually set the ids to something
+more meaningful (or use labels &#8211; see below). An ID can be pretty much anything
+that will pass through the YAML parser. The only requirement is that it is
+unique to the agenda. However, is usually better to keep them reasonably short
+(they don&#8217;t need to be <em>globally</em> unique), and to stick with alpha-numeric
+characters and underscores/dashes. While WA can handle other characters as well,
+getting too adventurous with your IDs may cause issues further down the line
+when processing WA results (e.g. when uploading them to a database that may have
+its own restrictions).</p>
+<p>In addition to IDs, you can also specify labels for your workload specs. These
+are similar to IDs but do not have the uniqueness restriction. If specified,
+labels will be used by some result processes instead of (or in addition to) the
+workload name. For example, the <code class="docutils literal"><span class="pre">csv</span></code> result processor will put the label in the
+&#8220;workload&#8221; column of the CSV file.</p>
+<p>It is up to you how you chose to use IDs and labels. WA itself doesn&#8217;t expect
+any particular format (apart from uniqueness for IDs). Below is the earlier
+example updated to specify explicit IDs and label dhrystone spec to reflect
+parameters used.</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">01_dhry</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">label</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone_15over6</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance</span>
+          <span class="l-Scalar-Plain">workload_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">02_memc</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">memcpy</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">03_cycl</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="result-processors-and-instrumentation">
+<h2>Result Processors and Instrumentation<a class="headerlink" href="#result-processors-and-instrumentation" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="result-processors">
+<h3>Result Processors<a class="headerlink" href="#result-processors" title="Permalink to this headline">¶</a></h3>
+<p>Result processors, as the name suggests, handle the processing of results
+generated form running workload specs. By default, WA enables a couple of basic
+result processors (e.g. one generates a csv file with all scores reported by
+workloads), which you can see in <code class="docutils literal"><span class="pre">~/.workload_automation/config.py</span></code>. However,
+WA has a number of other, more specialized, result processors (e.g. for
+uploading to databases). You can list available result processors with
+<code class="docutils literal"><span class="pre">wa</span> <span class="pre">list</span> <span class="pre">result_processors</span></code> command. If you want to permanently enable a
+result processor, you can add it to your <code class="docutils literal"><span class="pre">config.py</span></code>. You can also enable a
+result processor for a particular run by specifying it in the <code class="docutils literal"><span class="pre">config</span></code> section
+in the agenda. As the name suggests, <code class="docutils literal"><span class="pre">config</span></code> section mirrors the structure of
+<code class="docutils literal"><span class="pre">config.py</span></code>(although using YAML rather than Python), and anything that can
+be specified in the latter, can also be specified in the former.</p>
+<p>As with workloads, result processors may have parameters that define their
+behavior. Parameters of result processors are specified a little differently,
+however. Result processor parameter values are listed in the config section,
+namespaced under the name of the result processor.</p>
+<p>For example, suppose we want to be able to easily query the results generated by
+the workload specs we&#8217;ve defined so far. We can use <code class="docutils literal"><span class="pre">sqlite</span></code> result processor
+to have WA create an <a class="reference external" href="http://www.sqlite.org/">sqlite</a> database file with the results. By default, this
+file will be generated in WA&#8217;s output directory (at the same level as
+results.csv); but suppose we want to store the results in the same file for
+every run of the agenda we do. This can be done by specifying an alternative
+database file with <code class="docutils literal"><span class="pre">database</span></code> parameter of the result processor:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">config</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">result_processors</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sqlite</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">sqlite</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">database</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">~/my_wa_results.sqlite</span>
+<span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">01_dhry</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">label</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone_15over6</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance</span>
+          <span class="l-Scalar-Plain">workload_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">02_memc</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">memcpy</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">03_cycl</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+<p>A couple of things to observe here:</p>
+<ul class="simple">
+<li>There is no need to repeat the result processors listed in <code class="docutils literal"><span class="pre">config.py</span></code>. The
+processors listed in <code class="docutils literal"><span class="pre">result_processors</span></code> entry in the agenda will be used
+<em>in addition to</em> those defined in the <code class="docutils literal"><span class="pre">config.py</span></code>.</li>
+<li>The database file is specified under &#8220;sqlite&#8221; entry in the config section.
+Note, however, that this entry alone is not enough to enable the result
+processor, it must be listed in <code class="docutils literal"><span class="pre">result_processors</span></code>, otherwise the &#8220;sqilte&#8221;
+config entry will be ignored.</li>
+<li>The database file must be specified as an absolute path, however it may use
+the user home specifier &#8216;~&#8217; and/or environment variables.</li>
+</ul>
+</div>
+<div class="section" id="instrumentation">
+<h3>Instrumentation<a class="headerlink" href="#instrumentation" title="Permalink to this headline">¶</a></h3>
+<p>WA can enable various &#8220;instruments&#8221; to be used during workload execution.
+Instruments can be quite diverse in their functionality, but the majority of
+instruments available in WA today are there to collect additional data (such as
+trace) from the device during workload execution. You can view the list of
+available instruments by using <code class="docutils literal"><span class="pre">wa</span> <span class="pre">list</span> <span class="pre">instruments</span></code> command. As with result
+processors, a few are enabled by default in the <code class="docutils literal"><span class="pre">config.py</span></code> and additional
+ones may be added in the same place, or specified in the agenda using
+<code class="docutils literal"><span class="pre">instrumentation</span></code> entry.</p>
+<p>For example, we can collect core utilisation statistics (for what proportion of
+workload execution N cores were utilized above a specified threshold) using
+<code class="docutils literal"><span class="pre">coreutil</span></code> instrument.</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">config</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">coreutil</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">coreutil</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threshold</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">80</span>
+        <span class="l-Scalar-Plain">result_processors</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sqlite</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">sqlite</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">database</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">~/my_wa_results.sqlite</span>
+<span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">01_dhry</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">label</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone_15over6</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance</span>
+          <span class="l-Scalar-Plain">workload_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">02_memc</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">memcpy</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">03_cycl</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+<p>Instrumentation isn&#8217;t &#8220;free&#8221; and it is advisable not to have too many
+instruments enabled at once as that might skew results. For example, you don&#8217;t
+want to have power measurement enabled at the same time as event tracing, as the
+latter may prevent cores from going into idle states and thus affecting the
+reading collected by the former.</p>
+<p>Unlike result processors, instrumentation may be enabled (and disabled &#8211; see below)
+on per-spec basis. For example, suppose we want to collect /proc/meminfo from the
+device when we run <code class="docutils literal"><span class="pre">memcpy</span></code> workload, but not for the other two. We can do that using
+<code class="docutils literal"><span class="pre">sysfs_extractor</span></code> instrument, and we will only enable it for <code class="docutils literal"><span class="pre">memcpy</span></code>:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">config</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">coreutil</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">coreutil</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threshold</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">80</span>
+        <span class="l-Scalar-Plain">sysfs_extractor</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">paths</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">/proc/meminfo</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">result_processors</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sqlite</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">sqlite</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">database</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">~/my_wa_results.sqlite</span>
+<span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">01_dhry</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">label</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone_15over6</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance</span>
+          <span class="l-Scalar-Plain">workload_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">02_memc</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">memcpy</span>
+          <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sysfs_extractor</span><span class="p-Indicator">]</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">03_cycl</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+<p>As with <code class="docutils literal"><span class="pre">config</span></code> sections, <code class="docutils literal"><span class="pre">instrumentation</span></code> entry in the spec needs only to
+list additional instruments and does not need to repeat instruments specified
+elsewhere.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">At present, it is only possible to enable/disable instrumentation  on
+per-spec base. It is <em>not</em> possible to provide configuration on
+per-spec basis in the current version of WA (e.g. in our example, it
+is not possible to specify different <code class="docutils literal"><span class="pre">sysfs_extractor</span></code> paths for
+different workloads). This restriction may be lifted in future
+versions of WA.</p>
+</div>
+</div>
+<div class="section" id="disabling-result-processors-and-instrumentation">
+<h3>Disabling result processors and instrumentation<a class="headerlink" href="#disabling-result-processors-and-instrumentation" title="Permalink to this headline">¶</a></h3>
+<p>As seen above, extensions specified with <code class="docutils literal"><span class="pre">instrumentation</span></code> and
+<code class="docutils literal"><span class="pre">result_processor</span></code> clauses get added to those already specified previously.
+Just because an instrument specified in <code class="docutils literal"><span class="pre">config.py</span></code> is not listed in the
+<code class="docutils literal"><span class="pre">config</span></code> section of the agenda, does not mean it will be disabled. If you do
+want to disable an instrument, you can always remove/comment it out from
+<code class="docutils literal"><span class="pre">config.py</span></code>. However that will be introducing a permanent configuration change
+to your environment (one that can be easily reverted, but may be just as
+easily forgotten). If you want to temporarily disable a result processor or an
+instrument for a particular run, you can do that in your agenda by prepending a
+tilde (<code class="docutils literal"><span class="pre">~</span></code>) to its name.</p>
+<p>For example, let&#8217;s say we want to disable <code class="docutils literal"><span class="pre">cpufreq</span></code> instrument enabled in our
+<code class="docutils literal"><span class="pre">config.py</span></code> (suppose we&#8217;re going to send results via email and so want to
+reduce to total size of the output directory):</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">config</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">coreutil</span><span class="p-Indicator">,</span> <span class="nv">~cpufreq</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">coreutil</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threshold</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">80</span>
+        <span class="l-Scalar-Plain">sysfs_extractor</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">paths</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">/proc/meminfo</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">result_processors</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sqlite</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">sqlite</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">database</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">~/my_wa_results.sqlite</span>
+<span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">01_dhry</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">label</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone_15over6</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance</span>
+          <span class="l-Scalar-Plain">workload_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">02_memc</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">memcpy</span>
+          <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sysfs_extractor</span><span class="p-Indicator">]</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">03_cycl</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="sections">
+<h2>Sections<a class="headerlink" href="#sections" title="Permalink to this headline">¶</a></h2>
+<p>It is a common requirement to be able to run the same set of workloads under
+different device configurations. E.g. you may want to investigate impact of
+changing a particular setting to different values on the benchmark scores, or to
+quantify the impact of enabling a particular feature in the kernel. WA allows
+this by defining &#8220;sections&#8221; of configuration with an agenda.</p>
+<p>For example, suppose what we really want, is to measure the impact of using
+interactive cpufreq governor vs the performance governor on the three
+benchmarks. We could create another three workload spec entries similar to the
+ones we already have and change the sysfile value being set to &#8220;interactive&#8221;.
+However, this introduces a lot of duplication; and what if we  want to change
+spec configuration? We would have to change it in multiple places, running the
+risk of forgetting one.</p>
+<p>A better way is to keep the three workload specs and define a section for each
+governor:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">config</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">coreutil</span><span class="p-Indicator">,</span> <span class="nv">~cpufreq</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">coreutil</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threshold</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">80</span>
+        <span class="l-Scalar-Plain">sysfs_extractor</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">paths</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">/proc/meminfo</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">result_processors</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sqlite</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">sqlite</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">database</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">~/my_wa_results.sqlite</span>
+<span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">sections</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">perf</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">inter</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">interactive</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">01_dhry</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">label</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone_15over6</span>
+          <span class="l-Scalar-Plain">workload_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">02_memc</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">memcpy</span>
+          <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sysfs_extractor</span><span class="p-Indicator">]</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">03_cycl</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+<p>A section, just like an workload spec, needs to have a unique ID. Apart from
+that, a &#8220;section&#8221; is similar to the <code class="docutils literal"><span class="pre">global</span></code> section we&#8217;ve already seen &#8211;
+everything that goes into a section will be applied to each workload spec.
+Workload specs defined under top-level <code class="docutils literal"><span class="pre">workloads</span></code> entry will be executed for
+each of the sections listed under <code class="docutils literal"><span class="pre">sections</span></code>.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">It is also possible to have a <code class="docutils literal"><span class="pre">workloads</span></code> entry within a section,
+in which case, those workloads will only be executed for that specific
+section.</p>
+</div>
+<p>In order to maintain the uniqueness requirement of workload spec IDs, they will
+be namespaced under each section by prepending the section ID to the spec ID
+with an under score. So in the agenda above, we no longer have a workload spec
+with ID <code class="docutils literal"><span class="pre">01_dhry</span></code>, instead there are two specs with IDs <code class="docutils literal"><span class="pre">perf_01_dhry</span></code> and
+<code class="docutils literal"><span class="pre">inter_01_dhry</span></code>.</p>
+<p>Note that the <code class="docutils literal"><span class="pre">global</span></code> section still applies to every spec in the agenda. So
+the precedence order is &#8211; spec settings override section settings, which in
+turn override global settings.</p>
+</div>
+<div class="section" id="other-configuration">
+<h2>Other Configuration<a class="headerlink" href="#other-configuration" title="Permalink to this headline">¶</a></h2>
+<p id="configuration-in-agenda">As mentioned previously, <code class="docutils literal"><span class="pre">config</span></code> section in an agenda can contain anything
+that can be defined in <code class="docutils literal"><span class="pre">config.py</span></code> (with Python syntax translated to the
+equivalent YAML). Certain configuration (e.g. <code class="docutils literal"><span class="pre">run_name</span></code>) makes more sense
+to define in an agenda than a config file. Refer to the
+<a class="reference internal" href="configuration.html#configuration-specification"><span>Configuration</span></a> section for details.</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span class="l-Scalar-Plain">config</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">project</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">governor_comparison</span>
+        <span class="l-Scalar-Plain">run_name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance_vs_interactive</span>
+
+        <span class="l-Scalar-Plain">device</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">generic_android</span>
+        <span class="l-Scalar-Plain">reboot_policy</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">never</span>
+
+        <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">coreutil</span><span class="p-Indicator">,</span> <span class="nv">~cpufreq</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">coreutil</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threshold</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">80</span>
+        <span class="l-Scalar-Plain">sysfs_extractor</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">paths</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">/proc/meminfo</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">result_processors</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sqlite</span><span class="p-Indicator">]</span>
+        <span class="l-Scalar-Plain">sqlite</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">database</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">~/my_wa_results.sqlite</span>
+<span class="l-Scalar-Plain">global</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">5</span>
+<span class="l-Scalar-Plain">sections</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">perf</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">performance</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">inter</span>
+          <span class="l-Scalar-Plain">runtime_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">sysfile_values</span><span class="p-Indicator">:</span>
+                        <span class="l-Scalar-Plain">/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">interactive</span>
+<span class="l-Scalar-Plain">workloads</span><span class="p-Indicator">:</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">01_dhry</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone</span>
+          <span class="l-Scalar-Plain">label</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">dhrystone_15over6</span>
+          <span class="l-Scalar-Plain">workload_params</span><span class="p-Indicator">:</span>
+                <span class="l-Scalar-Plain">threads</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">6</span>
+                <span class="l-Scalar-Plain">mloops</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">15</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">02_memc</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">memcpy</span>
+          <span class="l-Scalar-Plain">instrumentation</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">sysfs_extractor</span><span class="p-Indicator">]</span>
+        <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">id</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">03_cycl</span>
+          <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cyclictest</span>
+          <span class="l-Scalar-Plain">iterations</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">10</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Agenda</a><ul>
+<li><a class="reference internal" href="#specifying-which-workloads-to-run">Specifying which workloads to run</a><ul>
+<li><a class="reference internal" href="#multiple-iterations">Multiple iterations</a></li>
+<li><a class="reference internal" href="#configuring-workloads">Configuring workloads</a></li>
+<li><a class="reference internal" href="#ids-and-labels">IDs and Labels</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#result-processors-and-instrumentation">Result Processors and Instrumentation</a><ul>
+<li><a class="reference internal" href="#result-processors">Result Processors</a></li>
+<li><a class="reference internal" href="#instrumentation">Instrumentation</a></li>
+<li><a class="reference internal" href="#disabling-result-processors-and-instrumentation">Disabling result processors and instrumentation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#sections">Sections</a></li>
+<li><a class="reference internal" href="#other-configuration">Other Configuration</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="invocation.html"
+                        title="previous chapter">Commands</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="configuration.html"
+                        title="next chapter">Configuration</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/agenda.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="configuration.html" title="Configuration"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="invocation.html" title="Commands"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

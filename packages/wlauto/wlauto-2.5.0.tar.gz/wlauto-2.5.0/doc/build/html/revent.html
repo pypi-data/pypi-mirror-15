@@ -1,0 +1,218 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>revent &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="index.html" />
+    <link rel="next" title="Contributing Code" href="contributing.html" />
+    <link rel="prev" title="DAQ Server Guide" href="daq_device_setup.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="contributing.html" title="Contributing Code"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="daq_device_setup.html" title="DAQ Server Guide"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="revent">
+<span id="revent-files-creation"></span><h1>revent<a class="headerlink" href="#revent" title="Permalink to this headline">¶</a></h1>
+<p>revent utility can be used to record and later play back a sequence of user
+input events, such as key presses and touch screen taps. This is an alternative
+to Android UI Automator for providing automation for workloads.</p>
+<div class="highlight-python"><div class="highlight"><pre>usage:
+        revent [record time file|replay file|info] [verbose]
+                record: stops after either return on stdin
+                        or time (in seconds)
+                        and stores in file
+                replay: replays eventlog from file
+                info:shows info about each event char device
+                any additional parameters make it verbose
+</pre></div>
+</div>
+<div class="section" id="recording">
+<h2>Recording<a class="headerlink" href="#recording" title="Permalink to this headline">¶</a></h2>
+<p>To record, transfer the revent binary to the device, then invoke <code class="docutils literal"><span class="pre">revent</span>
+<span class="pre">record</span></code>, giving it the time (in seconds) you want to record for, and the
+file you want to record to (WA expects these files to have .revent
+extension):</p>
+<div class="highlight-python"><div class="highlight"><pre>host$  adb push revent /data/local/revent
+host$  adb shell
+device#  cd /data/local
+device#  ./revent record 1000 my_recording.revent
+</pre></div>
+</div>
+<p>The recording has now started and button presses, taps, etc you perform on the
+device will go into the .revent file. The recording will stop after the
+specified time period, and you can also stop it by hitting return in the adb
+shell.</p>
+</div>
+<div class="section" id="replaying">
+<h2>Replaying<a class="headerlink" href="#replaying" title="Permalink to this headline">¶</a></h2>
+<p>To replay a recorded file, run <code class="docutils literal"><span class="pre">revent</span> <span class="pre">replay</span></code> on the device, giving it the
+file you want to replay:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">device</span><span class="c">#  ./revent replay my_recording.revent</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="using-revent-with-workloads">
+<h2>Using revent With Workloads<a class="headerlink" href="#using-revent-with-workloads" title="Permalink to this headline">¶</a></h2>
+<p>Some workloads (pretty much all games) rely on recorded revents for their
+execution. <code class="xref py py-class docutils literal"><span class="pre">wlauto.common.GameWorkload</span></code>-derived workloads expect two
+revent files &#8211; one for performing the initial setup (navigating menus,
+selecting game modes, etc), and one for the actual execution of the game.
+Because revents are very device-specific<a class="footnote-reference" href="#id2" id="id1">[*]</a>, these two files would need to
+be recorded for each device.</p>
+<p>The files must be called <code class="docutils literal"><span class="pre">&lt;device</span> <span class="pre">name&gt;.(setup|run).revent</span></code>, where
+<code class="docutils literal"><span class="pre">&lt;device</span> <span class="pre">name&gt;</span></code> is the name of your device (as defined by the <code class="docutils literal"><span class="pre">name</span></code>
+attribute of your device&#8217;s class). WA will look for these files in two
+places: <code class="docutils literal"><span class="pre">&lt;install</span> <span class="pre">dir&gt;/wlauto/workloads/&lt;workload</span> <span class="pre">name&gt;/revent_files</span></code>
+and <code class="docutils literal"><span class="pre">~/.workload_automation/dependencies/&lt;workload</span> <span class="pre">name&gt;</span></code>. The first
+location is primarily intended for revent files that come with WA (and if
+you did a system-wide install, you&#8217;ll need sudo to add files there), so it&#8217;s
+probably easier to use the second location for the files you record. Also,
+if revent files for a workload exist in both locations, the files under
+<code class="docutils literal"><span class="pre">~/.workload_automation/dependencies</span></code> will be used in favor of those
+installed with WA.</p>
+<p>For example, if you wanted to run angrybirds workload on &#8220;Acme&#8221; device, you would
+record the setup and run revent files using the method outlined in the section
+above and then pull them for the devices into the following locations:</p>
+<div class="highlight-python"><div class="highlight"><pre>~/workload_automation/dependencies/angrybirds/Acme.setup.revent
+~/workload_automation/dependencies/angrybirds/Acme.run.revent
+</pre></div>
+</div>
+<p>(you may need to create the intermediate directories if they don&#8217;t already
+exist).</p>
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[*]</a></td><td>It&#8217;s not just about screen resolution &#8211; the event codes may be different
+even if devices use the same screen.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="revent-vs-uiautomator">
+<h2>revent vs. UiAutomator<a class="headerlink" href="#revent-vs-uiautomator" title="Permalink to this headline">¶</a></h2>
+<p>In general, Android UI Automator is the preferred way of automating user input
+for workloads because, unlike revent, UI Automator does not depend on a
+particular screen resolution, and so is more portable across different devices.
+It also gives better control and can potentially be faster for ling UI
+manipulations, as input events are scripted based on the available UI elements,
+rather than generated by human input.</p>
+<p>On the other hand, revent can be used to manipulate pretty much any workload,
+where as UI Automator only works for Android UI elements (such as text boxes or
+radio buttons), which makes the latter useless for things like games. Recording
+revent sequence is also faster than writing automation code (on the other hand,
+one would need maintain a different revent log for each screen resolution).</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">revent</a><ul>
+<li><a class="reference internal" href="#recording">Recording</a></li>
+<li><a class="reference internal" href="#replaying">Replaying</a></li>
+<li><a class="reference internal" href="#using-revent-with-workloads">Using revent With Workloads</a></li>
+<li><a class="reference internal" href="#revent-vs-uiautomator">revent vs. UiAutomator</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="daq_device_setup.html"
+                        title="previous chapter">DAQ Server Guide</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="contributing.html"
+                        title="next chapter">Contributing Code</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/revent.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="contributing.html" title="Contributing Code"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="daq_device_setup.html" title="DAQ Server Guide"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

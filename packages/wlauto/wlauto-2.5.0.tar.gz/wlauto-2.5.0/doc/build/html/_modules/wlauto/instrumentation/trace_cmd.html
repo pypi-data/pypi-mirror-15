@@ -1,0 +1,416 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.instrumentation.trace_cmd &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="wlauto.instrumentation" href="../instrumentation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" accesskey="U">wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.instrumentation.trace_cmd</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="c"># pylint: disable=W0613,E1101</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Instrument</span><span class="p">,</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Executable</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">InstrumentError</span><span class="p">,</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.core</span> <span class="kn">import</span> <span class="n">signal</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">boolean</span>
+
+<span class="n">OUTPUT_TRACE_FILE</span> <span class="o">=</span> <span class="s">&#39;trace.dat&#39;</span>
+<span class="n">OUTPUT_TEXT_FILE</span> <span class="o">=</span> <span class="s">&#39;{}.txt&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">OUTPUT_TRACE_FILE</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">TIMEOUT</span> <span class="o">=</span> <span class="mi">180</span>
+
+
+<div class="viewcode-block" id="TraceCmdInstrument"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument">[docs]</a><span class="k">class</span> <span class="nc">TraceCmdInstrument</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;trace-cmd&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    trace-cmd is an instrument which interacts with Ftrace Linux kernel internal</span>
+<span class="s">    tracer</span>
+
+<span class="s">    From trace-cmd man page:</span>
+
+<span class="s">    trace-cmd command interacts with the Ftrace tracer that is built inside the</span>
+<span class="s">    Linux kernel. It interfaces with the Ftrace specific files found in the</span>
+<span class="s">    debugfs file system under the tracing directory.</span>
+
+<span class="s">    trace-cmd reads a list of events it will trace, which can be specified in</span>
+<span class="s">    the config file as follows ::</span>
+
+<span class="s">        trace_events = [&#39;irq*&#39;, &#39;power*&#39;]</span>
+
+<span class="s">    If no event is specified in the config file, trace-cmd traces the following events:</span>
+
+<span class="s">        - sched*</span>
+<span class="s">        - irq*</span>
+<span class="s">        - power*</span>
+<span class="s">        - cpufreq_interactive*</span>
+
+<span class="s">    The list of available events can be obtained by rooting and running the following</span>
+<span class="s">    command line on the device ::</span>
+
+<span class="s">       trace-cmd list</span>
+
+<span class="s">    You may also specify ``trace_buffer_size`` setting which must be an integer that will</span>
+<span class="s">    be used to set the ftrace buffer size. It will be interpreted as KB::</span>
+
+<span class="s">        trace_cmd_buffer_size = 8000</span>
+
+<span class="s">    The maximum buffer size varies from device to device, but there is a maximum and trying</span>
+<span class="s">    to set buffer size beyound that will fail. If you plan on collecting a lot of trace over</span>
+<span class="s">    long periods of time, the buffer size will not be enough and you will only get trace for</span>
+<span class="s">    the last portion of your run. To deal with this you can set the ``trace_mode`` setting to</span>
+<span class="s">    ``&#39;record&#39;`` (the default is ``&#39;start&#39;``)::</span>
+
+<span class="s">        trace_cmd_mode = &#39;record&#39;</span>
+
+<span class="s">    This will cause trace-cmd to trace into file(s) on disk, rather than the buffer, and so the</span>
+<span class="s">    limit for the max size of the trace is set by the storage available on device. Bear in mind</span>
+<span class="s">    that ``&#39;record&#39;`` mode *is* more instrusive than the default, so if you do not plan on</span>
+<span class="s">    generating a lot of trace, it is best to use the default ``&#39;start&#39;`` mode.</span>
+
+<span class="s">    .. note:: Mode names correspend to the underlying trace-cmd exectuable&#39;s command used to</span>
+<span class="s">              implement them. You can find out more about what is happening in each case from</span>
+<span class="s">              trace-cmd documentation: https://lwn.net/Articles/341902/.</span>
+
+<span class="s">    This instrument comes with an Android trace-cmd binary that will be copied and used on the</span>
+<span class="s">    device, however post-processing will be done on-host and you must have trace-cmd installed and</span>
+<span class="s">    in your path. On Ubuntu systems, this may be done with::</span>
+
+<span class="s">        sudo apt-get install trace-cmd</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;events&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">list</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;sched*&#39;</span><span class="p">,</span> <span class="s">&#39;irq*&#39;</span><span class="p">,</span> <span class="s">&#39;power*&#39;</span><span class="p">,</span> <span class="s">&#39;cpufreq_interactive*&#39;</span><span class="p">],</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;trace_events&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specifies the list of events to be traced. Each event in the list will be passed to</span>
+<span class="s">                  trace-cmd with -e parameter and must be in the format accepted by trace-cmd.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;mode&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;start&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;start&#39;</span><span class="p">,</span> <span class="s">&#39;record&#39;</span><span class="p">],</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;trace_mode&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Trace can be collected using either &#39;start&#39; or &#39;record&#39; trace-cmd</span>
+<span class="s">                  commands. In &#39;start&#39; mode, trace will be collected into the ftrace buffer;</span>
+<span class="s">                  in &#39;record&#39; mode, trace will be written into a file on the device&#39;s file</span>
+<span class="s">                  system. &#39;start&#39; mode is (in theory) less intrusive than &#39;record&#39; mode, however</span>
+<span class="s">                  it is limited by the size of the ftrace buffer (which is configurable --</span>
+<span class="s">                  see ``buffer_size`` -- but only up to a point) and that may overflow</span>
+<span class="s">                  for long-running workloads, which will result in dropped events.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;buffer_size&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;trace_buffer_size&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Attempt to set ftrace buffer size to the specified value (in KB). Default buffer size</span>
+<span class="s">                  may need to be increased for long-running workloads, or if a large number</span>
+<span class="s">                  of events have been enabled. Note: there is a maximum size that the buffer can</span>
+<span class="s">                  be set, and that varies from device to device. Attempting to set buffer size higher</span>
+<span class="s">                  than this will fail. In that case, this instrument will set the size to the highest</span>
+<span class="s">                  possible value by going down from the specified size in ``buffer_size_step`` intervals.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;buffer_size_step&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;trace_buffer_size_step&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Defines the decremental step used if the specified ``buffer_size`` could not be set.</span>
+<span class="s">                  This will be subtracted form the buffer size until set succeeds or size is reduced to</span>
+<span class="s">                  1MB.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;buffer_size_file&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/sys/kernel/debug/tracing/buffer_size_kb&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Path to the debugs file that may be used to set ftrace buffer size. This should need</span>
+<span class="s">                  to be modified for the vast majority devices.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;report&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Specifies whether host-side reporting should be performed once the binary trace has been</span>
+<span class="s">                  pulled form the device.</span>
+
+<span class="s">                  .. note:: This requires the latest version of trace-cmd to be installed on the host (the</span>
+<span class="s">                            one in your distribution&#39;s repos may be too old).</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;no_install&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">boolean</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Do not install the bundled trace-cmd  and use the one on the device instead. If there is</span>
+<span class="s">                  not already a trace-cmd on the device, an error is raised.</span>
+
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">TraceCmdInstrument</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_string</span> <span class="o">=</span> <span class="n">_build_trace_events</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">OUTPUT_TRACE_FILE</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">temp_trace_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">OUTPUT_TRACE_FILE</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TraceCmdInstrument.on_run_init"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.on_run_init">[docs]</a>    <span class="k">def</span> <span class="nf">on_run_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">is_rooted</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;trace-cmd instrument cannot be used on an unrooted device.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">no_install</span><span class="p">:</span>
+            <span class="n">host_file</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Executable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">abi</span><span class="p">,</span> <span class="s">&#39;trace-cmd&#39;</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">install_executable</span><span class="p">(</span><span class="n">host_file</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">is_installed</span><span class="p">(</span><span class="s">&#39;trace-cmd&#39;</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;No trace-cmd found on device and no_install=True is specified.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span> <span class="o">=</span> <span class="s">&#39;trace-cmd&#39;</span>
+        <span class="c"># Register ourselves as absolute last event before and</span>
+        <span class="c">#   first after so we can mark the trace at the right time</span>
+        <span class="n">signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">insert_start_mark</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">BEFORE_WORKLOAD_EXECUTION</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
+        <span class="n">signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">insert_end_mark</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">AFTER_WORKLOAD_EXECUTION</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TraceCmdInstrument.setup"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;start&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffer_size</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_set_buffer_size</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;{} reset&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">180</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;record&#39;</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Bad mode: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">))</span>  <span class="c"># should never get here</span>
+</div>
+<div class="viewcode-block" id="TraceCmdInstrument.very_slow_start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.very_slow_start">[docs]</a>    <span class="k">def</span> <span class="nf">very_slow_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>  <span class="c"># pylint: disable=attribute-defined-outside-init</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;start&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;{} start {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_string</span><span class="p">),</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;record&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">kick_off</span><span class="p">(</span><span class="s">&#39;{} record -o {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_file</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_string</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Bad mode: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">))</span>  <span class="c"># should never get here</span>
+</div>
+<div class="viewcode-block" id="TraceCmdInstrument.stop"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>  <span class="c"># pylint: disable=attribute-defined-outside-init</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;start&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;{} stop&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;record&#39;</span><span class="p">:</span>
+            <span class="c"># There will be a trace-cmd worker process per CPU core plus a main</span>
+            <span class="c"># control trace-cmd process. Interrupting the control process will</span>
+            <span class="c"># trigger the generation of the single binary trace file.</span>
+            <span class="n">trace_cmds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">ps</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">trace_cmds</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;Could not find running trace-cmd on device.&#39;</span><span class="p">)</span>
+            <span class="c"># The workers will have their PPID set to the PID of control.</span>
+            <span class="n">parent_map</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">trace_cmds</span><span class="p">:</span>
+                <span class="n">parent_map</span><span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">ppid</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">pid</span><span class="p">)</span>
+            <span class="n">controls</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">parent_map</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()</span>
+                        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">parent_map</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">controls</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;More than one trace-cmd instance found; stopping all of them.&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">controls</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">kill</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">signal</span><span class="o">=</span><span class="s">&#39;INT&#39;</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Bad mode: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">))</span>  <span class="c"># should never get here</span>
+</div>
+<div class="viewcode-block" id="TraceCmdInstrument.update_result"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>  <span class="c"># NOQA pylint: disable=R0912</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;start&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&#39;{} extract -o {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_file</span><span class="p">),</span>
+                                <span class="n">timeout</span><span class="o">=</span><span class="n">TIMEOUT</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;record&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for trace.dat to be generated.&#39;</span><span class="p">)</span>
+            <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">ps</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">trace_cmd</span><span class="p">):</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Bad mode: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">))</span>  <span class="c"># should never get here</span>
+
+        <span class="c"># The size of trace.dat will depend on how long trace-cmd was running.</span>
+        <span class="c"># Therefore timout for the pull command must also be adjusted</span>
+        <span class="c"># accordingly.</span>
+        <span class="n">pull_timeout</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stop_time</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_file</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">pull_timeout</span><span class="p">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">add_iteration_artifact</span><span class="p">(</span><span class="s">&#39;bintrace&#39;</span><span class="p">,</span> <span class="n">OUTPUT_TRACE_FILE</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">,</span>
+                                       <span class="n">description</span><span class="o">=</span><span class="s">&#39;trace-cmd generated ftrace dump.&#39;</span><span class="p">)</span>
+
+        <span class="n">local_trace_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">OUTPUT_TRACE_FILE</span><span class="p">)</span>
+        <span class="n">local_txt_trace_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">output_directory</span><span class="p">,</span> <span class="n">OUTPUT_TEXT_FILE</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">report</span><span class="p">:</span>
+            <span class="c"># To get the output of trace.dat, trace-cmd must be installed</span>
+            <span class="c"># This is done host-side because the generated file is very large</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">local_trace_file</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Not generating trace.txt, as {} does not exist.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">OUTPUT_TRACE_FILE</span><span class="p">))</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;trace-cmd report {} &gt; {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">local_trace_file</span><span class="p">,</span> <span class="n">local_txt_trace_file</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+                <span class="n">process</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                <span class="n">_</span><span class="p">,</span> <span class="n">error</span> <span class="o">=</span> <span class="n">process</span><span class="o">.</span><span class="n">communicate</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">process</span><span class="o">.</span><span class="n">returncode</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;trace-cmd returned non-zero exit code {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">process</span><span class="o">.</span><span class="n">returncode</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">error</span><span class="p">:</span>
+                    <span class="c"># logged at debug level, as trace-cmd always outputs some</span>
+                    <span class="c"># errors that seem benign.</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">local_txt_trace_file</span><span class="p">):</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">add_iteration_artifact</span><span class="p">(</span><span class="s">&#39;txttrace&#39;</span><span class="p">,</span> <span class="n">OUTPUT_TEXT_FILE</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s">&#39;export&#39;</span><span class="p">,</span>
+                                                   <span class="n">description</span><span class="o">=</span><span class="s">&#39;trace-cmd generated ftrace dump.&#39;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Verifying traces.&#39;</span><span class="p">)</span>
+                    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">local_txt_trace_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+                            <span class="k">if</span> <span class="s">&#39;EVENTS DROPPED&#39;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Dropped events detected.&#39;</span><span class="p">)</span>
+                                <span class="k">break</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Trace verified.&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Could not generate trace.txt.&#39;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;Could not find trace-cmd. Please make sure it is installed and is in PATH.&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TraceCmdInstrument.teardown"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.teardown">[docs]</a>    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">working_directory</span><span class="p">,</span> <span class="n">OUTPUT_TRACE_FILE</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="TraceCmdInstrument.on_run_end"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.on_run_end">[docs]</a>    <span class="k">def</span> <span class="nf">on_run_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">report</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&#39;which trace-cmd &gt; /dev/null&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;trace-cmd is not in PATH; is it installed?&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffer_size</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;record&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;trace_buffer_size specified with record mode; it will be ignored.&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_size</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;trace_buffer_size must be an int.&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TraceCmdInstrument.insert_start_mark"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.insert_start_mark">[docs]</a>    <span class="k">def</span> <span class="nf">insert_start_mark</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="c"># trace marker appears in ftrace as an ftrace/print event with TRACE_MARKER_START in info field</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="s">&quot;/sys/kernel/debug/tracing/trace_marker&quot;</span><span class="p">,</span> <span class="s">&quot;TRACE_MARKER_START&quot;</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TraceCmdInstrument.insert_end_mark"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.trace_cmd.html#wlauto.instrumentation.trace_cmd.TraceCmdInstrument.insert_end_mark">[docs]</a>    <span class="k">def</span> <span class="nf">insert_end_mark</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="c"># trace marker appears in ftrace as an ftrace/print event with TRACE_MARKER_STOP in info field</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="s">&quot;/sys/kernel/debug/tracing/trace_marker&quot;</span><span class="p">,</span> <span class="s">&quot;TRACE_MARKER_STOP&quot;</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_set_buffer_size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">target_buffer_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffer_size</span>
+        <span class="n">attempt_buffer_size</span> <span class="o">=</span> <span class="n">target_buffer_size</span>
+        <span class="n">buffer_size</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">floor</span> <span class="o">=</span> <span class="mi">1000</span> <span class="k">if</span> <span class="n">target_buffer_size</span> <span class="o">&gt;</span> <span class="mi">1000</span> <span class="k">else</span> <span class="n">target_buffer_size</span>
+        <span class="k">while</span> <span class="n">attempt_buffer_size</span> <span class="o">&gt;=</span> <span class="n">floor</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_size_file</span><span class="p">,</span> <span class="n">attempt_buffer_size</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">buffer_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_size_file</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">buffer_size</span> <span class="o">==</span> <span class="n">attempt_buffer_size</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">attempt_buffer_size</span> <span class="o">-=</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffer_size_step</span>
+        <span class="k">if</span> <span class="n">buffer_size</span> <span class="o">==</span> <span class="n">target_buffer_size</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">while</span> <span class="n">attempt_buffer_size</span> <span class="o">&lt;</span> <span class="n">target_buffer_size</span><span class="p">:</span>
+            <span class="n">attempt_buffer_size</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffer_size_step</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">set_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_size_file</span><span class="p">,</span> <span class="n">attempt_buffer_size</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">buffer_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">get_sysfile_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_size_file</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">attempt_buffer_size</span> <span class="o">!=</span> <span class="n">buffer_size</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Failed to set trace buffer size to {}, value set was {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">target_buffer_size</span><span class="p">,</span> <span class="n">buffer_size</span><span class="p">))</span>
+                <span class="k">break</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_build_trace_events</span><span class="p">(</span><span class="n">events</span><span class="p">):</span>
+    <span class="n">event_string</span> <span class="o">=</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&#39;-e {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">event_string</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" >wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

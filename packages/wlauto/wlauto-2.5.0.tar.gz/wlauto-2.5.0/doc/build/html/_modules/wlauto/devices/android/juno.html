@@ -1,0 +1,315 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.devices.android.juno &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.devices.android.juno</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="c"># pylint: disable=E1101</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">import</span> <span class="nn">pexpect</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">BigLittleDevice</span><span class="p">,</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">DeviceError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.serial_port</span> <span class="kn">import</span> <span class="n">open_serial_connection</span><span class="p">,</span> <span class="n">pulse_dtr</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.android</span> <span class="kn">import</span> <span class="n">adb_connect</span><span class="p">,</span> <span class="n">adb_disconnect</span><span class="p">,</span> <span class="n">adb_list_devices</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.uefi</span> <span class="kn">import</span> <span class="n">UefiMenu</span><span class="p">,</span> <span class="n">UefiConfig</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.uboot</span> <span class="kn">import</span> <span class="n">UbootMenu</span>
+
+
+<span class="n">AUTOSTART_MESSAGE</span> <span class="o">=</span> <span class="s">&#39;Press Enter to stop auto boot...&#39;</span>
+
+
+<div class="viewcode-block" id="Juno"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.juno.html#wlauto.devices.android.juno.Juno">[docs]</a><span class="k">class</span> <span class="nc">Juno</span><span class="p">(</span><span class="n">BigLittleDevice</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;juno&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    ARM Juno next generation big.LITTLE development platform.</span>
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">capabilities</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;reset_power&#39;</span><span class="p">]</span>
+
+    <span class="n">has_gpu</span> <span class="o">=</span> <span class="bp">True</span>
+
+    <span class="n">core_modules</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s">&#39;vexpress&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;retries&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;Specifies the number of times the device will attempt to recover</span>
+<span class="s">                                 (normally, with a hard reset) if it detects that something went wrong.&quot;&quot;&quot;</span><span class="p">),</span>
+
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;microsd_mount_point&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/media/JUNO&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;Location at which the device</span><span class="se">\&#39;</span><span class="s">s MicroSD card will be mounted.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;port&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;/dev/ttyS0&#39;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&#39;Serial port on which the device is connected.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;baudrate&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">115200</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&#39;Serial connection baud.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;timeout&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&#39;Serial connection timeout.&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;core_names&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;a53&#39;</span><span class="p">,</span> <span class="s">&#39;a53&#39;</span><span class="p">,</span> <span class="s">&#39;a53&#39;</span><span class="p">,</span> <span class="s">&#39;a53&#39;</span><span class="p">,</span> <span class="s">&#39;a57&#39;</span><span class="p">,</span> <span class="s">&#39;a57&#39;</span><span class="p">],</span> <span class="n">override</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;core_clusters&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">override</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;bootloader&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;uefi&#39;</span><span class="p">,</span> <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;uefi&#39;</span><span class="p">,</span> <span class="s">&#39;u-boot&#39;</span><span class="p">],</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;Bootloader used on the device.&quot;&quot;&quot;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;actually_disconnect&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">                  Actually perfom &quot;adb disconnect&quot; on closing the connection to the device.</span>
+<span class="s">                  &quot;&quot;&quot;</span><span class="p">),</span>
+
+        <span class="c"># VExpress flasher expects a device to have these:</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;uefi_entry&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;WA&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The name of the entry to use (will be created if does not exist).&#39;</span><span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;uefi_config&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">UefiConfig</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39;Specifies the configuration for the UEFI entry for his device. In an</span>
+<span class="s">                                 entry specified by ``uefi_entry`` parameter doesn&#39;t exist in UEFI menu,</span>
+<span class="s">                                 it will be created using this config. This configuration will also be</span>
+<span class="s">                                 used, when flashing new images.&#39;&#39;&#39;</span><span class="p">,</span>
+                  <span class="n">default</span><span class="o">=</span><span class="p">{</span>
+                      <span class="s">&#39;image_name&#39;</span><span class="p">:</span> <span class="s">&#39;Image&#39;</span><span class="p">,</span>
+                      <span class="s">&#39;image_args&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span>  <span class="c"># populated from bootargs if not specified</span>
+                      <span class="s">&#39;fdt_support&#39;</span><span class="p">:</span> <span class="bp">True</span><span class="p">,</span>
+                  <span class="p">}</span>
+                  <span class="p">),</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;bootargs&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;console=ttyAMA0,115200 earlyprintk=pl011,0x7ff80000 &#39;</span>
+                                      <span class="s">&#39;verbose debug init=/init root=/dev/sda1 rw ip=dhcp &#39;</span>
+                                      <span class="s">&#39;rootwait video=DVI-D-1:1920x1080R@60&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;&#39;&#39;Default boot arguments to use when boot_arguments were not.&#39;&#39;&#39;</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">short_delay</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">firmware_prompt</span> <span class="o">=</span> <span class="s">&#39;Cmd&gt;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">uefi_config</span><span class="o">.</span><span class="n">image_args</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">uefi_config</span><span class="o">.</span><span class="n">image_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bootargs</span>
+
+<div class="viewcode-block" id="Juno.boot"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.juno.html#wlauto.devices.android.juno.Juno.boot">[docs]</a>    <span class="k">def</span> <span class="nf">boot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bootargs</span> <span class="o">=</span> <span class="n">kwargs</span>  <span class="c"># pylint: disable=attribute-defined-outside-init</span>
+        <span class="k">if</span> <span class="n">hard</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Performing a hard reset.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hard_reset</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Resetting the device.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bootloader</span> <span class="o">==</span> <span class="s">&#39;uefi&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_boot_via_uefi</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_boot_via_uboot</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">bootargs</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_boot_via_uboot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="c"># Standard linaro configuration will proceed directly to the kernel</span>
+            <span class="k">return</span>
+        <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+                                    <span class="n">baudrate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">baudrate</span><span class="p">,</span>
+                                    <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+                                    <span class="n">init_dtr</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">target</span><span class="p">:</span>
+            <span class="n">menu</span> <span class="o">=</span> <span class="n">UbootMenu</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for U-Boot prompt...&#39;</span><span class="p">)</span>
+            <span class="n">menu</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">var</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                <span class="n">menu</span><span class="o">.</span><span class="n">setenv</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="n">menu</span><span class="o">.</span><span class="n">boot</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_boot_via_uefi</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+                                    <span class="n">baudrate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">baudrate</span><span class="p">,</span>
+                                    <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+                                    <span class="n">init_dtr</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">target</span><span class="p">:</span>
+            <span class="n">menu</span> <span class="o">=</span> <span class="n">UefiMenu</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for UEFI menu...&#39;</span><span class="p">)</span>
+            <span class="n">menu</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">120</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">menu</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">LookupError</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;{} UEFI entry not found.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Attempting to create one using default flasher configuration.&#39;</span><span class="p">)</span>
+                <span class="n">menu</span><span class="o">.</span><span class="n">create_entry</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">uefi_config</span><span class="p">)</span>
+                <span class="n">menu</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for the Android prompt.&#39;</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">android_prompt</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Juno.connect"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.juno.html#wlauto.devices.android.juno.Juno.connect">[docs]</a>    <span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">:</span>  <span class="c"># pylint: disable=E0203</span>
+                <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+                                            <span class="n">port</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+                                            <span class="n">baudrate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">baudrate</span><span class="p">,</span>
+                                            <span class="n">init_dtr</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">target</span><span class="p">:</span>
+                    <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for the Android prompt.&#39;</span><span class="p">)</span>
+                    <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">android_prompt</span><span class="p">)</span>
+
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for IP address...&#39;</span><span class="p">)</span>
+                    <span class="n">wait_start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                    <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                        <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;ip addr list eth0&#39;</span><span class="p">)</span>
+                        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;inet ([1-9]\d*.\d+.\d+.\d+)&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="s">&#39;:5555&#39;</span>  <span class="c"># pylint: disable=W0201</span>
+                            <span class="k">break</span>
+                        <span class="k">except</span> <span class="n">pexpect</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+                            <span class="k">pass</span>  <span class="c"># We have our own timeout -- see below.</span>
+                        <span class="k">if</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">wait_start_time</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">ready_timeout</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Could not acquire IP address.&#39;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="ow">in</span> <span class="n">adb_list_devices</span><span class="p">():</span>
+                <span class="n">adb_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">)</span>
+            <span class="n">adb_connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">Juno</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>  <span class="c"># wait for boot to complete etc.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+<div class="viewcode-block" id="Juno.disconnect"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.juno.html#wlauto.devices.android.juno.Juno.disconnect">[docs]</a>    <span class="k">def</span> <span class="nf">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">Juno</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">actually_disconnect</span><span class="p">:</span>
+                <span class="n">adb_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_is_ready</span> <span class="o">=</span> <span class="bp">False</span>
+</div>
+<div class="viewcode-block" id="Juno.reset"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.juno.html#wlauto.devices.android.juno.Juno.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Currently, reboot is not working in Android on Juno, so</span>
+        <span class="c"># perfrom a ahard reset instead</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hard_reset</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Juno.hard_reset"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.juno.html#wlauto.devices.android.juno.Juno.hard_reset">[docs]</a>    <span class="k">def</span> <span class="nf">hard_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">adb_name</span> <span class="o">=</span> <span class="bp">None</span>  <span class="c"># Force re-acquire IP address on reboot. pylint: disable=attribute-defined-outside-init</span>
+        <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+                                    <span class="n">baudrate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">baudrate</span><span class="p">,</span>
+                                    <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+                                    <span class="n">init_dtr</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                                    <span class="n">get_conn</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span> <span class="k">as</span> <span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">conn</span><span class="p">):</span>
+            <span class="n">pulse_dtr</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>  <span class="c"># TRM specifies a pulse of &gt;=100ms</span>
+
+            <span class="n">i</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="n">AUTOSTART_MESSAGE</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">firmware_prompt</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Saw firmware prompt.&#39;</span><span class="p">)</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">short_delay</span><span class="p">)</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;reboot&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Saw auto boot message.&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Juno.wait_for_microsd_mount_point"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.juno.html#wlauto.devices.android.juno.Juno.wait_for_microsd_mount_point">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_microsd_mount_point</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">attempts</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">retries</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">microsd_mount_point</span><span class="p">,</span> <span class="s">&#39;config.txt&#39;</span><span class="p">)):</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Waiting for VExpress MicroSD to mount...&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">attempts</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">:</span>  <span class="c"># Do not reboot on the first attempt.</span>
+                <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;reboot&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">timeout</span><span class="p">):</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">short_delay</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">microsd_mount_point</span><span class="p">,</span> <span class="s">&#39;config.txt&#39;</span><span class="p">)):</span>
+                    <span class="k">return</span>
+        <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Did not detect MicroSD mount on {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">microsd_mount_point</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Juno.get_android_id"><a class="viewcode-back" href="../../../../api/wlauto.devices.android.juno.html#wlauto.devices.android.juno.Juno.get_android_id">[docs]</a>    <span class="k">def</span> <span class="nf">get_android_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Android ID currenlty not set properly in Juno Android builds.</span>
+        <span class="k">return</span> <span class="s">&#39;abad1deadeadbeef&#39;</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.utils.ssh &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.utils.ssh</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">stat</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+
+<span class="kn">from</span> <span class="nn">pexpect</span> <span class="kn">import</span> <span class="n">EOF</span><span class="p">,</span> <span class="n">TIMEOUT</span><span class="p">,</span> <span class="n">spawn</span><span class="p">,</span> <span class="n">pxssh</span>
+
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">HostError</span><span class="p">,</span> <span class="n">DeviceError</span><span class="p">,</span> <span class="n">TimeoutError</span><span class="p">,</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">which</span><span class="p">,</span> <span class="n">strip_bash_colors</span><span class="p">,</span> <span class="n">escape_single_quotes</span><span class="p">,</span> <span class="n">check_output</span>
+
+
+<span class="n">ssh</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="n">scp</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="n">sshpass</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;ssh&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ssh_get_shell"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.ssh_get_shell">[docs]</a><span class="k">def</span> <span class="nf">ssh_get_shell</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">username</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">keyfile</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">telnet</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="n">_check_env</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">telnet</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">keyfile</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;keyfile may not be used with a telnet connection.&#39;</span><span class="p">)</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="n">TelnetConnection</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c"># ssh</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="n">pxssh</span><span class="o">.</span><span class="n">pxssh</span><span class="p">()</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">keyfile</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">username</span><span class="p">,</span> <span class="n">ssh_key</span><span class="o">=</span><span class="n">keyfile</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">,</span> <span class="n">login_timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">username</span><span class="p">,</span> <span class="n">password</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">,</span> <span class="n">login_timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">EOF</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="s">&#39;Could not connect to {}; is the host name correct?&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">host</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">conn</span>
+
+</div>
+<div class="viewcode-block" id="TelnetConnection"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.TelnetConnection">[docs]</a><span class="k">class</span> <span class="nc">TelnetConnection</span><span class="p">(</span><span class="n">pxssh</span><span class="o">.</span><span class="n">pxssh</span><span class="p">):</span>
+    <span class="c"># pylint: disable=arguments-differ</span>
+
+<div class="viewcode-block" id="TelnetConnection.login"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.TelnetConnection.login">[docs]</a>    <span class="k">def</span> <span class="nf">login</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="n">username</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">original_prompt</span><span class="o">=</span><span class="s">r&#39;[#$]&#39;</span><span class="p">,</span> <span class="n">login_timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+              <span class="n">auto_prompt_reset</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">sync_multiplier</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">23</span><span class="p">):</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="s">&#39;telnet -l {} {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">username</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="n">port</span><span class="p">)</span>
+
+        <span class="n">spawn</span><span class="o">.</span><span class="n">_spawn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cmd</span><span class="p">)</span>  <span class="c"># pylint: disable=protected-access</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&#39;(?i)(?:password)&#39;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">login_timeout</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">password</span><span class="p">)</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expect</span><span class="p">([</span><span class="n">original_prompt</span><span class="p">,</span> <span class="s">&#39;Login incorrect&#39;</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="n">login_timeout</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">pxssh</span><span class="o">.</span><span class="n">ExceptionPxssh</span><span class="p">(</span><span class="s">&#39;could not log in: password was incorrect&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">TIMEOUT</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">password</span><span class="p">:</span>
+                <span class="c"># There was no password prompt before TIMEOUT, and we didn&#39;t</span>
+                <span class="c"># have a password to enter. Assume everything is OK.</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">pxssh</span><span class="o">.</span><span class="n">ExceptionPxssh</span><span class="p">(</span><span class="s">&#39;could not log in: did not see a password prompt&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">sync_original_prompt</span><span class="p">(</span><span class="n">sync_multiplier</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">raise</span> <span class="n">pxssh</span><span class="o">.</span><span class="n">ExceptionPxssh</span><span class="p">(</span><span class="s">&#39;could not synchronize with original prompt&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">auto_prompt_reset</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_unique_prompt</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;could not set shell prompt (recieved: {}, expected: {}).&#39;</span>
+                <span class="k">raise</span> <span class="n">pxssh</span><span class="o">.</span><span class="n">ExceptionPxssh</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">PROMPT</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+</div></div>
+<div class="viewcode-block" id="check_keyfile"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.check_keyfile">[docs]</a><span class="k">def</span> <span class="nf">check_keyfile</span><span class="p">(</span><span class="n">keyfile</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    keyfile must have the right access premissions in order to be useable. If the specified</span>
+<span class="sd">    file doesn&#39;t, create a temporary copy and set the right permissions for that.</span>
+
+<span class="sd">    Returns either the ``keyfile`` (if the permissions on it are correct) or the path to a</span>
+<span class="sd">    temporary copy with the right permissions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">desired_mask</span> <span class="o">=</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IWUSR</span> <span class="o">|</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IRUSR</span>
+    <span class="n">actual_mask</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">stat</span><span class="p">(</span><span class="n">keyfile</span><span class="p">)</span><span class="o">.</span><span class="n">st_mode</span> <span class="o">&amp;</span> <span class="mh">0xFF</span>
+    <span class="k">if</span> <span class="n">actual_mask</span> <span class="o">!=</span> <span class="n">desired_mask</span><span class="p">:</span>
+        <span class="n">tmp_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">gettempdir</span><span class="p">(),</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">keyfile</span><span class="p">))</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">keyfile</span><span class="p">,</span> <span class="n">tmp_file</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">tmp_file</span><span class="p">,</span> <span class="n">desired_mask</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tmp_file</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c"># permissions on keyfile are OK</span>
+        <span class="k">return</span> <span class="n">keyfile</span>
+
+</div>
+<div class="viewcode-block" id="SshShell"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell">[docs]</a><span class="k">class</span> <span class="nc">SshShell</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">default_password_prompt</span> <span class="o">=</span> <span class="s">&#39;[sudo] password&#39;</span>
+    <span class="n">max_cancel_attempts</span> <span class="o">=</span> <span class="mi">5</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">password_prompt</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">telnet</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">password_prompt</span> <span class="o">=</span> <span class="n">password_prompt</span> <span class="k">if</span> <span class="n">password_prompt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_password_prompt</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">=</span> <span class="n">timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">telnet</span> <span class="o">=</span> <span class="n">telnet</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conn</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection_lost</span> <span class="o">=</span> <span class="bp">False</span>
+
+<div class="viewcode-block" id="SshShell.login"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell.login">[docs]</a>    <span class="k">def</span> <span class="nf">login</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">username</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">keyfile</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="c"># pylint: disable=attribute-defined-outside-init</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Logging in {}@{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">username</span><span class="p">,</span> <span class="n">host</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">host</span> <span class="o">=</span> <span class="n">host</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">username</span> <span class="o">=</span> <span class="n">username</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">password</span> <span class="o">=</span> <span class="n">password</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">keyfile</span> <span class="o">=</span> <span class="n">check_keyfile</span><span class="p">(</span><span class="n">keyfile</span><span class="p">)</span> <span class="k">if</span> <span class="n">keyfile</span> <span class="k">else</span> <span class="n">keyfile</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">port</span> <span class="o">=</span> <span class="n">port</span>
+        <span class="n">timeout</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="k">if</span> <span class="n">timeout</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conn</span> <span class="o">=</span> <span class="n">ssh_get_shell</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">username</span><span class="p">,</span> <span class="n">password</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">keyfile</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">timeout</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">telnet</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SshShell.push_file"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell.push_file">[docs]</a>    <span class="k">def</span> <span class="nf">push_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+        <span class="n">dest</span> <span class="o">=</span> <span class="s">&#39;{}@{}:{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">dest</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_scp</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SshShell.pull_file"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell.pull_file">[docs]</a>    <span class="k">def</span> <span class="nf">pull_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="s">&#39;{}@{}:{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_scp</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SshShell.background"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell.background">[docs]</a>    <span class="k">def</span> <span class="nf">background</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span> <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">):</span>
+        <span class="n">port_string</span> <span class="o">=</span> <span class="s">&#39;-p {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span> <span class="k">else</span> <span class="s">&#39;&#39;</span>
+        <span class="n">keyfile_string</span> <span class="o">=</span> <span class="s">&#39;-i {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">keyfile</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">keyfile</span> <span class="k">else</span> <span class="s">&#39;&#39;</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;{} {} {} {}@{} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ssh</span><span class="p">,</span> <span class="n">keyfile_string</span><span class="p">,</span> <span class="n">port_string</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">command</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="n">_give_password</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">,</span> <span class="n">command</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="o">=</span><span class="n">stderr</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SshShell.reconnect"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell.reconnect">[docs]</a>    <span class="k">def</span> <span class="nf">reconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conn</span> <span class="o">=</span> <span class="n">ssh_get_shell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">,</span>
+                                  <span class="bp">self</span><span class="o">.</span><span class="n">keyfile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">telnet</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SshShell.execute"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell.execute">[docs]</a>    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">check_exit_code</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">strip_colors</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection_lost</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Attempting to reconnect...&#39;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">reconnect</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">connection_lost</span> <span class="o">=</span> <span class="bp">False</span>
+                <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_execute_and_wait_for_prompt</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="p">,</span> <span class="n">as_root</span><span class="p">,</span> <span class="n">strip_colors</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">check_exit_code</span><span class="p">:</span>
+                    <span class="n">exit_code_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_execute_and_wait_for_prompt</span><span class="p">(</span><span class="s">&#39;echo $?&#39;</span><span class="p">,</span> <span class="n">strip_colors</span><span class="o">=</span><span class="n">strip_colors</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">exit_code</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">exit_code_text</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+                        <span class="k">if</span> <span class="n">exit_code</span><span class="p">:</span>
+                            <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Got exit code {}</span><span class="se">\n</span><span class="s">from: {}</span><span class="se">\n</span><span class="s">OUTPUT: {}&#39;</span>
+                            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">exit_code</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">output</span><span class="p">))</span>
+                    <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">IndexError</span><span class="p">):</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Could not get exit code for &quot;{}&quot;,</span><span class="se">\n</span><span class="s">got: &quot;{}&quot;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">exit_code_text</span><span class="p">))</span>
+                <span class="k">return</span> <span class="n">output</span>
+        <span class="k">except</span> <span class="n">EOF</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Dropped connection detected.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">connection_lost</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">raise</span>
+</div>
+<div class="viewcode-block" id="SshShell.logout"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell.logout">[docs]</a>    <span class="k">def</span> <span class="nf">logout</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Logging out {}@{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">logout</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="SshShell.cancel_running_command"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.SshShell.cancel_running_command">[docs]</a>    <span class="k">def</span> <span class="nf">cancel_running_command</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># simulate impatiently hitting ^C until command prompt appears</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Sending ^C&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_cancel_attempts</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="mf">0.1</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">False</span>
+</div>
+    <span class="k">def</span> <span class="nf">_execute_and_wait_for_prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">as_root</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">strip_colors</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>  <span class="c"># clear an existing prompt if there is one.</span>
+        <span class="k">if</span> <span class="n">as_root</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s">&quot;sudo -- sh -c &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">escape_single_quotes</span><span class="p">(</span><span class="n">command</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">log</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">expect_exact</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">password_prompt</span><span class="p">,</span> <span class="n">TIMEOUT</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">index</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">)</span>
+            <span class="n">timed_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_prompt</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39; \r([^\n])&#39;</span><span class="p">,</span> <span class="s">r&#39;\1&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">before</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">process_backspaces</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;.*?{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">command</span><span class="p">)),</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">log</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+            <span class="n">timed_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_prompt</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="c"># the regex removes line breaks potential introduced when writing</span>
+            <span class="c"># command to shell.</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39; \r([^\n])&#39;</span><span class="p">,</span> <span class="s">r&#39;\1&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">before</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">process_backspaces</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+            <span class="n">command_index</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="p">[</span><span class="n">command_index</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">command</span><span class="p">):]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">timed_out</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cancel_running_command</span><span class="p">()</span>
+            <span class="k">raise</span> <span class="n">TimeoutError</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">strip_colors</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">strip_bash_colors</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">output</span>
+
+    <span class="k">def</span> <span class="nf">_wait_for_prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">timeout</span><span class="p">:</span>
+            <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c"># cannot timeout; wait forever</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">):</span>
+                <span class="k">pass</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+    <span class="k">def</span> <span class="nf">_scp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+        <span class="c"># NOTE: the version of scp in Ubuntu 12.04 occasionally (and bizarrely)</span>
+        <span class="c"># fails to connect to a device if port is explicitly specified using -P</span>
+        <span class="c"># option, even if it is the default port, 22. To minimize this problem,</span>
+        <span class="c"># only specify -P for scp if the port is *not* the default.</span>
+        <span class="n">port_string</span> <span class="o">=</span> <span class="s">&#39;-P {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">)</span> <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span> <span class="o">!=</span> <span class="mi">22</span><span class="p">)</span> <span class="k">else</span> <span class="s">&#39;&#39;</span>
+        <span class="n">keyfile_string</span> <span class="o">=</span> <span class="s">&#39;-i {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">keyfile</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">keyfile</span> <span class="k">else</span> <span class="s">&#39;&#39;</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="s">&#39;{} -r {} {} {} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">scp</span><span class="p">,</span> <span class="n">keyfile_string</span><span class="p">,</span> <span class="n">port_string</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">)</span>
+        <span class="n">pass_string</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="n">_give_password</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">,</span> <span class="n">command</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">check_output</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">returncode</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">cmd</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">pass_string</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">),</span> <span class="n">e</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">TimeoutError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">TimeoutError</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">command</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">pass_string</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">),</span> <span class="n">e</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_give_password</span><span class="p">(</span><span class="n">password</span><span class="p">,</span> <span class="n">command</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">sshpass</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HostError</span><span class="p">(</span><span class="s">&#39;Must have sshpass installed on the host in order to use password-based auth.&#39;</span><span class="p">)</span>
+    <span class="n">pass_string</span> <span class="o">=</span> <span class="s">&quot;sshpass -p &#39;{}&#39; &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">password</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pass_string</span> <span class="o">+</span> <span class="n">command</span>
+
+
+<span class="k">def</span> <span class="nf">_check_env</span><span class="p">():</span>
+    <span class="k">global</span> <span class="n">ssh</span><span class="p">,</span> <span class="n">scp</span><span class="p">,</span> <span class="n">sshpass</span>  <span class="c"># pylint: disable=global-statement</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ssh</span><span class="p">:</span>
+        <span class="n">ssh</span> <span class="o">=</span> <span class="n">which</span><span class="p">(</span><span class="s">&#39;ssh&#39;</span><span class="p">)</span>
+        <span class="n">scp</span> <span class="o">=</span> <span class="n">which</span><span class="p">(</span><span class="s">&#39;scp&#39;</span><span class="p">)</span>
+        <span class="n">sshpass</span> <span class="o">=</span> <span class="n">which</span><span class="p">(</span><span class="s">&#39;sshpass&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">ssh</span> <span class="ow">and</span> <span class="n">scp</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">HostError</span><span class="p">(</span><span class="s">&#39;OpenSSH must be installed on the host.&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="process_backspaces"><a class="viewcode-back" href="../../../api/wlauto.utils.html#wlauto.utils.ssh.process_backspaces">[docs]</a><span class="k">def</span> <span class="nf">process_backspaces</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="n">chars</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">text</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="nb">chr</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span> <span class="ow">and</span> <span class="n">chars</span><span class="p">:</span>  <span class="c"># backspace</span>
+            <span class="n">chars</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">chars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">chars</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Additional Topics &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="index.html" />
+    <link rel="next" title="DAQ Server Guide" href="daq_device_setup.html" />
+    <link rel="prev" title="Dynamic Resource Resolution" href="resources.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="daq_device_setup.html" title="DAQ Server Guide"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="resources.html" title="Dynamic Resource Resolution"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="additional-topics">
+<h1>Additional Topics<a class="headerlink" href="#additional-topics" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="modules">
+<h2>Modules<a class="headerlink" href="#modules" title="Permalink to this headline">¶</a></h2>
+<p>Modules are essentially plug-ins for Extensions. They provide a way of defining
+common and reusable functionality. An Extension can load zero or more modules
+during it&#8217;s creation. Loaded modules will then add their capabilities (see
+<a class="reference internal" href="#capabilities">Capabilities</a>) to those of the Extension. When calling code tries to access an
+attribute of an Extension the Extension doesn&#8217;t have, it will try to find the
+attribute among it&#8217;s loaded modules and will return that instead.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Modules are themselves extensions, and can therefore load their own
+modules. <em>Do not</em> abuse this.</p>
+</div>
+<p>For example, calling code may wish to reboot an unresponsive device by calling
+<code class="docutils literal"><span class="pre">device.hard_reset()</span></code>, but the <code class="docutils literal"><span class="pre">Device</span></code> in question does not have a
+<code class="docutils literal"><span class="pre">hard_reset</span></code> method; however the <code class="docutils literal"><span class="pre">Device</span></code> has loaded <code class="docutils literal"><span class="pre">netio_switch</span></code>
+module which allows to disable power supply over a network (say this device
+is in a rack and is powered through such a switch). The module has
+<code class="docutils literal"><span class="pre">reset_power</span></code> capability (see <a class="reference internal" href="#capabilities">Capabilities</a> below) and so implements
+<code class="docutils literal"><span class="pre">hard_reset</span></code>. This will get invoked when <code class="docutils literal"><span class="pre">device.hard_rest()</span></code> is called.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Modules can only extend Extensions with new attributes; they cannot
+override existing functionality. In the example above, if the
+<code class="docutils literal"><span class="pre">Device</span></code> has implemented <code class="docutils literal"><span class="pre">hard_reset()</span></code> itself, then <em>that</em> will
+get invoked irrespective of which modules it has loaded.</p>
+</div>
+<p>If two loaded modules have the same capability or implement the same method,
+then the last module to be loaded &#8220;wins&#8221; and its method will be invoke,
+effectively overriding the module that was loaded previously.</p>
+<div class="section" id="specifying-modules">
+<h3>Specifying Modules<a class="headerlink" href="#specifying-modules" title="Permalink to this headline">¶</a></h3>
+<p>Modules get loaded when an Extension is instantiated by the extension loader.
+There are two ways to specify which modules should be loaded for a device.</p>
+</div>
+</div>
+<div class="section" id="capabilities">
+<h2>Capabilities<a class="headerlink" href="#capabilities" title="Permalink to this headline">¶</a></h2>
+<p>Capabilities define the functionality that is implemented by an Extension,
+either within the Extension itself or through loadable modules. A capability is
+just a label, but there is an implied contract. When an Extension claims to have
+a particular capability, it promises to expose a particular set of
+functionality through a predefined interface.</p>
+<p>Currently used capabilities are described below.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Since capabilities are basically random strings, the user can always
+define their own; and it is then up to the user to define, enforce and
+document the contract associated with their capability. Below, are the
+&#8220;standard&#8221; capabilities used in WA.</p>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The method signatures in the descriptions below show the calling
+signature (i.e. they&#8217;re omitting the initial self parameter).</p>
+</div>
+<div class="section" id="active-cooling">
+<h3>active_cooling<a class="headerlink" href="#active-cooling" title="Permalink to this headline">¶</a></h3>
+<p>Intended to be used by devices and device modules, this capability implies
+that the device implements a controllable active cooling solution (e.g.
+a programmable fan). The device/module must implement the following methods:</p>
+<dl class="docutils">
+<dt>start_active_cooling()</dt>
+<dd>Active cooling is started (e.g. the fan is turned on)</dd>
+<dt>stop_active_cooling()</dt>
+<dd>Active cooling is stopped (e.g. the fan is turned off)</dd>
+</dl>
+</div>
+<div class="section" id="reset-power">
+<h3>reset_power<a class="headerlink" href="#reset-power" title="Permalink to this headline">¶</a></h3>
+<p>Intended to be used by devices and device modules, this capability implies
+that the device is capable of performing a hard reset by toggling power. The
+device/module must implement the following method:</p>
+<dl class="docutils">
+<dt>hard_reset()</dt>
+<dd>The device is restarted. This method cannot rely on the device being
+responsive and must work even if the software on the device has crashed.</dd>
+</dl>
+</div>
+<div class="section" id="flash">
+<h3>flash<a class="headerlink" href="#flash" title="Permalink to this headline">¶</a></h3>
+<p>Intended to be used by devices and device modules, this capability implies
+that the device can be flashed with new images.  The device/module must
+implement the following method:</p>
+<dl class="docutils">
+<dt>flash(image_bundle=None, images=None)</dt>
+<dd><code class="docutils literal"><span class="pre">image_bundle</span></code> is a path to a &#8220;bundle&#8221; (e.g. a tarball) that contains
+all the images to be flashed. Which images go where must also be defined
+within the bundle. <code class="docutils literal"><span class="pre">images</span></code> is a dict mapping image destination (e.g.
+partition name) to the path to that specific image. Both
+<code class="docutils literal"><span class="pre">image_bundle</span></code> and <code class="docutils literal"><span class="pre">images</span></code> may be specified at the same time. If
+there is overlap between the two, <code class="docutils literal"><span class="pre">images</span></code> wins and its contents will
+be flashed in preference to the <code class="docutils literal"><span class="pre">image_bundle</span></code>.</dd>
+</dl>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Additional Topics</a><ul>
+<li><a class="reference internal" href="#modules">Modules</a><ul>
+<li><a class="reference internal" href="#specifying-modules">Specifying Modules</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#capabilities">Capabilities</a><ul>
+<li><a class="reference internal" href="#active-cooling">active_cooling</a></li>
+<li><a class="reference internal" href="#reset-power">reset_power</a></li>
+<li><a class="reference internal" href="#flash">flash</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="resources.html"
+                        title="previous chapter">Dynamic Resource Resolution</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="daq_device_setup.html"
+                        title="next chapter">DAQ Server Guide</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/additional_topics.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="daq_device_setup.html" title="DAQ Server Guide"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="resources.html" title="Dynamic Resource Resolution"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

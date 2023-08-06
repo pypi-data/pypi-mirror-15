@@ -1,0 +1,340 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.modules.flashing &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.modules.flashing</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2014-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+<span class="c"># pylint: disable=attribute-defined-outside-init</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">tarfile</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Module</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">ConfigError</span><span class="p">,</span> <span class="n">DeviceError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.android</span> <span class="kn">import</span> <span class="n">fastboot_flash_partition</span><span class="p">,</span> <span class="n">fastboot_command</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.serial_port</span> <span class="kn">import</span> <span class="n">open_serial_connection</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.uefi</span> <span class="kn">import</span> <span class="n">UefiMenu</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.misc</span> <span class="kn">import</span> <span class="n">merge_dicts</span>
+
+
+<div class="viewcode-block" id="Flasher"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.Flasher">[docs]</a><span class="k">class</span> <span class="nc">Flasher</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Implements a mechanism for flashing a device. The images to be flashed can be</span>
+<span class="sd">    specified either as a tarball &quot;image bundle&quot; (in which case instructions for</span>
+<span class="sd">    flashing are provided as flasher-specific metadata also in the bundle), or as</span>
+<span class="sd">    individual image files, in which case instructions for flashing as specified</span>
+<span class="sd">    as part of  flashing config.</span>
+
+<span class="sd">    .. note:: It is important that when resolving configuration, concrete flasher</span>
+<span class="sd">              implementations prioritise settings specified in the config over those</span>
+<span class="sd">              in the bundle (if they happen to clash).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">capabilities</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;flash&#39;</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Flasher.flash"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.Flasher.flash">[docs]</a>    <span class="k">def</span> <span class="nf">flash</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image_bundle</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Flashes the specified device using the specified config. As a post condition,</span>
+<span class="sd">        the device must be ready to run workloads upon returning from this method (e.g.</span>
+<span class="sd">        it must be fully-booted into the OS).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+</div></div>
+<div class="viewcode-block" id="FastbootFlasher"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.FastbootFlasher">[docs]</a><span class="k">class</span> <span class="nc">FastbootFlasher</span><span class="p">(</span><span class="n">Flasher</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;fastboot&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Enables automated flashing of images using the fastboot utility.</span>
+
+<span class="s">    To use this flasher, a set of image files to be flused are required.</span>
+<span class="s">    In addition a mapping between partitions and image file is required. There are two ways</span>
+<span class="s">    to specify those requirements:</span>
+
+<span class="s">    - Image mapping: In this mode, a mapping between partitions and images is given in the agenda.</span>
+<span class="s">    - Image Bundle: In This mode a tarball is specified, which must contain all image files as well</span>
+<span class="s">      as well as a partition file, named ``partitions.txt`` which contains the mapping between</span>
+<span class="s">      partitions and images.</span>
+
+<span class="s">    The format of ``partitions.txt`` defines one mapping per line as such: ::</span>
+
+<span class="s">        kernel zImage-dtb</span>
+<span class="s">        ramdisk ramdisk_image</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">delay</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="n">serial_timeout</span> <span class="o">=</span> <span class="mi">30</span>
+    <span class="n">partitions_file_name</span> <span class="o">=</span> <span class="s">&#39;partitions.txt&#39;</span>
+
+<div class="viewcode-block" id="FastbootFlasher.flash"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.FastbootFlasher.flash">[docs]</a>    <span class="k">def</span> <span class="nf">flash</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image_bundle</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prelude_done</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">to_flash</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">image_bundle</span><span class="p">:</span>  <span class="c"># pylint: disable=access-member-before-definition</span>
+            <span class="n">image_bundle</span> <span class="o">=</span> <span class="n">expand_path</span><span class="p">(</span><span class="n">image_bundle</span><span class="p">)</span>
+            <span class="n">to_flash</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bundle_to_images</span><span class="p">(</span><span class="n">image_bundle</span><span class="p">)</span>
+        <span class="n">to_flash</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">to_flash</span><span class="p">,</span> <span class="n">images</span> <span class="ow">or</span> <span class="p">{},</span> <span class="n">should_normalize</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">partition</span><span class="p">,</span> <span class="n">image_path</span> <span class="ow">in</span> <span class="n">to_flash</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;flashing {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">partition</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_flash_image</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">owner</span><span class="p">,</span> <span class="n">partition</span><span class="p">,</span> <span class="n">expand_path</span><span class="p">(</span><span class="n">image_path</span><span class="p">))</span>
+        <span class="n">fastboot_command</span><span class="p">(</span><span class="s">&#39;reboot&#39;</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_validate_image_bundle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image_bundle</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">is_tarfile</span><span class="p">(</span><span class="n">image_bundle</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;File {} is not a tarfile&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">image_bundle</span><span class="p">))</span>
+        <span class="k">with</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">image_bundle</span><span class="p">)</span> <span class="k">as</span> <span class="n">tar</span><span class="p">:</span>
+            <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="n">tf</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">tf</span> <span class="ow">in</span> <span class="n">tar</span><span class="o">.</span><span class="n">getmembers</span><span class="p">()]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">pf</span> <span class="ow">in</span> <span class="n">files</span> <span class="k">for</span> <span class="n">pf</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">partitions_file_name</span><span class="p">,</span> <span class="s">&#39;{}/{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">files</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">partitions_file_name</span><span class="p">))):</span>
+                <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Image bundle does not contain the required partition file (see documentation)&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_bundle_to_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image_bundle</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Extracts the bundle to a temporary location and creates a mapping between the contents of the bundle</span>
+<span class="sd">        and images to be flushed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_image_bundle</span><span class="p">(</span><span class="n">image_bundle</span><span class="p">)</span>
+        <span class="n">extract_dir</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">image_bundle</span><span class="p">)</span> <span class="k">as</span> <span class="n">tar</span><span class="p">:</span>
+            <span class="n">tar</span><span class="o">.</span><span class="n">extractall</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">extract_dir</span><span class="p">)</span>
+            <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="n">tf</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">tf</span> <span class="ow">in</span> <span class="n">tar</span><span class="o">.</span><span class="n">getmembers</span><span class="p">()]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">partitions_file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+                <span class="n">extract_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">extract_dir</span><span class="p">,</span> <span class="n">files</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">partition_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">extract_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">partitions_file_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">get_mapping</span><span class="p">(</span><span class="n">extract_dir</span><span class="p">,</span> <span class="n">partition_file</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_flash_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">partition</span><span class="p">,</span> <span class="n">image_path</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">prelude_done</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_fastboot_prelude</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">fastboot_flash_partition</span><span class="p">(</span><span class="n">partition</span><span class="p">,</span> <span class="n">image_path</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_fastboot_prelude</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+                                    <span class="n">baudrate</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">baudrate</span><span class="p">,</span>
+                                    <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">serial_timeout</span><span class="p">,</span>
+                                    <span class="n">init_dtr</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                                    <span class="n">get_conn</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span> <span class="k">as</span> <span class="n">target</span><span class="p">:</span>
+            <span class="n">device</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;fast&#39;</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prelude_done</span> <span class="o">=</span> <span class="bp">True</span>
+
+</div>
+<div class="viewcode-block" id="VersatileExpressFlasher"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.VersatileExpressFlasher">[docs]</a><span class="k">class</span> <span class="nc">VersatileExpressFlasher</span><span class="p">(</span><span class="n">Flasher</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;vexpress&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Enables flashing of kernels and firmware to ARM Versatile Express devices.</span>
+
+<span class="s">    This modules enables flashing of image bundles or individual images to ARM</span>
+<span class="s">    Versatile Express-based devices (e.g. JUNO) via host-mounted MicroSD on the</span>
+<span class="s">    board.</span>
+
+<span class="s">    The bundle, if specified, must reflect the directory structure of the MicroSD</span>
+<span class="s">    and will be extracted directly into the location it is mounted on the host. The</span>
+<span class="s">    images, if  specified, must be a dict mapping the absolute path of the image on</span>
+<span class="s">    the host to the destination path within the board&#39;s MicroSD; the destination path</span>
+<span class="s">    may be either absolute, or relative to the MicroSD mount location.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="VersatileExpressFlasher.flash"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.VersatileExpressFlasher.flash">[docs]</a>    <span class="k">def</span> <span class="nf">flash</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image_bundle</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">recreate_uefi_entry</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>  <span class="c"># pylint: disable=arguments-differ</span>
+        <span class="n">device</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">owner</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s">&#39;port&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s">&#39;microsd_mount_point&#39;</span><span class="p">):</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Device {} does not appear to support VExpress flashing.&#39;</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+                                    <span class="n">baudrate</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">baudrate</span><span class="p">,</span>
+                                    <span class="n">timeout</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+                                    <span class="n">init_dtr</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">target</span><span class="p">:</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="s">&#39;usb_on&#39;</span><span class="p">)</span>  <span class="c"># this will cause the MicroSD to be mounted on the host</span>
+            <span class="n">device</span><span class="o">.</span><span class="n">wait_for_microsd_mount_point</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">deploy_images</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="n">image_bundle</span><span class="p">,</span> <span class="n">images</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Resetting the device.&#39;</span><span class="p">)</span>
+        <span class="n">device</span><span class="o">.</span><span class="n">hard_reset</span><span class="p">()</span>
+
+        <span class="k">with</span> <span class="n">open_serial_connection</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+                                    <span class="n">baudrate</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">baudrate</span><span class="p">,</span>
+                                    <span class="n">timeout</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+                                    <span class="n">init_dtr</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">target</span><span class="p">:</span>
+            <span class="n">menu</span> <span class="o">=</span> <span class="n">UefiMenu</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            <span class="n">menu</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">recreate_uefi_entry</span> <span class="ow">and</span> <span class="n">menu</span><span class="o">.</span><span class="n">has_option</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Deleting existing device entry.&#39;</span><span class="p">)</span>
+                <span class="n">menu</span><span class="o">.</span><span class="n">delete_entry</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">)</span>
+                <span class="n">menu</span><span class="o">.</span><span class="n">create_entry</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">,</span> <span class="n">device</span><span class="o">.</span><span class="n">uefi_config</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">menu</span><span class="o">.</span><span class="n">has_option</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">):</span>
+                <span class="n">menu</span><span class="o">.</span><span class="n">create_entry</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">,</span> <span class="n">device</span><span class="o">.</span><span class="n">uefi_config</span><span class="p">)</span>
+            <span class="n">menu</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">uefi_entry</span><span class="p">)</span>
+            <span class="n">target</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">android_prompt</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="VersatileExpressFlasher.deploy_images"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.VersatileExpressFlasher.deploy_images">[docs]</a>    <span class="k">def</span> <span class="nf">deploy_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">image_bundle</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">image_bundle</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">deploy_image_bundle</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="n">image_bundle</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">images</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">overlay_images</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="n">images</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&#39;sync&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">IOError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">),</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Could not deploy images to {}; got: {}&#39;</span>
+            <span class="k">raise</span> <span class="n">DeviceError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">microsd_mount_point</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="VersatileExpressFlasher.deploy_image_bundle"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.VersatileExpressFlasher.deploy_image_bundle">[docs]</a>    <span class="k">def</span> <span class="nf">deploy_image_bundle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">bundle</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Validating {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">bundle</span><span class="p">))</span>
+        <span class="n">validate_image_bundle</span><span class="p">(</span><span class="n">bundle</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Extracting {} into {}...&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">bundle</span><span class="p">,</span> <span class="n">device</span><span class="o">.</span><span class="n">microsd_mount_point</span><span class="p">))</span>
+        <span class="k">with</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">bundle</span><span class="p">)</span> <span class="k">as</span> <span class="n">tar</span><span class="p">:</span>
+            <span class="n">tar</span><span class="o">.</span><span class="n">extractall</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">microsd_mount_point</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="VersatileExpressFlasher.overlay_images"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.VersatileExpressFlasher.overlay_images">[docs]</a>    <span class="k">def</span> <span class="nf">overlay_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">images</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">dest</span><span class="p">,</span> <span class="n">src</span> <span class="ow">in</span> <span class="n">images</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="n">dest</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">microsd_mount_point</span><span class="p">,</span> <span class="n">dest</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Copying {} to {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">dest</span><span class="p">))</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">dest</span><span class="p">)</span>
+
+
+<span class="c"># utility functions</span>
+</div></div>
+<div class="viewcode-block" id="get_mapping"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.get_mapping">[docs]</a><span class="k">def</span> <span class="nf">get_mapping</span><span class="p">(</span><span class="n">base_dir</span><span class="p">,</span> <span class="n">partition_file</span><span class="p">):</span>
+    <span class="n">mapping</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">partition_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">pf</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">pf</span><span class="p">:</span>
+            <span class="n">pair</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pair</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;partitions.txt is not properly formated&#39;</span><span class="p">)</span>
+            <span class="n">image_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_dir</span><span class="p">,</span> <span class="n">pair</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">expand_path</span><span class="p">(</span><span class="n">image_path</span><span class="p">)):</span>
+                <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;file {} was not found in the bundle or was misplaced&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">pair</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">mapping</span><span class="p">[</span><span class="n">pair</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">image_path</span>
+    <span class="k">return</span> <span class="n">mapping</span>
+
+</div>
+<div class="viewcode-block" id="expand_path"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.expand_path">[docs]</a><span class="k">def</span> <span class="nf">expand_path</span><span class="p">(</span><span class="n">original_path</span><span class="p">):</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="n">original_path</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;{} does not exist.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">path</span>
+
+</div>
+<div class="viewcode-block" id="validate_image_bundle"><a class="viewcode-back" href="../../../api/wlauto.modules.html#wlauto.modules.flashing.validate_image_bundle">[docs]</a><span class="k">def</span> <span class="nf">validate_image_bundle</span><span class="p">(</span><span class="n">bundle</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">is_tarfile</span><span class="p">(</span><span class="n">bundle</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="s">&#39;Image bundle {} does not appear to be a valid TAR file.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">bundle</span><span class="p">))</span>
+    <span class="k">with</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">bundle</span><span class="p">)</span> <span class="k">as</span> <span class="n">tar</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">tar</span><span class="o">.</span><span class="n">getmember</span><span class="p">(</span><span class="s">&#39;config.txt&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">tar</span><span class="o">.</span><span class="n">getmember</span><span class="p">(</span><span class="s">&#39;./config.txt&#39;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Tarball {} does not appear to be a valid image bundle (did not see config.txt).&#39;</span>
+                <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">bundle</span><span class="p">))</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

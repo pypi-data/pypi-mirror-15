@@ -1,0 +1,281 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.core.signal &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.core.signal</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module wraps louie signalling mechanism. It relies on modified version of loiue</span>
+<span class="sd">that has prioritization added to handler invocation.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">louie</span> <span class="kn">import</span> <span class="n">dispatcher</span>  <span class="c"># pylint: disable=F0401</span>
+
+
+<div class="viewcode-block" id="Signal"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.signal.Signal">[docs]</a><span class="k">class</span> <span class="nc">Signal</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This class implements the signals to be used for notifiying callbacks</span>
+<span class="sd">    registered to respond to different states and stages of the execution of workload</span>
+<span class="sd">    automation.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Instantiates a Signal.</span>
+
+<span class="sd">            :param name: name is the identifier of the Signal object. Signal instances with</span>
+<span class="sd">                        the same name refer to the same execution stage/stage.</span>
+<span class="sd">            :param invert_priority: boolean parameter that determines whether multiple</span>
+<span class="sd">                                    callbacks for the same signal should be ordered with</span>
+<span class="sd">                                    ascending or descending priorities. Typically this flag</span>
+<span class="sd">                                    should be set to True if the Signal is triggered AFTER an</span>
+<span class="sd">                                    a state/stage has been reached. That way callbacks with high</span>
+<span class="sd">                                    priorities will be called right after the event has occured.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">invert_priority</span> <span class="o">=</span> <span class="n">invert_priority</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+
+<span class="c"># These are paired events -- if the before_event is sent, the after_ signal is</span>
+<span class="c"># guaranteed to also be sent. In particular, the after_ signals will be sent</span>
+<span class="c"># even if there is an error, so you cannot assume in the handler that the</span>
+<span class="c"># device has booted successfully. In most cases, you should instead use the</span>
+<span class="c"># non-paired signals below.</span></div>
+<span class="n">BEFORE_FLASHING</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-flashing-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_FLASHING</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-flashing-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_FLASHING</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-flashing-signal&#39;</span><span class="p">)</span>
+
+<span class="n">BEFORE_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-boot-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-boot-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-boot-signal&#39;</span><span class="p">)</span>
+
+<span class="n">BEFORE_INITIAL_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-initial-boot-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_INITIAL_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-initial-boot-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_INITIAL_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-initial-boot-signal&#39;</span><span class="p">)</span>
+
+<span class="n">BEFORE_FIRST_ITERATION_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-first-iteration-boot-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_FIRST_ITERATION_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-first-iteration-boot-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_FIRST_ITERATION_BOOT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-first-iteration-boot-signal&#39;</span><span class="p">)</span>
+
+<span class="n">BEFORE_WORKLOAD_SETUP</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-workload-setup-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_WORKLOAD_SETUP</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-workload-setup-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_WORKLOAD_SETUP</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-workload-setup-signal&#39;</span><span class="p">)</span>
+
+<span class="n">BEFORE_WORKLOAD_EXECUTION</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-workload-execution-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_WORKLOAD_EXECUTION</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-workload-execution-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_WORKLOAD_EXECUTION</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-workload-execution-signal&#39;</span><span class="p">)</span>
+
+<span class="n">BEFORE_WORKLOAD_RESULT_UPDATE</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-iteration-result-update-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_WORKLOAD_RESULT_UPDATE</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-iteration-result-update-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_WORKLOAD_RESULT_UPDATE</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-iteration-result-update-signal&#39;</span><span class="p">)</span>
+
+<span class="n">BEFORE_WORKLOAD_TEARDOWN</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-workload-teardown-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_WORKLOAD_TEARDOWN</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-workload-teardown-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_WORKLOAD_TEARDOWN</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-workload-teardown-signal&#39;</span><span class="p">)</span>
+
+<span class="n">BEFORE_OVERALL_RESULTS_PROCESSING</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;before-overall-results-process-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">SUCCESSFUL_OVERALL_RESULTS_PROCESSING</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;successful-overall-results-process-signal&#39;</span><span class="p">)</span>
+<span class="n">AFTER_OVERALL_RESULTS_PROCESSING</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;after-overall-results-process-signal&#39;</span><span class="p">)</span>
+
+<span class="c"># These are the not-paired signals; they are emitted independently. E.g. the</span>
+<span class="c"># fact that RUN_START was emitted does not mean run end will be.</span>
+<span class="n">RUN_START</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;start-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">RUN_END</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;end-signal&#39;</span><span class="p">)</span>
+<span class="n">WORKLOAD_SPEC_START</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;workload-spec-start-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">WORKLOAD_SPEC_END</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;workload-spec-end-signal&#39;</span><span class="p">)</span>
+<span class="n">ITERATION_START</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;iteration-start-signal&#39;</span><span class="p">,</span> <span class="n">invert_priority</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">ITERATION_END</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;iteration-end-signal&#39;</span><span class="p">)</span>
+
+<span class="n">RUN_INIT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;run-init-signal&#39;</span><span class="p">)</span>
+<span class="n">SPEC_INIT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;spec-init-signal&#39;</span><span class="p">)</span>
+<span class="n">ITERATION_INIT</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;iteration-init-signal&#39;</span><span class="p">)</span>
+
+<span class="n">RUN_FIN</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;run-fin-signal&#39;</span><span class="p">)</span>
+
+<span class="c"># These signals are used by the LoggerFilter to tell about logging events</span>
+<span class="n">ERROR_LOGGED</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;error_logged&#39;</span><span class="p">)</span>
+<span class="n">WARNING_LOGGED</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="s">&#39;warning_logged&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="connect"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.signal.connect">[docs]</a><span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="n">handler</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">dispatcher</span><span class="o">.</span><span class="n">Any</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Connects a callback to a signal, so that the callback will be automatically invoked</span>
+<span class="sd">    when that signal is sent.</span>
+
+<span class="sd">    Parameters:</span>
+
+<span class="sd">        :handler: This can be any callable that that takes the right arguments for</span>
+<span class="sd">                  the signal. For most siginals this means a single argument that</span>
+<span class="sd">                  will be an ``ExecutionContext`` instance. But please see documentaion</span>
+<span class="sd">                  for individual signals in the :ref:`signals reference &lt;instrumentation_method_map&gt;`.</span>
+<span class="sd">        :signal: The signal to which the hanlder will be subscribed. Please see</span>
+<span class="sd">                 :ref:`signals reference &lt;instrumentation_method_map&gt;` for the list of standard WA</span>
+<span class="sd">                 signals.</span>
+
+<span class="sd">                 .. note:: There is nothing that prevents instrumentation from sending their</span>
+<span class="sd">                           own signals that are not part of the standard set. However the signal</span>
+<span class="sd">                           must always be an :class:`wlauto.core.signal.Signal` instance.</span>
+
+<span class="sd">        :sender: The handler will be invoked only for the signals emitted by this sender. By</span>
+<span class="sd">                 default, this is set to :class:`louie.dispatcher.Any`, so the handler will</span>
+<span class="sd">                 be invoked for signals from any sentder.</span>
+<span class="sd">        :priority: An integer (positive or negative) the specifies the priority of the handler.</span>
+<span class="sd">                   Handlers with higher priority will be called before handlers with lower</span>
+<span class="sd">                   priority. The  call order of handlers with the same priority is not specified.</span>
+<span class="sd">                   Defaults to 0.</span>
+
+<span class="sd">                   .. note:: Priorities for some signals are inverted (so highest priority</span>
+<span class="sd">                             handlers get executed last). Please see :ref:`signals reference &lt;instrumentation_method_map&gt;`</span>
+<span class="sd">                             for details.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">signal</span><span class="o">.</span><span class="n">invert_priority</span><span class="p">:</span>
+        <span class="n">dispatcher</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">handler</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">priority</span><span class="o">=-</span><span class="n">priority</span><span class="p">)</span>  <span class="c"># pylint: disable=E1123</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">dispatcher</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">handler</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">priority</span><span class="p">)</span>  <span class="c"># pylint: disable=E1123</span>
+
+</div>
+<div class="viewcode-block" id="disconnect"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.signal.disconnect">[docs]</a><span class="k">def</span> <span class="nf">disconnect</span><span class="p">(</span><span class="n">handler</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">dispatcher</span><span class="o">.</span><span class="n">Any</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Disconnect a previously connected handler form the specified signal, optionally, only</span>
+<span class="sd">    for the specified sender.</span>
+
+<span class="sd">    Parameters:</span>
+
+<span class="sd">        :handler: The callback to be disconnected.</span>
+<span class="sd">        :signal: The signal the handler is to be disconnected form. It will</span>
+<span class="sd">                 be an :class:`wlauto.core.signal.Signal` instance.</span>
+<span class="sd">        :sender: If specified, the handler will only be disconnected from the signal</span>
+<span class="sd">                sent by this sender.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dispatcher</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="n">handler</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">sender</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="send"><a class="viewcode-back" href="../../../api/wlauto.core.html#wlauto.core.signal.send">[docs]</a><span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="n">signal</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Sends a signal, causing connected handlers to be invoked.</span>
+
+<span class="sd">    Paramters:</span>
+
+<span class="sd">        :signal: Signal to be sent. This must be an instance of :class:`wlauto.core.signal.Signal`</span>
+<span class="sd">                 or its subclasses.</span>
+<span class="sd">        :sender: The sender of the signal (typically, this would be ``self``). Some handlers may only</span>
+<span class="sd">                 be subscribed to signals from a particular sender.</span>
+
+<span class="sd">        The rest of the parameters will be passed on as aruments to the handler.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dispatcher</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">signal</span><span class="p">,</span> <span class="n">sender</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wlauto.instrumentation.hwmon &mdash; Workload Automation 2.4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '2.4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Workload Automation 2.4.0 documentation" href="../../../index.html" />
+    <link rel="up" title="wlauto.instrumentation" href="../instrumentation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" accesskey="U">wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for wlauto.instrumentation.hwmon</h1><div class="highlight"><pre>
+<span class="c">#    Copyright 2013-2015 ARM Limited</span>
+<span class="c">#</span>
+<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c"># you may not use this file except in compliance with the License.</span>
+<span class="c"># You may obtain a copy of the License at</span>
+<span class="c">#</span>
+<span class="c">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c">#</span>
+<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c"># See the License for the specific language governing permissions and</span>
+<span class="c"># limitations under the License.</span>
+<span class="c">#</span>
+
+
+<span class="c"># pylint: disable=W0613,E1101</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+
+<span class="kn">from</span> <span class="nn">wlauto</span> <span class="kn">import</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Instrument</span>
+<span class="kn">from</span> <span class="nn">wlauto.exceptions</span> <span class="kn">import</span> <span class="n">InstrumentError</span><span class="p">,</span> <span class="n">ConfigError</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.hwmon</span> <span class="kn">import</span> <span class="n">discover_sensors</span>
+<span class="kn">from</span> <span class="nn">wlauto.utils.types</span> <span class="kn">import</span> <span class="n">list_of_strs</span>
+
+
+<span class="c"># sensor_kind: (report_type, units, conversion)</span>
+<span class="n">HWMON_SENSORS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;energy&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s">&#39;diff&#39;</span><span class="p">,</span> <span class="s">&#39;Joules&#39;</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">/</span> <span class="mi">10</span> <span class="o">**</span> <span class="mi">6</span><span class="p">),</span>
+    <span class="s">&#39;temp&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s">&#39;before/after&#39;</span><span class="p">,</span> <span class="s">&#39;Celsius&#39;</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">/</span> <span class="mi">10</span> <span class="o">**</span> <span class="mi">3</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="n">HWMON_SENSOR_PRIORITIES</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;energy&#39;</span><span class="p">,</span> <span class="s">&#39;temp&#39;</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="HwmonInstrument"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.hwmon.html#wlauto.instrumentation.hwmon.HwmonInstrument">[docs]</a><span class="k">class</span> <span class="nc">HwmonInstrument</span><span class="p">(</span><span class="n">Instrument</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;hwmon&#39;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">    Hardware Monitor (hwmon) is a generic Linux kernel subsystem,</span>
+<span class="s">    providing access to hardware monitoring components like temperature or</span>
+<span class="s">    voltage/current sensors.</span>
+
+<span class="s">    The following web page has more information:</span>
+
+<span class="s">        http://blogs.arm.com/software-enablement/925-linux-hwmon-power-management-and-arm-ds-5-streamline/</span>
+
+<span class="s">    You can specify which sensors HwmonInstrument looks for by specifying</span>
+<span class="s">    hwmon_sensors in your config.py, e.g. ::</span>
+
+<span class="s">        hwmon_sensors = [&#39;energy&#39;, &#39;temp&#39;]</span>
+
+<span class="s">    If this setting is not specified, it will look for all sensors it knows about.</span>
+<span class="s">    Current valid values are::</span>
+
+<span class="s">        :energy: Collect energy measurements and report energy consumed</span>
+<span class="s">                 during run execution (the diff of before and after readings)</span>
+<span class="s">                 in Joules.</span>
+<span class="s">        :temp: Collect temperature measurements and report the before and</span>
+<span class="s">               after readings in degrees Celsius.</span>
+
+<span class="s">    &quot;&quot;&quot;</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Parameter</span><span class="p">(</span><span class="s">&#39;sensors&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">list_of_strs</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;energy&#39;</span><span class="p">,</span> <span class="s">&#39;temp&#39;</span><span class="p">],</span>
+                  <span class="n">global_alias</span><span class="o">=</span><span class="s">&#39;hwmon_sensors&#39;</span><span class="p">,</span>
+                  <span class="n">description</span><span class="o">=</span><span class="s">&#39;The kinds of sensors hwmon instrument will look for&#39;</span><span class="p">)</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">HwmonInstrument</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sensor_kinds</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">kind</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">kind</span> <span class="ow">in</span> <span class="n">HWMON_SENSORS</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">sensor_kinds</span><span class="p">[</span><span class="n">kind</span><span class="p">]</span> <span class="o">=</span> <span class="n">HWMON_SENSORS</span><span class="p">[</span><span class="n">kind</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">message</span> <span class="o">=</span> <span class="s">&#39;Unexpected sensor type: {}; must be in {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">kind</span><span class="p">,</span> <span class="n">HWMON_SENSORS</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+                    <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sensor_kinds</span> <span class="o">=</span> <span class="n">HWMON_SENSORS</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Searching for HWMON sensors.&#39;</span><span class="p">)</span>
+        <span class="n">discovered_sensors</span> <span class="o">=</span> <span class="n">discover_sensors</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sensor_kinds</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="k">for</span> <span class="n">sensor</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">discovered_sensors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">HWMON_SENSOR_PRIORITIES</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">kind</span><span class="p">)):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Adding {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sensor</span><span class="o">.</span><span class="n">filepath</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sensor</span><span class="p">)</span>
+
+<div class="viewcode-block" id="HwmonInstrument.setup"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.hwmon.html#wlauto.instrumentation.hwmon.HwmonInstrument.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">sensor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">:</span>
+            <span class="n">sensor</span><span class="o">.</span><span class="n">clear_readings</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="HwmonInstrument.fast_start"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.hwmon.html#wlauto.instrumentation.hwmon.HwmonInstrument.fast_start">[docs]</a>    <span class="k">def</span> <span class="nf">fast_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">sensor</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">):</span>
+            <span class="n">sensor</span><span class="o">.</span><span class="n">take_reading</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="HwmonInstrument.fast_stop"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.hwmon.html#wlauto.instrumentation.hwmon.HwmonInstrument.fast_stop">[docs]</a>    <span class="k">def</span> <span class="nf">fast_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">sensor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">:</span>
+            <span class="n">sensor</span><span class="o">.</span><span class="n">take_reading</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="HwmonInstrument.update_result"><a class="viewcode-back" href="../../../api/wlauto.instrumentation.hwmon.html#wlauto.instrumentation.hwmon.HwmonInstrument.update_result">[docs]</a>    <span class="k">def</span> <span class="nf">update_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">sensor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sensors</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">report_type</span><span class="p">,</span> <span class="n">units</span><span class="p">,</span> <span class="n">conversion</span> <span class="o">=</span> <span class="n">HWMON_SENSORS</span><span class="p">[</span><span class="n">sensor</span><span class="o">.</span><span class="n">kind</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">report_type</span> <span class="o">==</span> <span class="s">&#39;diff&#39;</span><span class="p">:</span>
+                    <span class="n">before</span><span class="p">,</span> <span class="n">after</span> <span class="o">=</span> <span class="n">sensor</span><span class="o">.</span><span class="n">readings</span>
+                    <span class="n">diff</span> <span class="o">=</span> <span class="n">conversion</span><span class="p">(</span><span class="n">after</span> <span class="o">-</span> <span class="n">before</span><span class="p">)</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">sensor</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">diff</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">report_type</span> <span class="o">==</span> <span class="s">&#39;before/after&#39;</span><span class="p">:</span>
+                    <span class="n">before</span><span class="p">,</span> <span class="n">after</span> <span class="o">=</span> <span class="n">sensor</span><span class="o">.</span><span class="n">readings</span>
+                    <span class="n">mean</span> <span class="o">=</span> <span class="n">conversion</span><span class="p">((</span><span class="n">after</span> <span class="o">+</span> <span class="n">before</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">sensor</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">mean</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">sensor</span><span class="o">.</span><span class="n">label</span> <span class="o">+</span> <span class="s">&#39; before&#39;</span><span class="p">,</span> <span class="n">conversion</span><span class="p">(</span><span class="n">before</span><span class="p">),</span> <span class="n">units</span><span class="p">)</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span><span class="n">sensor</span><span class="o">.</span><span class="n">label</span> <span class="o">+</span> <span class="s">&#39; after&#39;</span><span class="p">,</span> <span class="n">conversion</span><span class="p">(</span><span class="n">after</span><span class="p">),</span> <span class="n">units</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">InstrumentError</span><span class="p">(</span><span class="s">&#39;Unexpected report_type: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">report_type</span><span class="p">))</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Could not collect all {} readings for {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sensor</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">sensor</span><span class="o">.</span><span class="n">label</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;Got: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">Workload Automation 2.4.0 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li class="nav-item nav-item-2"><a href="../instrumentation.html" >wlauto.instrumentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, ARM Ltd.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>
