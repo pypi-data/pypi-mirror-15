@@ -1,0 +1,302 @@
+#!/bin/bash
+
+# Copyright 2014 Intel Corporation, All Rights Reserved.
+
+# Licensed under the Apache License, Version 2.0 (the"License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#  http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+
+set -e
+set -o xtrace
+
+
+#---------------------------------------------
+# Usage
+#---------------------------------------------
+
+function usage() {
+    cat << EOF
+Usage: vsm-ceph-upgrade
+
+for example:
+os==ubuntu14:
+    Step 1 get pakages needed by ceph upgrading in controller node: vsm-ceph-upgrade -p http://ceph.com/debian-hammer/ -k https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc --proxy ...
+    Step 2 upgrade ceph in agent nodes:vsm-ceph-upgrade
+os==centos7:
+    Step 1 get pakages needed by ceph upgrading in controller node: vsm-ceph-upgrade -p http://ceph.com/rpm-hammer/rhel7 -k https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc --proxy ...
+    Step 2 upgrade ceph in agent nodes:vsm-ceph-upgrade
+    Step 3 if ceph user exists, chown -R ceph:ceph /var/lib/ceph and chown -R ceph:ceph /etc/ceph and data, journal for osd
+
+Options:
+  --help | -h
+    Print usage information.
+  --pkg_url | -p
+    pkg_url.
+  --key_url | -k
+    key_url.
+  --ssh_user
+    ssh_user.
+  --proxy
+    proxy.
+EOF
+    exit 0
+}
+
+
+function get_ceph_upgrade_pkgs_in_controller() {
+    log_dir=/tmp/ceph-upgrade.log
+    rm -rf $log_dir
+    echo '----------------begin-----------------------------------------' >$log_dir
+    rm -rf /tmp/ceph_upgrade
+    mkdir -p  /tmp/ceph_upgrade
+    mkdir -p /tmp/ceph_upgrade/ceph_repo
+    cd /tmp/ceph_upgrade
+    wget -q -O- $KEY_URL | sudo apt-key add -
+    echo deb $PKG_URL $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list;
+    echo '----------------ceph.list build success-------------------------' >>$log_dir;
+    rm -rf /var/lib/dpkg/info-bak;
+    mv /var/lib/dpkg/info/ /var/lib/dpkg/info-bak;
+    mkdir -p /var/lib/dpkg/info;
+    echo '----------------apt-get update begin--------------------------' >>$log_dir;
+    apt-get update;
+    echo '----------------apt-get update over and upgrade ceph begin----' >>$log_dir;
+    exp_ceph-common_upgrade >>$log_dir;
+    exp_ceph_upgrade >>$log_dir ;
+    exp_ceph-mds_upgrade >>$log_dir ;
+    echo '----------------upgrade ceph over-----------------------------' >>$log_dir;
+    cp /var/cache/apt/archives/*.deb /tmp/ceph_upgrade/ceph_repo/
+    cd /tmp/ceph_upgrade/
+    dpkg-scanpackages ceph_repo | gzip > ceph_repo/Packages.gz
+    if [[ -n $SSH_USER ]];then
+        for node in `echo "$STORAGE_NODE_LIST"|sed "s/,/ /g"`;do su -s /bin/sh -c "scp -r /tmp/ceph_upgrade/ceph_repo $SSH_USER@$node:/tmp/" $SSH_USER;done
+    else
+        for node in `echo "$STORAGE_NODE_LIST"|sed "s/,/ /g"`;do scp -r /tmp/ceph_upgrade/ceph_repo $node:/tmp/;done
+    fi
+}
+
+function build_ceph_upgrade_repo() {
+    rm -rf /etc/apt/sources.list.d/ceph-uprage.list
+    echo deb file:///tmp ceph_repo/ > /etc/apt/sources.list.d/ceph-uprage.list
+}
+
+
+function ceph_upgrade_node() {
+    build_ceph_upgrade_repo
+    log_dir=/tmp/ceph-upgrade.log
+    rm -rf $log_dir
+    echo '----------------begin-----------------------------------------' >$log_dir
+    rm -rf /var/lib/dpkg/info-bak;
+    mv /var/lib/dpkg/info/ /var/lib/dpkg/info-bak;
+    mkdir -p /var/lib/dpkg/info;
+    echo '----------------apt-get update begin--------------------------' >>$log_dir;
+    apt-get update;
+    echo '----------------apt-get update over and upgrade ceph begin----' >>$log_dir;
+    exp_ceph-common_upgrade >>$log_dir;
+    exp_ceph_upgrade >>$log_dir ;
+    exp_ceph-mds_upgrade >>$log_dir ;
+    echo '----------------upgrade ceph over-----------------------------' >>$log_dir;
+    sed -i "s/root=default/root=vsm/g" /usr/bin/ceph-crush-location;
+    chown_ceph
+#    restart_ceph_daemon
+    echo '-----------------over-----------------------------------------' >>$log_dir ;
+
+}
+
+
+
+function get_ceph_upgrade_pkgs_in_controller_centos() {
+    log_dir=/tmp/ceph-upgrade.log
+    rm -rf $log_dir
+    echo '----------------begin-----------------------------------------' >$log_dir
+    rm -rf /tmp/ceph_upgrade
+    mkdir -p  /tmp/ceph_upgrade
+    mkdir -p /tmp/ceph_upgrade/ceph_repo
+    cd /tmp/ceph_upgrade
+    rpm --import  $KEY_URL
+    echo "
+[Ceph]
+name=Ceph packages for \$basearch
+baseurl=${PKG_URL}\$basearch
+enabled=1
+gpgcheck=1
+type=rpm-md
+gpgkey=${KEY_URL}
+
+[Ceph-noarch]
+name=Ceph noarch packages
+baseurl=${PKG_URL}noarch
+enabled=1
+gpgcheck=1
+type=rpm-md
+gpgkey=${KEY_URL}
+
+[ceph-source]
+name=Ceph source packages
+baseurl=${PKG_URL}SRPMS
+enabled=1
+gpgcheck=1
+type=rpm-md
+gpgkey=${KEY_URL}
+   " > /etc/yum.repos.d/ceph.repo
+    yum -y install ceph;
+    cd  /var/cache/yum/x86_64/7/
+
+    for file in ./*
+        do
+            if [ -d $file ]
+            then
+                if [[ `ls -l $file/packages|grep "^-"|wc -l` -gt 0 ]];then
+                    cp $file/packages/*.rpm /tmp/ceph_upgrade/ceph_repo
+                fi
+            fi
+        done
+
+    cd /tmp/ceph_upgrade
+    createrepo ceph_repo
+    if [[ -n $SSH_USER ]];then
+        for node in `echo "$STORAGE_NODE_LIST"|sed "s/,/ /g"`;do su -s /bin/sh -c "scp -r /tmp/ceph_upgrade/ceph_repo $SSH_USER@$node:/tmp/" $SSH_USER;done
+    else
+        for node in `echo "$STORAGE_NODE_LIST"|sed "s/,/ /g"`;do scp -r /tmp/ceph_upgrade/ceph_repo $node:/tmp/;done
+    fi
+}
+
+function build_ceph_upgrade_repo_centos() {
+    mkdir -p /etc/yum.repos.d/saved
+    mv /etc/yum.repos.d/*.repo /etc/yum.repos.d/saved/
+    echo "
+[cephrepo]
+name=cephrepo
+baseurl=file:///tmp/ceph_repo
+gpgcheck=0
+enabled=1
+proxy=_none_" > /etc/yum.repos.d/ceph-uprage.repo
+    }
+
+
+function ceph_upgrade_node_centos() {
+    build_ceph_upgrade_repo_centos
+    log_dir=/tmp/ceph-upgrade.log
+    rm -rf $log_dir
+    echo '----------------begin-----------------------------------------' >$log_dir
+    echo '---------------yum makecache  begin------------------------' >>$log_dir;
+    yum clean all;
+    yum makecache;
+    echo '---------------yum makecache done----' >>$log_dir;
+    yum -y install ceph;
+    echo '----------------upgrade ceph over-----------------------------' >>$log_dir;
+    chown_ceph
+#    restart_ceph_daemon
+    echo '-----------------over-----------------------------------------' >>$log_dir ;
+
+}
+
+function chown_ceph() {
+    ceph_user=`cat /etc/passwd|grep ceph|wc -l`
+    if [[ $ceph_user != 0 ]]; then
+        echo '---------------Modify the directory and file belongs----------' >>$log_dir
+        chown -R ceph:ceph /var/lib/ceph
+        chown -R ceph:ceph /etc/ceph
+        if [[ -d /var/run/ceph ]]; then
+            chown -R ceph:ceph /var/run/ceph
+        fi
+        cat /etc/ceph/ceph.conf | while read line; do
+            str1=${line:0:4}
+            str2=${line:0:11}
+            if [[ $str1 == "devs" && -e ${line:7} ]]; then
+                data_partition=${line:7}
+                chown ceph:ceph $data_partition
+            fi
+            if [[ $str2 == "osd journal" && -e ${line:14} ]]; then
+                if [[ ${line:15:-5} == "dev" ]]; then
+                    journal_partition=${line:14}
+                    chown ceph:ceph $journal_partition
+                fi
+            fi
+        done
+        echo '---------------Modify Over--------------------------------' >>$log_dir
+    fi
+}
+
+function restart_ceph_daemon() {
+    echo '---------------Restart ceph daemon------------------------' >>$log_dir
+    upstart_file=`find /var/lib/ceph -name upstart`
+    if [[ -e $upstart_file ]]; then
+        restart ceph-all
+    else
+        service ceph restart
+    fi
+    echo '---------------Restart ceph daemon Over-------------------' >>$log_dir
+}
+
+#---------------------------------------------
+# Read Parameters.
+#---------------------------------------------
+
+parameter_count=$#
+parameters=$*
+
+PKG_URL=""
+KEY_URL=""
+PROXY=""
+STORAGE_NODE_LIST=""
+SSH_USER=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h) usage ;;
+    --help) usage ;;
+    -p | --pkg_url) shift;echo $1;PKG_URL=$1 ;;
+    -k | --key_url) shift;KEY_URL=$1  ;;
+    -s | --storages) shift;STORAGE_NODE_LIST=$1  ;;
+    --proxy) shift;PROXY=$1  ;;
+    --ssh_user) shift;SSH_USER=$1  ;;
+    *) shift ;;
+  esac
+  shift
+done
+
+if [[ -n $PROXY ]]; then
+    export http_proxy=$PROXY
+    export https_proxy=$PROXY
+    export ftp_proxy=$PROXY
+fi
+
+is_lsb_release=0
+lsb_release -a >/dev/null 2>&1 && is_lsb_release=1
+OS=""
+OS_VERSION=""
+if [[ $is_lsb_release -gt 0 ]]; then
+    OS=`lsb_release -a|grep "Distributor ID:"|awk -F ' ' '{print $3}'`
+    OS_VERSION=`lsb_release -a|grep "Release"|awk -F ' ' '{print $2}'`
+else
+    var=`cat /etc/os-release|grep "PRETTY_NAME"|awk -F "=" '{print $2}'`
+    if [[ $var =~ "CentOS Linux 7" ]]; then
+        OS="CentOS"
+        OS_VERSION="7"
+    fi
+fi
+
+if [[ -n $STORAGE_NODE_LIST  && -n $KEY_URL   ]]; then
+    if [[ $OS == "Ubuntu" && -n $PKG_URL ]]; then
+        get_ceph_upgrade_pkgs_in_controller
+    elif [[ $OS == "CentOS" ]]; then
+        get_ceph_upgrade_pkgs_in_controller_centos
+    fi
+
+else
+    if [[ $OS == "Ubuntu" ]]; then
+        ceph_upgrade_node
+    elif [[ $OS == "CentOS" ]]; then
+        ceph_upgrade_node_centos
+    fi
+
+fi
+
+set +o xtrace
+
