@@ -1,0 +1,415 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.kld &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../index.html"/>
+        <link rel="up" title="vaex" href="../vaex.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.kld</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.kld</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">import</span> <span class="nn">logging</span> <span class="kn">as</span> <span class="nn">logging</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;vaex.kld&quot;</span><span class="p">)</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">vaex.vaexfast</span>
+<span class="kn">import</span> <span class="nn">vaex.utils</span>
+<span class="kn">from</span> <span class="nn">vaex.utils</span> <span class="kn">import</span> <span class="n">Timer</span>
+
+<div class="viewcode-block" id="mutual_information"><a class="viewcode-back" href="../../vaex.html#vaex.kld.mutual_information">[docs]</a><span class="k">def</span> <span class="nf">mutual_information</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+	<span class="n">Q</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">disjoined</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+	<span class="n">P</span> <span class="o">=</span> <span class="n">data</span>
+
+	<span class="n">P</span> <span class="o">=</span> <span class="n">P</span> <span class="o">/</span> <span class="n">P</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+	<span class="n">Q</span> <span class="o">=</span> <span class="n">Q</span> <span class="o">/</span> <span class="n">Q</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+	<span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">P</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">Q</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">)</span>
+	<span class="n">information</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">/</span><span class="n">Q</span><span class="p">[</span><span class="n">mask</span><span class="p">]))</span><span class="c"># * np.sum(dx)</span>
+	<span class="k">return</span> <span class="n">information</span></div>
+
+<div class="viewcode-block" id="kl_divergence"><a class="viewcode-back" href="../../vaex.html#vaex.kld.kl_divergence">[docs]</a><span class="k">def</span> <span class="nf">kl_divergence</span><span class="p">(</span><span class="n">P</span><span class="p">,</span> <span class="n">Q</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">P</span> <span class="o">=</span> <span class="n">P</span> <span class="o">/</span> <span class="n">P</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">)</span>
+    <span class="n">Q</span> <span class="o">=</span> <span class="n">Q</span> <span class="o">/</span> <span class="n">Q</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">)</span>
+    <span class="c">#mask = (P &gt; 0) &amp; (Q&gt;0)</span>
+    <span class="c">#information = np.sum(P[mask] * np.log(P[mask]/Q[mask]), axis=axis)# * np.sum(dx)</span>
+    <span class="c">#mask = (P &gt; 0) &amp; (Q&gt;0)</span>
+    <span class="n">information</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">P</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">P</span><span class="o">/</span><span class="n">Q</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">)</span><span class="c"># * np.sum(dx)</span>
+    <span class="k">return</span> <span class="n">information</span></div>
+
+<div class="viewcode-block" id="KlDivergenceShuffle"><a class="viewcode-back" href="../../vaex.html#vaex.kld.KlDivergenceShuffle">[docs]</a><span class="k">class</span> <span class="nc">KlDivergenceShuffle</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">pairs</span><span class="p">,</span> <span class="n">gridsize</span><span class="o">=</span><span class="mi">128</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">pairs</span> <span class="o">=</span> <span class="n">pairs</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dimension</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pairs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;kld&#39;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">gridsize</span> <span class="o">=</span> <span class="n">gridsize</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;dimension: </span><span class="si">%d</span><span class="s">, pairs: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dimension</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pairs</span><span class="p">))</span>
+		
+		
+<div class="viewcode-block" id="KlDivergenceShuffle.get_jobs"><a class="viewcode-back" href="../../vaex.html#vaex.kld.KlDivergenceShuffle.get_jobs">[docs]</a>	<span class="k">def</span> <span class="nf">get_jobs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">def</span> <span class="nf">job</span><span class="p">(</span><span class="n">pair</span><span class="p">):</span>
+			<span class="k">pass</span></div></div>
+		
+		
+<div class="viewcode-block" id="to_disjoined"><a class="viewcode-back" href="../../vaex.html#vaex.kld.to_disjoined">[docs]</a><span class="k">def</span> <span class="nf">to_disjoined</span><span class="p">(</span><span class="n">counts</span><span class="p">):</span>
+	<span class="n">shape</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">shape</span>
+	<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">counts</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+	<span class="n">counts_0</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">))</span>
+	<span class="n">counts_1</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+	<span class="n">counts_disjoined</span> <span class="o">=</span> <span class="n">counts_0</span> <span class="o">*</span> <span class="n">counts_1</span>
+	<span class="k">return</span> <span class="n">counts_disjoined</span></div>
+		
+<div class="viewcode-block" id="kld_shuffled"><a class="viewcode-back" href="../../vaex.html#vaex.kld.kld_shuffled">[docs]</a><span class="k">def</span> <span class="nf">kld_shuffled</span><span class="p">(</span><span class="n">columns</span><span class="p">,</span> <span class="n">Ngrid</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">datamins</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">datamaxes</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+	<span class="k">if</span> <span class="n">datamins</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+		<span class="n">datamins</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">nanmin</span><span class="p">(</span><span class="n">column</span><span class="p">)</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">])</span>
+	<span class="k">if</span> <span class="n">datamaxes</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+		<span class="n">datamaxes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">nanmax</span><span class="p">(</span><span class="n">column</span><span class="p">)</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">])</span>
+	<span class="n">dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span>
+	<span class="n">counts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">Ngrid</span><span class="p">,</span> <span class="p">)</span> <span class="o">*</span> <span class="n">dim</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+	<span class="n">counts_shuffled</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">Ngrid</span><span class="p">,</span> <span class="p">)</span> <span class="o">*</span> <span class="n">dim</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+	<span class="n">D_kl</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+		<span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">columns</span>
+		<span class="c">#print x</span>
+		<span class="c">#print y</span>
+		<span class="k">print</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">counts</span><span class="p">,</span> <span class="n">counts_shuffled</span><span class="p">,</span> <span class="n">datamins</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">datamaxes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">datamins</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">datamaxes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">offset</span><span class="p">))</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">vaex</span><span class="o">.</span><span class="n">histogram</span><span class="o">.</span><span class="n">hist2d_and_shuffled</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">counts</span><span class="p">,</span> <span class="n">counts_shuffled</span><span class="p">,</span> <span class="n">datamins</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">datamaxes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">datamins</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">datamaxes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">offset</span><span class="p">)</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">counts</span><span class="p">,</span> <span class="n">counts_shuffled</span><span class="p">,</span> <span class="n">datamins</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">datamaxes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">datamins</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">datamaxes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">offset</span><span class="p">]</span>
+			<span class="n">sig</span> <span class="o">=</span> <span class="p">[</span><span class="n">numba</span><span class="o">.</span><span class="n">dispatcher</span><span class="o">.</span><span class="n">typeof_pyval</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span><span class="p">]</span>
+			<span class="k">print</span><span class="p">(</span><span class="n">sig</span><span class="p">)</span>
+			<span class="k">raise</span>
+			
+		<span class="k">print</span><span class="p">((</span><span class="s">&quot;counts&quot;</span><span class="p">,</span> <span class="nb">sum</span><span class="p">(</span><span class="n">counts</span><span class="p">)))</span>
+		<span class="n">deltax</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">datamaxes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">datamins</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">)]</span>
+		<span class="n">dx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">deltax</span><span class="p">[</span><span class="n">d</span><span class="p">]</span><span class="o">/</span><span class="n">counts</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">)])</span>
+		<span class="n">density</span> <span class="o">=</span> <span class="n">counts</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">counts</span><span class="p">)</span><span class="c"># * np.sum(dx)</span>
+		<span class="n">density_shuffled</span> <span class="o">=</span> <span class="n">counts_shuffled</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">counts_shuffled</span><span class="p">)</span><span class="c"># * np.sum(dx)</span>
+		<span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">density_shuffled</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">density</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">)</span>
+		<span class="c">#print density</span>
+		<span class="n">D_kl</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">density</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">density</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">/</span><span class="n">density_shuffled</span><span class="p">[</span><span class="n">mask</span><span class="p">]))</span><span class="c"># * np.sum(dx)</span>
+		<span class="c">#if D_kl &lt; 0:</span>
+		<span class="c">#	import pdb</span>
+		<span class="c">#	pdb.set_trace()</span>
+	<span class="k">return</span> <span class="n">D_kl</span></div>
+				
+		
+<div class="viewcode-block" id="kld_shuffled_grouped"><a class="viewcode-back" href="../../vaex.html#vaex.kld.kld_shuffled_grouped">[docs]</a><span class="k">def</span> <span class="nf">kld_shuffled_grouped</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">range_map</span><span class="p">,</span> <span class="n">pairs</span><span class="p">,</span> <span class="n">feedback</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">size_grid</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">use_mask</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">bytes_max</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span><span class="o">/</span><span class="mi">2</span><span class="p">)):</span>
+	<span class="n">dimension</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+	<span class="n">bytes_per_grid</span> <span class="o">=</span> <span class="n">size_grid</span> <span class="o">**</span> <span class="n">dimension</span> <span class="o">*</span> <span class="mi">8</span> <span class="c"># 8==sizeof (double)</span>
+	<span class="n">grids_per_iteration</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">bytes_max</span><span class="o">/</span><span class="n">bytes_per_grid</span><span class="p">))</span>
+	<span class="n">iterations</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">grids_per_iteration</span><span class="p">))</span>
+	<span class="n">jobsManager</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">JobsManager</span><span class="p">()</span>
+	<span class="n">ranges</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span>
+	<span class="n">D_kls</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+	<span class="k">class</span> <span class="nc">Wrapper</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+		<span class="k">pass</span>
+	<span class="n">wrapper</span> <span class="o">=</span> <span class="n">Wrapper</span><span class="p">()</span>
+	<span class="n">wrapper</span><span class="o">.</span><span class="n">N_done</span> <span class="o">=</span> <span class="mi">0</span>
+
+	<span class="n">counts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">grids_per_iteration</span><span class="p">,)</span> <span class="o">+</span> <span class="p">(</span><span class="n">size_grid</span><span class="p">,)</span> <span class="o">*</span> <span class="n">dimension</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+	<span class="c">#counts_shuffled = np.zeros((grids_per_iteration,) + (size_grid,) * dimension, dtype=np.float64)</span>
+
+	<span class="n">N_total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span> <span class="o">*</span> <span class="n">dimension</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span> <span class="o">*</span><span class="n">counts</span><span class="o">.</span><span class="n">size</span>
+
+	<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;{iterations} iterations with {grids_per_iteration} grids per iteration&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="nb">locals</span><span class="p">()))</span>
+	<span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">iterations</span><span class="p">):</span>
+		<span class="k">if</span> <span class="n">part</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span> <span class="c"># next iterations reset the counts</span>
+			<span class="n">counts</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[:]</span> <span class="o">=</span> <span class="mi">0</span>
+			<span class="c">#counts_shuffled.reshape(-1)[:] = 0</span>
+		<span class="n">i1</span><span class="p">,</span> <span class="n">i2</span> <span class="o">=</span> <span class="n">part</span> <span class="o">*</span> <span class="n">grids_per_iteration</span><span class="p">,</span> <span class="p">(</span><span class="n">part</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">grids_per_iteration</span>
+		<span class="k">if</span> <span class="n">i2</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">):</span>
+			<span class="n">i2</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span>
+		<span class="n">n_grids</span> <span class="o">=</span> <span class="n">i2</span> <span class="o">-</span> <span class="n">i1</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;part {part} of {iterations}, from {i1} to {i2}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="nb">locals</span><span class="p">()))</span>
+		<span class="k">def</span> <span class="nf">grid</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="o">*</span><span class="n">blocks</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+			<span class="n">index</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;index&quot;</span><span class="p">]</span>
+			<span class="k">if</span> <span class="n">use_mask</span> <span class="ow">and</span> <span class="n">dataset</span><span class="o">.</span><span class="n">mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+				<span class="n">mask</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">mask</span><span class="p">[</span><span class="n">info</span><span class="o">.</span><span class="n">i1</span><span class="p">:</span><span class="n">info</span><span class="o">.</span><span class="n">i2</span><span class="p">]</span>
+				<span class="n">blocks</span> <span class="o">=</span> <span class="p">[</span><span class="n">block</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">blocks</span><span class="p">]</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">mask</span> <span class="o">=</span> <span class="bp">None</span>
+			<span class="n">ranges</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="n">minima</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="n">maxima</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dimension</span><span class="p">):</span>
+				<span class="n">ranges</span> <span class="o">+=</span> <span class="nb">list</span><span class="p">(</span><span class="n">range_map</span><span class="p">[</span><span class="n">pairs</span><span class="p">[</span><span class="n">index</span><span class="p">][</span><span class="n">dim</span><span class="p">]])</span>
+				<span class="n">mi</span><span class="p">,</span> <span class="n">ma</span> <span class="o">=</span> <span class="n">range_map</span><span class="p">[</span><span class="n">pairs</span><span class="p">[</span><span class="n">index</span><span class="p">][</span><span class="n">dim</span><span class="p">]]</span>
+				<span class="n">minima</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mi</span><span class="p">)</span>
+				<span class="n">maxima</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ma</span><span class="p">)</span>
+			<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">blocks</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+				<span class="k">print</span><span class="p">((</span><span class="s">&quot;mask&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">))</span>
+				<span class="n">vaex</span><span class="o">.</span><span class="n">vaexfast</span><span class="o">.</span><span class="n">histogram2d</span><span class="p">(</span><span class="n">blocks</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">blocks</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">None</span><span class="p">,</span> <span class="n">counts</span><span class="p">[</span><span class="n">index</span><span class="p">],</span> <span class="o">*</span><span class="p">(</span><span class="n">ranges</span> <span class="o">+</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span>
+				<span class="c">#vaex.vaexfast.histogram2d(blocks[0], blocks[1], None, counts_shuffled[index], *(ranges + [1, 0]))</span>
+			<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">blocks</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+				<span class="n">vaex</span><span class="o">.</span><span class="n">vaexfast</span><span class="o">.</span><span class="n">histogram3d</span><span class="p">(</span><span class="n">blocks</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">blocks</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">blocks</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="bp">None</span><span class="p">,</span> <span class="n">counts</span><span class="p">[</span><span class="n">index</span><span class="p">],</span> <span class="o">*</span><span class="p">(</span><span class="n">ranges</span> <span class="o">+</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]))</span>
+				<span class="c">#vaex.vaexfast.histogramNd(list(blocks), None, counts[index], minima, maxima)</span>
+				<span class="c">#for i in range(5):</span>
+				<span class="c">#	vaex.vaexfast.histogram3d(blocks[0], blocks[1], blocks[2], None, counts_shuffled[index], *(ranges + [2+i,1+i,0]))</span>
+			<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">blocks</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">:</span>
+				<span class="n">vaex</span><span class="o">.</span><span class="n">vaexfast</span><span class="o">.</span><span class="n">histogramNd</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">blocks</span><span class="p">),</span> <span class="bp">None</span><span class="p">,</span> <span class="n">counts</span><span class="p">[</span><span class="n">index</span><span class="p">],</span> <span class="n">minima</span><span class="p">,</span> <span class="n">maxima</span><span class="p">)</span>
+				<span class="c">#for i in range(5):</span>
+				<span class="c">#	vaex.vaexfast.histogram3d(blocks[0], blocks[1], blocks[2], None, counts_shuffled[index], *(ranges + [2+i,1+i,0]))</span>
+			<span class="k">if</span> <span class="n">feedback</span><span class="p">:</span>
+				<span class="n">wrapper</span><span class="o">.</span><span class="n">N_done</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">blocks</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="n">dimension</span>
+				<span class="k">if</span> <span class="n">feedback</span><span class="p">:</span>
+					<span class="n">cancel</span> <span class="o">=</span> <span class="n">feedback</span><span class="p">(</span><span class="n">wrapper</span><span class="o">.</span><span class="n">N_done</span><span class="o">*</span><span class="mf">100.</span><span class="o">/</span><span class="n">N_total</span><span class="p">)</span>
+					<span class="k">if</span> <span class="n">cancel</span><span class="p">:</span>
+						<span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;cancelled&quot;</span><span class="p">)</span>
+				
+		<span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">pair</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">)),</span> <span class="n">pairs</span><span class="p">[</span><span class="n">i1</span><span class="p">:</span><span class="n">i2</span><span class="p">]):</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;add job </span><span class="si">%r</span><span class="s"> </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">pair</span><span class="p">))</span>
+			<span class="n">jobsManager</span><span class="o">.</span><span class="n">addJob</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">index</span><span class="o">-</span><span class="n">i1</span><span class="p">),</span> <span class="n">dataset</span><span class="p">,</span> <span class="o">*</span><span class="n">pair</span><span class="p">)</span> 
+		<span class="n">jobsManager</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+
+	
+		<span class="k">with</span> <span class="n">Timer</span><span class="p">(</span><span class="s">&quot;D_kl&quot;</span><span class="p">):</span>
+			<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_grids</span><span class="p">):</span>
+				<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+					<span class="n">deltax</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">range_map</span><span class="p">[</span><span class="n">pairs</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">d</span><span class="p">]][</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">range_map</span><span class="p">[</span><span class="n">pairs</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">d</span><span class="p">]][</span><span class="mi">0</span><span class="p">])</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dimension</span><span class="p">)]</span>
+					<span class="n">dx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">deltax</span><span class="p">[</span><span class="n">d</span><span class="p">]</span><span class="o">/</span><span class="n">counts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dimension</span><span class="p">)])</span>
+					<span class="n">density</span> <span class="o">=</span> <span class="n">counts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">counts</span><span class="p">[</span><span class="n">i</span><span class="p">])</span><span class="c"># * np.sum(dx)</span>
+					<span class="n">counts_shuffled</span> <span class="o">=</span> <span class="n">to_disjoined</span><span class="p">(</span><span class="n">counts</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+					<span class="n">density_shuffled</span> <span class="o">=</span> <span class="n">counts_shuffled</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">counts_shuffled</span><span class="p">)</span><span class="c"># * np.sum(dx)</span>
+					<span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">density_shuffled</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">density</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">)</span>
+					<span class="k">print</span><span class="p">((</span><span class="s">&quot;mask sum&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">mask</span><span class="p">)))</span>
+					<span class="k">print</span><span class="p">((</span><span class="s">&quot;mask sum&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">counts_shuffled</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">counts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">))))</span>
+					<span class="c">#print density</span>
+					<span class="n">D_kl</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">density</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">density</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">/</span><span class="n">density_shuffled</span><span class="p">[</span><span class="n">mask</span><span class="p">]))</span><span class="c"># * np.sum(dx)</span>
+				<span class="k">else</span><span class="p">:</span>
+					<span class="n">D_kl</span> <span class="o">=</span> <span class="n">mutual_information</span><span class="p">(</span><span class="n">counts</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+				<span class="n">D_kls</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">D_kl</span><span class="p">)</span>
+				<span class="k">if</span> <span class="n">feedback</span><span class="p">:</span>
+					<span class="n">wrapper</span><span class="o">.</span><span class="n">N_done</span> <span class="o">+=</span> <span class="n">counts</span><span class="o">.</span><span class="n">size</span>
+					<span class="n">cancel</span> <span class="o">=</span> <span class="n">feedback</span><span class="p">(</span><span class="n">wrapper</span><span class="o">.</span><span class="n">N_done</span><span class="o">*</span><span class="mf">100.</span><span class="o">/</span><span class="n">N_total</span><span class="p">)</span>
+					<span class="k">if</span> <span class="n">cancel</span><span class="p">:</span>
+						<span class="k">return</span> <span class="bp">None</span>
+						<span class="c">#raise Exception, &quot;cancelled&quot;</span>
+	<span class="k">return</span> <span class="n">D_kls</span></div>
+			
+		
+		
+	
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+	<span class="kn">import</span> <span class="nn">vaex.dataset</span>
+	<span class="kn">import</span> <span class="nn">vaex.files</span>
+	<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+	<span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span> <span class="c">#usage=&quot;&quot;)</span>
+
+	<span class="c">#parser.add_option(&quot;-n&quot;, &quot;--name&quot;,</span>
+	<span class="c">#                 help=&quot;dataset name [default=%default]&quot;, default=&quot;data&quot;, type=str)</span>
+	<span class="c">#parser.add_option(&quot;-o&quot;, &quot;--output&quot;,</span>
+	<span class="c">#                 help=&quot;dataset output filename [by default the suffix of input filename will be replaced by hdf5]&quot;, default=None, type=str)</span>
+	<span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+		<span class="n">filename</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="n">filename</span> <span class="o">=</span> <span class="s">&quot;gaussian4d-1e7.hdf5&quot;</span>
+	
+	<span class="n">path</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">files</span><span class="o">.</span><span class="n">get_datafile</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+	<span class="n">dataset</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">Hdf5MemoryMapped</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+	<span class="c">#for column_name in dataset.column_names:</span>
+	<span class="c">#	print column_name</span>
+	
+	<span class="n">subspace</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">subspace</span><span class="p">(</span><span class="mi">1</span><span class="p">)[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="n">dataset</span><span class="o">.</span><span class="n">subspace</span><span class="p">(</span><span class="mi">1</span><span class="p">)[:</span><span class="mi">3</span><span class="p">]</span>
+	<span class="c">#subspace = Subspace(dataset, [(&quot;x&quot;,), (&quot;y&quot;,), (&quot;z&quot;,)]</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

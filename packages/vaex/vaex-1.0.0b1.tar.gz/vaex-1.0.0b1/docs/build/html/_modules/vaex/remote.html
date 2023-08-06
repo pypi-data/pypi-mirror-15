@@ -1,0 +1,697 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.remote &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../index.html"/>
+        <link rel="up" title="vaex" href="../vaex.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.remote</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.remote</h1><div class="highlight"><pre>
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;breddels&#39;</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">uuid</span>
+
+<span class="k">try</span><span class="p">:</span>
+	<span class="kn">import</span> <span class="nn">__builtin__</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+	<span class="kn">import</span> <span class="nn">builtins</span> <span class="kn">as</span> <span class="nn">__builtin__</span>
+
+<span class="kn">from</span> <span class="nn">.dataset</span> <span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">Subspace</span><span class="p">,</span> <span class="n">Task</span>
+<span class="kn">import</span> <span class="nn">vaex.promise</span>
+<span class="kn">import</span> <span class="nn">vaex.settings</span>
+<span class="kn">import</span> <span class="nn">vaex.utils</span>
+<span class="k">try</span><span class="p">:</span>
+	<span class="kn">import</span> <span class="nn">Cookie</span>  <span class="c"># py2</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+	<span class="kn">import</span> <span class="nn">http.cookies</span> <span class="kn">as</span> <span class="nn">Cookie</span>  <span class="c"># py3</span>
+
+
+<span class="kn">from</span> <span class="nn">tornado.httpclient</span> <span class="kn">import</span> <span class="n">AsyncHTTPClient</span><span class="p">,</span> <span class="n">HTTPClient</span>
+<span class="kn">import</span> <span class="nn">tornado.httputil</span>
+<span class="kn">import</span> <span class="nn">tornado.websocket</span>
+<span class="kn">from</span> <span class="nn">tornado.concurrent</span> <span class="kn">import</span> <span class="n">Future</span>
+<span class="kn">from</span> <span class="nn">tornado</span> <span class="kn">import</span> <span class="n">gen</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;vaex.remote&quot;</span><span class="p">)</span>
+
+<span class="n">DEFAULT_REQUEST_TIMEOUT</span> <span class="o">=</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">5</span> <span class="c"># 5 minutes</span>
+
+<div class="viewcode-block" id="wrap_future_with_promise"><a class="viewcode-back" href="../../vaex.html#vaex.remote.wrap_future_with_promise">[docs]</a><span class="k">def</span> <span class="nf">wrap_future_with_promise</span><span class="p">(</span><span class="n">future</span><span class="p">):</span>
+	<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">future</span><span class="p">,</span> <span class="n">vaex</span><span class="o">.</span><span class="n">promise</span><span class="o">.</span><span class="n">Promise</span><span class="p">):</span> <span class="c"># TODO: not so nice, sometimes we pass a promise</span>
+		<span class="k">return</span> <span class="n">future</span>
+	<span class="n">promise</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">promise</span><span class="o">.</span><span class="n">Promise</span><span class="p">()</span>
+	<span class="k">def</span> <span class="nf">callback</span><span class="p">(</span><span class="n">future</span><span class="p">):</span>
+		<span class="c">#print((&quot;callback&quot;, future, future.result()))</span>
+		<span class="n">e</span> <span class="o">=</span> <span class="n">future</span><span class="o">.</span><span class="n">exception</span><span class="p">()</span>
+		<span class="k">if</span> <span class="n">e</span><span class="p">:</span>
+			<span class="c">#print((&quot;reject&quot;, e))</span>
+			<span class="n">promise</span><span class="o">.</span><span class="n">reject</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">promise</span><span class="o">.</span><span class="n">fulfill</span><span class="p">(</span><span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
+	<span class="n">future</span><span class="o">.</span><span class="n">add_done_callback</span><span class="p">(</span><span class="n">callback</span><span class="p">)</span>
+	<span class="k">return</span> <span class="n">promise</span></div>
+
+<span class="kn">import</span> <span class="nn">tornado.ioloop</span>
+
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">json</span>
+
+
+<span class="k">try</span><span class="p">:</span>
+	<span class="kn">from</span> <span class="nn">urllib.request</span> <span class="kn">import</span> <span class="n">urlopen</span>
+	<span class="kn">from</span> <span class="nn">urllib.parse</span> <span class="kn">import</span> <span class="n">urlparse</span><span class="p">,</span> <span class="n">urlencode</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+	<span class="kn">from</span> <span class="nn">urlparse</span> <span class="kn">import</span> <span class="n">urlparse</span>
+	<span class="kn">from</span> <span class="nn">urllib</span> <span class="kn">import</span> <span class="n">urlopen</span><span class="p">,</span> <span class="n">urlencode</span>
+
+<span class="kn">import</span> <span class="nn">threading</span>
+
+<span class="k">def</span> <span class="nf">_check_error</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">if</span> <span class="s">&quot;error&quot;</span> <span class="ow">in</span> <span class="nb">object</span><span class="p">:</span>
+		<span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;Server responded with error: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="nb">object</span><span class="p">[</span><span class="s">&quot;error&quot;</span><span class="p">])</span>
+
+
+<div class="viewcode-block" id="ServerRest"><a class="viewcode-back" href="../../vaex.html#vaex.remote.ServerRest">[docs]</a><span class="k">class</span> <span class="nc">ServerRest</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hostname</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">base_path</span><span class="o">=</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="n">background</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">thread_mover</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">websocket</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">hostname</span> <span class="o">=</span> <span class="n">hostname</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">port</span> <span class="o">=</span> <span class="n">port</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">base_path</span> <span class="o">=</span> <span class="n">base_path</span> <span class="k">if</span> <span class="n">base_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">base_path</span> <span class="o">+</span> <span class="s">&quot;/&quot;</span><span class="p">)</span>
+		<span class="c">#if async:</span>
+		<span class="n">event</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span> <span class="o">=</span> <span class="n">thread_mover</span> <span class="ow">or</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;thread mover: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">)</span>
+
+		<span class="c"># jobs maps from uid to tasks</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">jobs</span> <span class="o">=</span> <span class="p">{}</span>
+
+		<span class="k">def</span> <span class="nf">ioloop_threaded</span><span class="p">():</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;creating tornado io_loop&quot;</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">io_loop</span> <span class="o">=</span> <span class="n">tornado</span><span class="o">.</span><span class="n">ioloop</span><span class="o">.</span><span class="n">IOLoop</span><span class="p">()</span><span class="o">.</span><span class="n">instance</span><span class="p">()</span>
+			<span class="n">event</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;started tornado io_loop...&quot;</span><span class="p">)</span>
+
+			<span class="bp">self</span><span class="o">.</span><span class="n">io_loop</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;stopped tornado io_loop&quot;</span><span class="p">)</span>
+
+		<span class="n">io_loop</span> <span class="o">=</span> <span class="n">tornado</span><span class="o">.</span><span class="n">ioloop</span><span class="o">.</span><span class="n">IOLoop</span><span class="o">.</span><span class="n">current</span><span class="p">(</span><span class="n">instance</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">io_loop</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;no current io loop, starting it in thread&quot;</span><span class="p">)</span>
+			<span class="n">thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">ioloop_threaded</span><span class="p">)</span>
+			<span class="n">thread</span><span class="o">.</span><span class="n">setDaemon</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+			<span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+			<span class="n">event</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">io_loop</span> <span class="o">=</span> <span class="n">io_loop</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">io_loop</span><span class="o">.</span><span class="n">make_current</span><span class="p">()</span>
+		<span class="c">#if async:</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">http_client_async</span> <span class="o">=</span> <span class="n">AsyncHTTPClient</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">http_client</span> <span class="o">=</span> <span class="n">HTTPClient</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">user_id</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">settings</span><span class="o">.</span><span class="n">webclient</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;cookie.user_id&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">use_websocket</span> <span class="o">=</span> <span class="n">websocket</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">websocket</span> <span class="o">=</span> <span class="bp">None</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">submit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">submit_http</span>
+
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_websocket</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">submit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">submit_websocket</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">_websocket_connect</span><span class="p">()</span>
+
+	<span class="k">def</span> <span class="nf">_websocket_connect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">def</span> <span class="nf">connected</span><span class="p">(</span><span class="n">websocket</span><span class="p">):</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;connected to websocket: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_url</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">))</span>
+		<span class="k">def</span> <span class="nf">failed</span><span class="p">(</span><span class="n">reason</span><span class="p">):</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;failed to connect to </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_url</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">))</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">websocket_connected</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">promise</span><span class="o">.</span><span class="n">Promise</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">websocket_connected</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">connected</span><span class="p">,</span> <span class="n">failed</span><span class="p">)</span>
+		<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">connected</span> <span class="o">=</span> <span class="n">wrap_future_with_promise</span><span class="p">(</span><span class="n">tornado</span><span class="o">.</span><span class="n">websocket</span><span class="o">.</span><span class="n">websocket_connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_url</span><span class="p">(</span><span class="s">&quot;websocket&quot;</span><span class="p">),</span> <span class="n">on_message_callback</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_on_websocket_message</span><span class="p">))</span>
+			<span class="n">connected</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">websocket_connected</span><span class="o">.</span><span class="n">fulfill</span><span class="p">(</span><span class="n">connected</span><span class="p">)</span>
+		<span class="k">def</span> <span class="nf">do</span><span class="p">():</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="n">connected</span> <span class="o">=</span> <span class="n">wrap_future_with_promise</span><span class="p">(</span><span class="n">tornado</span><span class="o">.</span><span class="n">websocket</span><span class="o">.</span><span class="n">websocket_connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_url</span><span class="p">(</span><span class="s">&quot;websocket&quot;</span><span class="p">),</span> <span class="n">on_message_callback</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_on_websocket_message</span><span class="p">))</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">websocket_connected</span><span class="o">.</span><span class="n">fulfill</span><span class="p">(</span><span class="n">connected</span><span class="p">)</span>
+			<span class="k">except</span><span class="p">:</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s">&quot;error connecting&quot;</span><span class="p">)</span>
+				<span class="c">#raise</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">io_loop</span><span class="o">.</span><span class="n">add_callback</span><span class="p">(</span><span class="n">do</span><span class="p">)</span>
+		<span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">websocket_connected</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">websocket_connected</span><span class="o">.</span><span class="n">isRejected</span><span class="p">:</span>
+			<span class="k">raise</span> <span class="bp">self</span><span class="o">.</span><span class="n">websocket</span><span class="o">.</span><span class="n">reason</span>
+
+
+
+
+	<span class="k">def</span> <span class="nf">_on_websocket_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+		<span class="n">response</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+		<span class="kn">import</span> <span class="nn">sys</span>
+		<span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1024</span><span class="o">*</span><span class="mi">4</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;socket read message: &lt;large amount of data&gt;&quot;</span><span class="p">,)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;socket read message: </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;json response: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">response</span><span class="p">)</span>
+		<span class="c"># for the moment, job == task, in the future a job can be multiple tasks</span>
+		<span class="n">job_id</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;job_id&quot;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">job_id</span><span class="p">:</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="n">phase</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s">&quot;job_phase&quot;</span><span class="p">]</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;job update </span><span class="si">%r</span><span class="s">, phase=</span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span>
+				<span class="k">if</span> <span class="n">phase</span> <span class="o">==</span> <span class="s">&quot;COMPLETED&quot;</span><span class="p">:</span>
+					<span class="n">result</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s">&quot;result&quot;</span><span class="p">]</span><span class="c">#[0]</span>
+					<span class="c">#logger.debug(&quot;completed job %r, result=%r&quot;, job_id, result)</span>
+					<span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;completed job </span><span class="si">%r</span><span class="s"> (async=</span><span class="si">%r</span><span class="s">, thread_mover=</span><span class="si">%r</span><span class="s">)&quot;</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">async</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">)</span>
+					<span class="n">processed_result</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">post_process</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+					<span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">async</span><span class="p">:</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">fulfill</span><span class="p">,</span> <span class="n">processed_result</span><span class="p">)</span>
+					<span class="k">else</span><span class="p">:</span>
+						<span class="n">task</span><span class="o">.</span><span class="n">fulfill</span><span class="p">(</span><span class="n">processed_result</span><span class="p">)</span>
+				<span class="k">elif</span> <span class="n">phase</span> <span class="o">==</span> <span class="s">&quot;EXCEPTION&quot;</span><span class="p">:</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;exception happened at server side: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">response</span><span class="p">)</span>
+					<span class="n">class_name</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s">&quot;exception&quot;</span><span class="p">][</span><span class="s">&quot;class&quot;</span><span class="p">]</span>
+					<span class="n">msg</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s">&quot;exception&quot;</span><span class="p">][</span><span class="s">&quot;msg&quot;</span><span class="p">]</span>
+					<span class="n">exception</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">__builtin__</span><span class="p">,</span> <span class="n">class_name</span><span class="p">)(</span><span class="n">msg</span><span class="p">)</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;error in job </span><span class="si">%r</span><span class="s">, exception=</span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">exception</span><span class="p">)</span>
+					<span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
+					<span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">async</span><span class="p">:</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">reject</span><span class="p">,</span> <span class="n">exception</span><span class="p">)</span>
+					<span class="k">else</span><span class="p">:</span>
+						<span class="n">task</span><span class="o">.</span><span class="n">reject</span><span class="p">(</span><span class="n">exception</span><span class="p">)</span>
+				<span class="k">elif</span> <span class="n">phase</span> <span class="o">==</span> <span class="s">&quot;ERROR&quot;</span><span class="p">:</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error happened at server side: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">response</span><span class="p">)</span>
+					<span class="n">msg</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s">&quot;error&quot;</span><span class="p">]</span>
+					<span class="n">exception</span> <span class="o">=</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;error at server: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">msg</span><span class="p">)</span>
+					<span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
+					<span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">async</span><span class="p">:</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">reject</span><span class="p">,</span> <span class="n">exception</span><span class="p">)</span>
+					<span class="k">else</span><span class="p">:</span>
+						<span class="n">task</span><span class="o">.</span><span class="n">reject</span><span class="p">(</span><span class="n">exception</span><span class="p">)</span>
+				<span class="k">elif</span> <span class="n">phase</span> <span class="o">==</span> <span class="s">&quot;PENDING&quot;</span><span class="p">:</span>
+					<span class="n">fraction</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s">&quot;progress&quot;</span><span class="p">]</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;pending?: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span>
+					<span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
+					<span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">async</span><span class="p">:</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">signal_progress</span><span class="o">.</span><span class="n">emit</span><span class="p">,</span> <span class="n">fraction</span><span class="p">)</span>
+					<span class="k">else</span><span class="p">:</span>
+						<span class="n">task</span><span class="o">.</span><span class="n">signal_progress</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">fraction</span><span class="p">)</span>
+			<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s">&quot;error in handling job&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+				<span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
+				<span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">async</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">reject</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+				<span class="k">else</span><span class="p">:</span>
+					<span class="n">task</span><span class="o">.</span><span class="n">reject</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ServerRest.wait"><a class="viewcode-back" href="../../vaex.html#vaex.remote.ServerRest.wait">[docs]</a>	<span class="k">def</span> <span class="nf">wait</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">io_loop</span> <span class="o">=</span> <span class="n">tornado</span><span class="o">.</span><span class="n">ioloop</span><span class="o">.</span><span class="n">IOLoop</span><span class="o">.</span><span class="n">instance</span><span class="p">()</span>
+		<span class="n">io_loop</span><span class="o">.</span><span class="n">start</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ServerRest.submit_websocket"><a class="viewcode-back" href="../../vaex.html#vaex.remote.ServerRest.submit_websocket">[docs]</a>	<span class="k">def</span> <span class="nf">submit_websocket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">arguments</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">post_process</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">):</span>
+		<span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_websocket</span>
+
+		<span class="n">task</span> <span class="o">=</span> <span class="n">TaskServer</span><span class="p">(</span><span class="n">post_process</span><span class="o">=</span><span class="n">post_process</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="n">async</span><span class="p">)</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;created task: </span><span class="si">%r</span><span class="s">, </span><span class="si">%r</span><span class="s"> (async=</span><span class="si">%r</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">arguments</span><span class="p">,</span> <span class="n">async</span><span class="p">))</span>
+		<span class="n">job_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">task</span>
+		<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;job_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">job_id</span>
+		<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;path&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">path</span>
+		<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;user_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">user_id</span>
+		<span class="k">def</span> <span class="nf">listify</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+			<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+				<span class="n">value</span> <span class="o">=</span> <span class="nb">list</span><span class="p">([</span><span class="n">listify</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">value</span><span class="p">])</span>
+			<span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s">&quot;tolist&quot;</span><span class="p">):</span>
+				<span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+			<span class="k">return</span> <span class="n">value</span>
+
+		<span class="c">#arguments = dict({key: (value.tolist() if hasattr(value, &quot;tolist&quot;) else value) for key, value in arguments.items()})</span>
+		<span class="n">arguments</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="n">listify</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">arguments</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span>
+
+		<span class="k">def</span> <span class="nf">do</span><span class="p">():</span>
+			<span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="n">socket</span><span class="p">):</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;write to websocket: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">arguments</span><span class="p">)</span>
+					<span class="n">socket</span><span class="o">.</span><span class="n">write_message</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">arguments</span><span class="p">))</span>
+					<span class="k">return</span>
+				<span class="k">except</span><span class="p">:</span>
+					<span class="kn">import</span> <span class="nn">traceback</span>
+					<span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+			<span class="c">#return</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;will schedule a write to the websocket&quot;</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">websocket_connected</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">write</span><span class="p">)</span><span class="o">.</span><span class="n">end</span><span class="p">()</span><span class="c">#.then(task.fulfill)</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">io_loop</span><span class="o">.</span><span class="n">add_callback</span><span class="p">(</span><span class="n">do</span><span class="p">)</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;we can continue (main thread is </span><span class="si">%r</span><span class="s">)&quot;</span><span class="p">,</span> <span class="n">threading</span><span class="o">.</span><span class="n">currentThread</span><span class="p">())</span>
+		<span class="k">if</span> <span class="n">async</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">task</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">task</span><span class="o">.</span><span class="n">get</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ServerRest.submit_http"><a class="viewcode-back" href="../../vaex.html#vaex.remote.ServerRest.submit_http">[docs]</a>	<span class="k">def</span> <span class="nf">submit_http</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">arguments</span><span class="p">,</span> <span class="n">post_process</span><span class="p">,</span> <span class="n">async</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+		<span class="k">def</span> <span class="nf">pre_post_process</span><span class="p">(</span><span class="n">response</span><span class="p">):</span>
+			<span class="n">cookie</span> <span class="o">=</span> <span class="n">Cookie</span><span class="o">.</span><span class="n">SimpleCookie</span><span class="p">()</span>
+			<span class="k">for</span> <span class="n">cookieset</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get_list</span><span class="p">(</span><span class="s">&quot;Set-Cookie&quot;</span><span class="p">):</span>
+				<span class="n">cookie</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">cookieset</span><span class="p">)</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;cookie load: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">cookieset</span><span class="p">)</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;cookie: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">cookie</span><span class="p">)</span>
+			<span class="k">if</span> <span class="s">&quot;user_id&quot;</span> <span class="ow">in</span> <span class="n">cookie</span><span class="p">:</span>
+				<span class="n">user_id</span> <span class="o">=</span> <span class="n">cookie</span><span class="p">[</span><span class="s">&quot;user_id&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">value</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;user_id: </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="p">)</span>
+				<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">user_id</span> <span class="o">!=</span> <span class="n">user_id</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">user_id</span> <span class="o">=</span> <span class="n">user_id</span>
+					<span class="n">vaex</span><span class="o">.</span><span class="n">settings</span><span class="o">.</span><span class="n">webclient</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="s">&quot;cookie.user_id&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">user_id</span><span class="p">)</span>
+			<span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">_check_exception</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+			<span class="k">return</span> <span class="n">post_process</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s">&quot;result&quot;</span><span class="p">])</span>
+
+		<span class="n">arguments</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s">&quot;tolist&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">arguments</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+		<span class="n">arguments_json</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">arguments</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+		<span class="n">headers</span> <span class="o">=</span> <span class="n">tornado</span><span class="o">.</span><span class="n">httputil</span><span class="o">.</span><span class="n">HTTPHeaders</span><span class="p">()</span>
+
+		<span class="n">url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_url</span><span class="p">(</span><span class="n">path</span> <span class="o">+</span><span class="s">&quot;?&quot;</span> <span class="o">+</span> <span class="n">urlencode</span><span class="p">(</span><span class="n">arguments_json</span><span class="p">))</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;fetch </span><span class="si">%s</span><span class="s">, async=</span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">url</span><span class="p">,</span> <span class="n">async</span><span class="p">)</span>
+
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">user_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="n">headers</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&quot;Cookie&quot;</span><span class="p">,</span> <span class="s">&quot;user_id=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">user_id</span><span class="p">)</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;adding user_id </span><span class="si">%s</span><span class="s"> to request&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">user_id</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">async</span><span class="p">:</span>
+			<span class="n">task</span> <span class="o">=</span> <span class="n">TaskServer</span><span class="p">(</span><span class="n">pre_post_process</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="n">async</span><span class="p">)</span>
+			<span class="c"># tornado doesn&#39;t like that we call fetch while ioloop is running in another thread, we should use ioloop.add_callbacl</span>
+			<span class="k">def</span> <span class="nf">do</span><span class="p">():</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">signal_progress</span><span class="o">.</span><span class="n">emit</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>
+				<span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">http_client_async</span><span class="o">.</span><span class="n">fetch</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">request_timeout</span><span class="o">=</span><span class="n">DEFAULT_REQUEST_TIMEOUT</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+				<span class="k">def</span> <span class="nf">thread_save_succes</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">signal_progress</span><span class="o">.</span><span class="n">emit</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">fulfill</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+				<span class="k">def</span> <span class="nf">thread_save_failure</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">reject</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+				<span class="n">wrap_future_with_promise</span><span class="p">(</span><span class="n">future</span><span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">pre_post_process</span><span class="p">)</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">thread_save_succes</span><span class="p">,</span> <span class="n">thread_save_failure</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">io_loop</span><span class="o">.</span><span class="n">add_callback</span><span class="p">(</span><span class="n">do</span><span class="p">)</span>
+			<span class="k">return</span> <span class="n">task</span> <span class="c">#promise.then(self._move_to_thread)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">pre_post_process</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_client</span><span class="o">.</span><span class="n">fetch</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">request_timeout</span><span class="o">=</span><span class="n">DEFAULT_REQUEST_TIMEOUT</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="ServerRest.datasets"><a class="viewcode-back" href="../../vaex.html#vaex.remote.ServerRest.datasets">[docs]</a>	<span class="k">def</span> <span class="nf">datasets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">as_dict</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+		<span class="k">def</span> <span class="nf">post</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;datasets result: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+			<span class="n">datasets</span> <span class="o">=</span> <span class="p">[</span><span class="n">DatasetRest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">kwargs</span> <span class="ow">in</span> <span class="n">result</span><span class="p">]</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;datasets: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">datasets</span><span class="p">)</span>
+			<span class="k">return</span> <span class="n">datasets</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">as_dict</span> <span class="k">else</span> <span class="nb">dict</span><span class="p">([(</span><span class="n">ds</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ds</span><span class="p">)</span> <span class="k">for</span> <span class="n">ds</span> <span class="ow">in</span> <span class="n">datasets</span><span class="p">])</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s">&quot;datasets&quot;</span><span class="p">,</span> <span class="n">arguments</span><span class="o">=</span><span class="p">{},</span> <span class="n">post_process</span><span class="o">=</span><span class="n">post</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="n">async</span><span class="p">)</span></div>
+
+	<span class="k">def</span> <span class="nf">_build_url</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">):</span>
+		<span class="n">protocol</span> <span class="o">=</span> <span class="s">&quot;ws&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_websocket</span> <span class="k">else</span> <span class="s">&quot;http&quot;</span>
+		<span class="k">return</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s">://</span><span class="si">%s</span><span class="s">:</span><span class="si">%d%s%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">protocol</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hostname</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_path</span><span class="p">,</span> <span class="n">method</span><span class="p">)</span>
+
+	<span class="k">def</span> <span class="nf">_call_subspace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_name</span><span class="p">,</span> <span class="n">subspace</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+		<span class="k">def</span> <span class="nf">post_process</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
+			<span class="k">if</span> <span class="n">method_name</span> <span class="o">==</span> <span class="s">&quot;histogram&quot;</span><span class="p">:</span> <span class="c"># histogram is the exception..</span>
+				<span class="c"># TODO: don&#39;t do binary transfer, just json, now we cannot handle exception</span>
+				<span class="kn">import</span> <span class="nn">base64</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;result: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">result</span><span class="p">)</span>
+				<span class="n">result</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="c">#.decode(&quot;base64&quot;)</span>
+				<span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fromstring</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+				<span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;size&quot;</span><span class="p">],)</span> <span class="o">*</span> <span class="n">subspace</span><span class="o">.</span><span class="n">dimension</span>
+				<span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+				<span class="k">return</span> <span class="n">data</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+				<span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+					<span class="k">return</span> <span class="n">result</span>
+		<span class="n">dataset_name</span> <span class="o">=</span> <span class="n">subspace</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">name</span>
+		<span class="n">expressions</span> <span class="o">=</span> <span class="n">subspace</span><span class="o">.</span><span class="n">expressions</span>
+		<span class="n">async</span> <span class="o">=</span> <span class="n">subspace</span><span class="o">.</span><span class="n">async</span>
+		<span class="n">path</span> <span class="o">=</span> <span class="s">&quot;datasets/</span><span class="si">%s</span><span class="s">/</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dataset_name</span><span class="p">,</span> <span class="n">method_name</span><span class="p">)</span>
+		<span class="n">url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_url</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+		<span class="n">arguments</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+		<span class="k">if</span> <span class="ow">not</span> <span class="n">subspace</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_auto_fraction</span><span class="p">():</span>
+			<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;active_fraction&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">subspace</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_active_fraction</span><span class="p">()</span>
+		<span class="n">selection</span> <span class="o">=</span> <span class="n">subspace</span><span class="o">.</span><span class="n">get_selection</span><span class="p">()</span>
+		<span class="k">if</span> <span class="n">selection</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;selection&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">selection</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+		<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;variables&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">subspace</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">variables</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+		<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;virtual_columns&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">subspace</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">virtual_columns</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+		<span class="n">arguments</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">expressions</span><span class="o">=</span><span class="n">expressions</span><span class="p">))</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">arguments</span><span class="p">,</span> <span class="n">post_process</span><span class="o">=</span><span class="n">post_process</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="n">async</span><span class="p">)</span>
+
+	<span class="k">def</span> <span class="nf">_call_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_name</span><span class="p">,</span> <span class="n">dataset_remote</span><span class="p">,</span> <span class="n">async</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+		<span class="k">def</span> <span class="nf">post_process</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
+			<span class="c">#result = self._check_exception(json.loads(result.body))[&quot;result&quot;]</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+			<span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+				<span class="k">return</span> <span class="n">result</span>
+		<span class="n">path</span> <span class="o">=</span> <span class="s">&quot;datasets/</span><span class="si">%s</span><span class="s">/</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dataset_remote</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">method_name</span><span class="p">)</span>
+		<span class="n">arguments</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+		<span class="k">if</span> <span class="ow">not</span> <span class="n">dataset_remote</span><span class="o">.</span><span class="n">get_auto_fraction</span><span class="p">():</span>
+			<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;active_fraction&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataset_remote</span><span class="o">.</span><span class="n">get_active_fraction</span><span class="p">()</span>
+		<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;variables&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dataset_remote</span><span class="o">.</span><span class="n">variables</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+		<span class="n">arguments</span><span class="p">[</span><span class="s">&quot;virtual_columns&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dataset_remote</span><span class="o">.</span><span class="n">virtual_columns</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+		<span class="c">#arguments[&quot;selection_name&quot;] = json.dumps(dataset_remote.get_selection_name())</span>
+		<span class="n">body</span> <span class="o">=</span> <span class="n">urlencode</span><span class="p">(</span><span class="n">arguments</span><span class="p">)</span>
+
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">arguments</span><span class="p">,</span> <span class="n">post_process</span><span class="o">=</span><span class="n">post_process</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="n">async</span><span class="p">)</span>
+		<span class="c">#return self.fetch(url+&quot;?&quot;+body, wrap, async=async, method=&quot;GET&quot;)</span>
+		<span class="c">#return self._return(result, wrap)</span>
+
+
+	<span class="k">def</span> <span class="nf">_check_exception</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reply_json</span><span class="p">):</span>
+		<span class="k">if</span> <span class="s">&quot;exception&quot;</span> <span class="ow">in</span> <span class="n">reply_json</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;exception happened at server side: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">reply_json</span><span class="p">)</span>
+			<span class="n">class_name</span> <span class="o">=</span> <span class="n">reply_json</span><span class="p">[</span><span class="s">&quot;exception&quot;</span><span class="p">][</span><span class="s">&quot;class&quot;</span><span class="p">]</span>
+			<span class="n">msg</span> <span class="o">=</span> <span class="n">reply_json</span><span class="p">[</span><span class="s">&quot;exception&quot;</span><span class="p">][</span><span class="s">&quot;msg&quot;</span><span class="p">]</span>
+			<span class="k">raise</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">__builtin__</span><span class="p">,</span> <span class="n">class_name</span><span class="p">)(</span><span class="n">msg</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">reply_json</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote">[docs]</a><span class="k">class</span> <span class="nc">SubspaceRemote</span><span class="p">(</span><span class="n">Subspace</span><span class="p">):</span>
+<div class="viewcode-block" id="SubspaceRemote.toarray"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.toarray">[docs]</a>	<span class="k">def</span> <span class="nf">toarray</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+		<span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span></div>
+
+	<span class="nd">@property</span>
+	<span class="k">def</span> <span class="nf">dimension</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">)</span>
+
+	<span class="k">def</span> <span class="nf">_task</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">promise</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot;Helper function for returning tasks results, result when immediate is True, otherwise the task itself, which is a promise&quot;&quot;&quot;</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">async</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">promise</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">promise</span>
+
+<div class="viewcode-block" id="SubspaceRemote.sleep"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.sleep">[docs]</a>	<span class="k">def</span> <span class="nf">sleep</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seconds</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="s">&quot;sleep&quot;</span><span class="p">,</span> <span class="n">seconds</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="n">async</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote.minmax"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.minmax">[docs]</a>	<span class="k">def</span> <span class="nf">minmax</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;minmax&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">))</span></div>
+		<span class="c">#return self._task(task)</span>
+
+<div class="viewcode-block" id="SubspaceRemote.histogram"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.histogram">[docs]</a>	<span class="k">def</span> <span class="nf">histogram</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">limits</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;histogram&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span> <span class="n">limits</span><span class="o">=</span><span class="n">limits</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="n">weight</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote.nearest"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.nearest">[docs]</a>	<span class="k">def</span> <span class="nf">nearest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">point</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="n">point</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">make_list</span><span class="p">(</span><span class="n">point</span><span class="p">)</span>
+		<span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;nearest&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">point</span><span class="o">=</span><span class="n">point</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="n">metric</span><span class="p">)</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="p">(</span><span class="n">result</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote.mean"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.mean">[docs]</a>	<span class="k">def</span> <span class="nf">mean</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;mean&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote.correlation"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.correlation">[docs]</a>	<span class="k">def</span> <span class="nf">correlation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">means</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">vars</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;correlation&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">means</span><span class="o">=</span><span class="n">means</span><span class="p">,</span> <span class="nb">vars</span><span class="o">=</span><span class="nb">vars</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote.var"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.var">[docs]</a>	<span class="k">def</span> <span class="nf">var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">means</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;var&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">means</span><span class="o">=</span><span class="n">means</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote.sum"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.sum">[docs]</a>	<span class="k">def</span> <span class="nf">sum</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;sum&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote.limits_sigma"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.limits_sigma">[docs]</a>	<span class="k">def</span> <span class="nf">limits_sigma</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sigmas</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">square</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;limits_sigma&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">sigmas</span><span class="o">=</span><span class="n">sigmas</span><span class="p">,</span> <span class="n">square</span><span class="o">=</span><span class="n">square</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SubspaceRemote.mutual_information"><a class="viewcode-back" href="../../vaex.html#vaex.remote.SubspaceRemote.mutual_information">[docs]</a>	<span class="k">def</span> <span class="nf">mutual_information</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">limits</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">256</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_subspace</span><span class="p">(</span><span class="s">&quot;mutual_information&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">limits</span><span class="o">=</span><span class="n">limits</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">)</span></div></div>
+
+<div class="viewcode-block" id="DatasetRemote"><a class="viewcode-back" href="../../vaex.html#vaex.remote.DatasetRemote">[docs]</a><span class="k">class</span> <span class="nc">DatasetRemote</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="n">column_names</span><span class="p">):</span>
+		<span class="nb">super</span><span class="p">(</span><span class="n">DatasetRemote</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">column_names</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">server</span> <span class="o">=</span> <span class="n">server</span></div>
+
+<span class="kn">import</span> <span class="nn">astropy.units</span>
+
+<div class="viewcode-block" id="DatasetRest"><a class="viewcode-back" href="../../vaex.html#vaex.remote.DatasetRest">[docs]</a><span class="k">class</span> <span class="nc">DatasetRest</span><span class="p">(</span><span class="n">DatasetRemote</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">column_names</span><span class="p">,</span> <span class="n">dtypes</span><span class="p">,</span> <span class="n">ucds</span><span class="p">,</span> <span class="n">descriptions</span><span class="p">,</span> <span class="n">units</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">full_length</span><span class="p">,</span> <span class="n">virtual_columns</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="n">DatasetRemote</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">server</span><span class="o">.</span><span class="n">hostname</span><span class="p">,</span> <span class="n">column_names</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">server</span> <span class="o">=</span> <span class="n">server</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">column_names</span> <span class="o">=</span> <span class="n">column_names</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dtypes</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">np</span><span class="p">,</span> <span class="n">dtype</span><span class="p">))</span><span class="o">.</span><span class="n">dtype</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">dtypes</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">astropy</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">unit</span> <span class="ow">in</span> <span class="n">units</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">virtual_columns</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">virtual_columns</span> <span class="ow">or</span> <span class="p">{})</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ucds</span> <span class="o">=</span> <span class="n">ucds</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">descriptions</span> <span class="o">=</span> <span class="n">descriptions</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="n">description</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_full_length</span> <span class="o">=</span> <span class="n">full_length</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_length</span> <span class="o">=</span> <span class="n">full_length</span>
+		<span class="c">#self.filename = #&quot;http://%s:%s/%s&quot; % (server.hostname, server.port, name)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_build_url</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">fraction</span> <span class="o">=</span> <span class="mi">1</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">executor</span> <span class="o">=</span> <span class="n">ServerExecutor</span><span class="p">()</span>
+
+<div class="viewcode-block" id="DatasetRest.dtype"><a class="viewcode-back" href="../../vaex.html#vaex.remote.DatasetRest.dtype">[docs]</a>	<span class="k">def</span> <span class="nf">dtype</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expression</span><span class="p">):</span>
+		<span class="k">if</span> <span class="n">expression</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_column_names</span><span class="p">():</span>
+			<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtypes</span><span class="p">[</span><span class="n">expression</span><span class="p">]</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span><span class="o">.</span><span class="n">dtype</span></div>
+
+<div class="viewcode-block" id="DatasetRest.is_local"><a class="viewcode-back" href="../../vaex.html#vaex.remote.DatasetRest.is_local">[docs]</a>	<span class="k">def</span> <span class="nf">is_local</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">return</span> <span class="bp">False</span></div>
+
+	<span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__module__</span> <span class="o">+</span> <span class="s">&quot;.&quot;</span> <span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+		<span class="k">return</span> <span class="s">&quot;&lt;</span><span class="si">%s</span><span class="s">(server=</span><span class="si">%r</span><span class="s">, name=</span><span class="si">%r</span><span class="s">, column_names=</span><span class="si">%r</span><span class="s">, __len__=</span><span class="si">%r</span><span class="s">)&gt; instance at 0x</span><span class="si">%x</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">server</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">column_names</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+
+	<span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">expressions</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+		<span class="k">return</span> <span class="n">SubspaceRemote</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expressions</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;executor&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;async&quot;</span><span class="p">,</span> <span class="bp">False</span><span class="p">))</span>
+
+<div class="viewcode-block" id="DatasetRest.evaluate"><a class="viewcode-back" href="../../vaex.html#vaex.remote.DatasetRest.evaluate">[docs]</a>	<span class="k">def</span> <span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expression</span><span class="p">,</span> <span class="n">i1</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">i2</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+		<span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">_call_dataset</span><span class="p">(</span><span class="s">&quot;evaluate&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">expression</span><span class="o">=</span><span class="n">expression</span><span class="p">,</span> <span class="n">i1</span><span class="o">=</span><span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="o">=</span><span class="n">i2</span><span class="p">,</span> <span class="n">async</span><span class="o">=</span><span class="n">async</span><span class="p">)</span>
+		<span class="c"># TODO: we ignore out</span>
+		<span class="k">return</span> <span class="n">result</span></div></div>
+
+
+<span class="c"># we may get rid of this when we group together tasks</span>
+<div class="viewcode-block" id="ServerExecutor"><a class="viewcode-back" href="../../vaex.html#vaex.remote.ServerExecutor">[docs]</a><span class="k">class</span> <span class="nc">ServerExecutor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">signal_begin</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="s">&quot;begin&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">signal_progress</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="s">&quot;progress&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">signal_end</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="s">&quot;end&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">signal_cancel</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="s">&quot;cancel&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ServerExecutor.execute"><a class="viewcode-back" href="../../vaex.html#vaex.remote.ServerExecutor.execute">[docs]</a>	<span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;dummy execute&quot;</span><span class="p">)</span></div></div>
+
+<span class="kn">from</span> <span class="nn">vaex.dataset</span> <span class="kn">import</span> <span class="n">Task</span>
+<div class="viewcode-block" id="TaskServer"><a class="viewcode-back" href="../../vaex.html#vaex.remote.TaskServer">[docs]</a><span class="k">class</span> <span class="nc">TaskServer</span><span class="p">(</span><span class="n">Task</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">post_process</span><span class="p">,</span> <span class="n">async</span><span class="p">):</span>
+		<span class="n">vaex</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">Task</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="p">[])</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">post_process</span> <span class="o">=</span> <span class="n">post_process</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">async</span> <span class="o">=</span> <span class="n">async</span></div>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+	<span class="kn">import</span> <span class="nn">vaex</span>
+	<span class="kn">import</span> <span class="nn">sys</span>
+	<span class="n">vaex</span><span class="o">.</span><span class="n">set_log_level_debug</span><span class="p">()</span>
+	<span class="n">server</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">server</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">port</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+	<span class="n">datasets</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">datasets</span><span class="p">()</span>
+	<span class="k">print</span><span class="p">(</span><span class="n">datasets</span><span class="p">)</span>
+	<span class="n">dataset</span> <span class="o">=</span> <span class="n">datasets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+	<span class="n">dataset</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">example</span><span class="p">()</span>
+	<span class="k">print</span><span class="p">(</span><span class="n">dataset</span><span class="p">(</span><span class="s">&quot;x&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">minmax</span><span class="p">())</span>
+	<span class="n">dataset</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s">&quot;x &lt; 0&quot;</span><span class="p">)</span>
+	<span class="k">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">selected_length</span><span class="p">(),</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">))</span>
+	<span class="k">print</span><span class="p">(</span><span class="n">dataset</span><span class="p">(</span><span class="s">&quot;x&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">selected</span><span class="p">()</span><span class="o">.</span><span class="n">is_masked</span><span class="p">)</span>
+	<span class="k">print</span><span class="p">(</span><span class="n">dataset</span><span class="p">(</span><span class="s">&quot;x&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">selected</span><span class="p">()</span><span class="o">.</span><span class="n">minmax</span><span class="p">())</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

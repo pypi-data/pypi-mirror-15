@@ -1,0 +1,321 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.ui.undo &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../../index.html"/>
+        <link rel="up" title="vaex" href="../../vaex.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.ui.undo</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.ui.undo</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">vaex.logging</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;vaex.ui.undo&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UndoManager"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.UndoManager">[docs]</a><span class="k">class</span> <span class="nc">UndoManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">max_bytes</span><span class="o">=</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">undo_count</span> <span class="o">=</span> <span class="mi">0</span><span class="c"># number of times undo is pressed</span>
+		
+<div class="viewcode-block" id="UndoManager.undo"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.UndoManager.undo">[docs]</a>	<span class="k">def</span> <span class="nf">undo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;history was </span><span class="si">%r</span><span class="s">-</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="p">))</span>
+ 		<span class="n">action</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;undoing: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">action</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">action</span><span class="p">)</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">action</span><span class="o">.</span><span class="n">undo</span><span class="p">()</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s">&quot;error executing action&quot;</span><span class="p">)</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;history is  </span><span class="si">%r</span><span class="s">-</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="p">))</span>
+	</div>
+<div class="viewcode-block" id="UndoManager.add_action"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.UndoManager.add_action">[docs]</a>	<span class="k">def</span> <span class="nf">add_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+		<span class="c"># cut off any remaining &#39;redo&#39; action, and add action to the list</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;history was </span><span class="si">%r</span><span class="s">-</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="p">))</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;adding action: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">action</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;history is  </span><span class="si">%r</span><span class="s">-</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="UndoManager.redo"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.UndoManager.redo">[docs]</a>	<span class="k">def</span> <span class="nf">redo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;history was </span><span class="si">%r</span><span class="s">-</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="p">))</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;redoing&quot;</span><span class="p">)</span>
+		<span class="n">action</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">action</span><span class="o">.</span><span class="n">do</span><span class="p">()</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s">&quot;error executing action&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;history is  </span><span class="si">%r</span><span class="s">-</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="p">))</span>
+		</div>
+<div class="viewcode-block" id="UndoManager.can_undo"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.UndoManager.can_undo">[docs]</a>	<span class="k">def</span> <span class="nf">can_undo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions_undo</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+</div>
+<div class="viewcode-block" id="UndoManager.can_redo"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.UndoManager.can_redo">[docs]</a>	<span class="k">def</span> <span class="nf">can_redo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions_redo</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+
+</div></div>
+<div class="viewcode-block" id="Action"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.Action">[docs]</a><span class="k">class</span> <span class="nc">Action</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	action should support</span>
+<span class="sd">	 - byteSize() # nr of bytes the action occupies</span>
+<span class="sd">	 - do() - does the operation, used at moment of the actual action, and during redo</span>
+<span class="sd">	 - redo() - redo the operation</span>
+<span class="sd">	 - description() - gui friendly desciption</span>
+<span class="sd">	 </span>
+<span class="sd">	 and actions should add itself to it&#39;s UndoManager</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+	<span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="ActionMask"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.ActionMask">[docs]</a><span class="k">class</span> <span class="nc">ActionMask</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">undo_manager</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">apply_mask</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot; Assuming mask is a bool array&quot;&quot;&quot;</span>
+		<span class="c"># store the 1 byte mask as a 1 bit mask to save memory</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">undo_manager</span> <span class="o">=</span> <span class="n">undo_manager</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="bp">None</span> <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">packbits</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">))</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">length</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="nb">len</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_description</span> <span class="o">=</span> <span class="n">description</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">apply_mask</span> <span class="o">=</span> <span class="n">apply_mask</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">undo_manager</span><span class="o">.</span><span class="n">add_action</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		
+<div class="viewcode-block" id="ActionMask.description"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.ActionMask.description">[docs]</a>	<span class="k">def</span> <span class="nf">description</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_description</span>
+		</div>
+<div class="viewcode-block" id="ActionMask.do"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.ActionMask.do">[docs]</a>	<span class="k">def</span> <span class="nf">do</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">mask</span> <span class="o">=</span> <span class="bp">None</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">unpackbits</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">bool</span><span class="p">)[:</span><span class="bp">self</span><span class="o">.</span><span class="n">length</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">apply_mask</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+		</div>
+<div class="viewcode-block" id="ActionMask.undo"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.ActionMask.undo">[docs]</a>	<span class="k">def</span> <span class="nf">undo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="c"># find a previous ActionMask, and execute it, but just keep it in the history</span>
+		<span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">undo_manager</span><span class="o">.</span><span class="n">actions_undo</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span> <span class="c"># traverse from most recent to last</span>
+			<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">action</span><span class="p">,</span> <span class="n">ActionMask</span><span class="p">):</span>
+				<span class="n">action</span><span class="o">.</span><span class="n">do</span><span class="p">()</span>
+				<span class="k">break</span>
+		<span class="k">else</span><span class="p">:</span> <span class="c"># if nothing was selected before, select None</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">apply_mask</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+		
+</div></div>
+<div class="viewcode-block" id="ActionZoom"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.ActionZoom">[docs]</a><span class="k">class</span> <span class="nc">ActionZoom</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>		
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">undo_manager</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">apply_ranges</span><span class="p">,</span> <span class="n">all_axis_indices</span><span class="p">,</span>
+	             <span class="n">previous_ranges_show</span><span class="p">,</span> <span class="n">previous_range_level_show</span><span class="p">,</span> <span class="n">axis_indices</span><span class="p">,</span> <span class="n">ranges_show</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">range_level_show</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">undo_manager</span> <span class="o">=</span> <span class="n">undo_manager</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">apply_ranges</span> <span class="o">=</span> <span class="n">apply_ranges</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">all_axis_indices</span> <span class="o">=</span> <span class="n">all_axis_indices</span>
+		<span class="c">#self.previous_ranges = list(previous_ranges)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">previous_ranges_show</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">previous_ranges_show</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">previous_range_level_show</span> <span class="o">=</span> <span class="bp">None</span> <span class="k">if</span> <span class="n">previous_range_level_show</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">previous_range_level_show</span><span class="p">)</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">axis_indices</span> <span class="o">=</span> <span class="n">axis_indices</span>
+		<span class="c">#self.ranges = ranges</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ranges_show</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">ranges_show</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">range_level_show</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">range_level_show</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_description</span> <span class="o">=</span> <span class="n">description</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">undo_manager</span><span class="o">.</span><span class="n">add_action</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		
+<div class="viewcode-block" id="ActionZoom.description"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.ActionZoom.description">[docs]</a>	<span class="k">def</span> <span class="nf">description</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_description</span>
+		</div>
+<div class="viewcode-block" id="ActionZoom.do"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.ActionZoom.do">[docs]</a>	<span class="k">def</span> <span class="nf">do</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">apply_ranges</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axis_indices</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">range_level_show</span><span class="p">)</span>
+		</div>
+<div class="viewcode-block" id="ActionZoom.undo"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.undo.ActionZoom.undo">[docs]</a>	<span class="k">def</span> <span class="nf">undo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">apply_ranges</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_axis_indices</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">previous_ranges_show</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">previous_range_level_show</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

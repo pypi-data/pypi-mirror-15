@@ -1,0 +1,526 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.ui.plugin.zoom &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../../../index.html"/>
+        <link rel="up" title="vaex.ui.plugin" href="../plugin.html"/> 
+
+  
+  <script src="../../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../../../vaex.html">vaex</a> &raquo;</li>
+      
+          <li><a href="../plugin.html">vaex.ui.plugin</a> &raquo;</li>
+      
+    <li>vaex.ui.plugin.zoom</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.ui.plugin.zoom</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">functools</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.widgets</span>
+
+<span class="kn">import</span> <span class="nn">vaex.ui.plugin</span>
+<span class="kn">from</span> <span class="nn">vaex.ui</span> <span class="kn">import</span> <span class="n">undo</span>
+<span class="kn">from</span> <span class="nn">vaex.ui.qt</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">vaex.ui.icons</span> <span class="kn">import</span> <span class="n">iconfile</span>
+<span class="kn">import</span> <span class="nn">vaex.logging</span>
+<span class="kn">import</span> <span class="nn">vaex.ui.undo</span> <span class="kn">as</span> <span class="nn">undo</span>
+
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;plugin.zoom&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ZoomPlugin"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin">[docs]</a><span class="k">class</span> <span class="nc">ZoomPlugin</span><span class="p">(</span><span class="n">vaex</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">plugin</span><span class="o">.</span><span class="n">PluginPlot</span><span class="p">):</span>
+	<span class="n">name</span> <span class="o">=</span> <span class="s">&quot;zoom&quot;</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dialog</span><span class="p">):</span>
+		<span class="nb">super</span><span class="p">(</span><span class="n">ZoomPlugin</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">dialog</span><span class="p">)</span>
+		<span class="n">dialog</span><span class="o">.</span><span class="n">plug_toolbar</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plug_toolbar</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">)</span>
+		
+		
+<div class="viewcode-block" id="ZoomPlugin.plug_toolbar"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.plug_toolbar">[docs]</a>	<span class="k">def</span> <span class="nf">plug_toolbar</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;adding zoom plugin&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">menu_mode</span><span class="o">.</span><span class="n">addSeparator</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QAction</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QIcon</span><span class="p">(</span><span class="n">iconfile</span><span class="p">(</span><span class="s">&#39;zoom&#39;</span><span class="p">)),</span> <span class="s">&#39;&amp;Zoom to rect&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span><span class="o">.</span><span class="n">setShortcut</span><span class="p">(</span><span class="s">&quot;Ctrl+Alt+Z&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">menu_mode</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span><span class="p">)</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QAction</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QIcon</span><span class="p">(</span><span class="n">iconfile</span><span class="p">(</span><span class="s">&#39;zoom_x&#39;</span><span class="p">)),</span> <span class="s">&#39;&amp;Zoom x&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_y</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QAction</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QIcon</span><span class="p">(</span><span class="n">iconfile</span><span class="p">(</span><span class="s">&#39;zoom_y&#39;</span><span class="p">)),</span> <span class="s">&#39;&amp;Zoom y&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QAction</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QIcon</span><span class="p">(</span><span class="n">iconfile</span><span class="p">(</span><span class="s">&#39;zoom&#39;</span><span class="p">)),</span> <span class="s">&#39;&amp;Zoom(you should not read this)&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="p">)</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span><span class="o">.</span><span class="n">setShortcut</span><span class="p">(</span><span class="s">&quot;Ctrl+Alt+X&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_y</span><span class="o">.</span><span class="n">setShortcut</span><span class="p">(</span><span class="s">&quot;Ctrl+Alt+Y&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">menu_mode</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">menu_mode</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_y</span><span class="p">)</span>
+
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">menu_mode</span><span class="o">.</span><span class="n">addSeparator</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_out</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QAction</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QIcon</span><span class="p">(</span><span class="n">iconfile</span><span class="p">(</span><span class="s">&#39;zoom_out&#39;</span><span class="p">)),</span> <span class="s">&#39;&amp;Zoom out&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_in</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QAction</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QIcon</span><span class="p">(</span><span class="n">iconfile</span><span class="p">(</span><span class="s">&#39;zoom_in&#39;</span><span class="p">)),</span> <span class="s">&#39;&amp;Zoom in&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_fit</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QAction</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QIcon</span><span class="p">(</span><span class="n">iconfile</span><span class="p">(</span><span class="s">&#39;arrow_out&#39;</span><span class="p">)),</span> <span class="s">&#39;&amp;Reset view&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="p">)</span>
+		<span class="c">#self.action_zoom_use = QtGui.QAction(QtGui.QIcon(iconfile(&#39;chart_bar&#39;)), &#39;&amp;Use zoom area&#39;, self.dialog)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_out</span><span class="o">.</span><span class="n">setShortcut</span><span class="p">(</span><span class="s">&quot;Ctrl+Alt+-&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_in</span><span class="o">.</span><span class="n">setShortcut</span><span class="p">(</span><span class="s">&quot;Ctrl+Alt++&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_fit</span><span class="o">.</span><span class="n">setShortcut</span><span class="p">(</span><span class="s">&quot;Ctrl+Alt+0&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">menu_mode</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_out</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">menu_mode</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_in</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">menu_mode</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_fit</span><span class="p">)</span>
+
+
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">action_group_main</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">action_group_main</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">action_group_main</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_y</span><span class="p">)</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">toolbar</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_out</span><span class="p">)</span>
+		<span class="c">#self.dialog.add_shortcut(self.action_zoom_in,&quot;+&quot;)</span>
+		<span class="c">#self.dialog.add_shortcut(self.action_zoom_out,&quot;-&quot;)</span>
+		
+		<span class="c">#self.dialog.add_shortcut(self.action_zoom_rect,&quot;Z&quot;)</span>
+		<span class="c">#self.dialog.add_shortcut(self.action_zoom_x,&quot;Alt+X&quot;)</span>
+		<span class="c">#self.dialog.add_shortcut(self.action_zoom_y,&quot;Alt+Y&quot;)</span>
+		<span class="c">#self.dialog.add_shortcut(self.action_zoom_fit, &quot;0&quot;)</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">toolbar</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">zoom_menu</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QMenu</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom</span><span class="o">.</span><span class="n">setMenu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">zoom_menu</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">zoom_menu</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">zoom_menu</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">zoom_menu</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_y</span><span class="p">)</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span> <span class="c"># this makes more sense for histograms as default</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">toolbar</span><span class="o">.</span><span class="n">addSeparator</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">toolbar</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_out</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">toolbar</span><span class="o">.</span><span class="n">addAction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_fit</span><span class="p">)</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom</span><span class="o">.</span><span class="n">triggered</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onActionZoom</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_out</span><span class="o">.</span><span class="n">triggered</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onZoomOut</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_in</span><span class="o">.</span><span class="n">triggered</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onZoomIn</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_fit</span><span class="o">.</span><span class="n">triggered</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onZoomFit</span><span class="p">)</span>
+		<span class="c">#self.action_zoom_use.triggered.connect(self.onZoomUse)</span>
+		
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom</span><span class="o">.</span><span class="n">setCheckable</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span><span class="o">.</span><span class="n">setCheckable</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span><span class="o">.</span><span class="n">setCheckable</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_y</span><span class="o">.</span><span class="n">setCheckable</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+		
+		</div>
+<div class="viewcode-block" id="ZoomPlugin.setMode"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.setMode">[docs]</a>	<span class="k">def</span> <span class="nf">setMode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+		<span class="n">useblit</span> <span class="o">=</span> <span class="bp">True</span>
+		<span class="n">axes_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">getAxesList</span><span class="p">()</span>
+		<span class="k">print</span> <span class="n">action</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span>
+		<span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span><span class="p">:</span>
+			<span class="k">print</span> <span class="s">&quot;zoom x&quot;</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_x</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">currentModes</span> <span class="o">=</span> <span class="p">[</span><span class="n">matplotlib</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">SpanSelector</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onZoomX</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">),</span> <span class="s">&#39;horizontal&#39;</span><span class="p">,</span> <span class="n">useblit</span><span class="o">=</span><span class="n">useblit</span><span class="p">)</span> <span class="k">for</span> <span class="n">axes</span> <span class="ow">in</span> <span class="n">axes_list</span><span class="p">]</span> <span class="c">#, rectprops={&quot;color&quot;:&quot;blue&quot;})</span>
+			<span class="k">if</span> <span class="n">useblit</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">draw</span><span class="p">()</span> <span class="c"># buggy otherwise</span>
+		<span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_y</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_y</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">currentModes</span> <span class="o">=</span> <span class="p">[</span><span class="n">matplotlib</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">SpanSelector</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onZoomY</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">),</span> <span class="s">&#39;vertical&#39;</span><span class="p">,</span> <span class="n">useblit</span><span class="o">=</span><span class="n">useblit</span><span class="p">)</span>  <span class="k">for</span> <span class="n">axes</span> <span class="ow">in</span> <span class="n">axes_list</span><span class="p">]</span> <span class="c">#, rectprops={&quot;color&quot;:&quot;blue&quot;})</span>
+			<span class="k">if</span> <span class="n">useblit</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">draw</span><span class="p">()</span> <span class="c"># buggy otherwise</span>
+		<span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span><span class="p">:</span>
+			<span class="k">print</span> <span class="s">&quot;zoom rect&quot;</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_zoom_rect</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">currentModes</span> <span class="o">=</span> <span class="p">[</span><span class="n">matplotlib</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">RectangleSelector</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onZoomRect</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">),</span> <span class="n">useblit</span><span class="o">=</span><span class="n">useblit</span><span class="p">)</span> <span class="k">for</span> <span class="n">axes</span> <span class="ow">in</span> <span class="n">axes_list</span><span class="p">]</span> <span class="c">#, rectprops={&quot;color&quot;:&quot;blue&quot;})</span>
+			<span class="k">if</span> <span class="n">useblit</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">draw</span><span class="p">()</span> <span class="c"># buggy otherwise</span>
+		
+		
+</div>
+<div class="viewcode-block" id="ZoomPlugin.onZoomIn"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.onZoomIn">[docs]</a>	<span class="k">def</span> <span class="nf">onZoomIn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+		<span class="n">axes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getAxesList</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="c"># TODO: handle propery multiple axes</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">zoom</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">axes</span><span class="p">)</span>
+		</div>
+<div class="viewcode-block" id="ZoomPlugin.onZoomOut"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.onZoomOut">[docs]</a>	<span class="k">def</span> <span class="nf">onZoomOut</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">axes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">getAxesList</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="c"># TODO: handle propery multiple axes</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">zoom</span><span class="p">(</span><span class="mf">2.</span><span class="p">,</span> <span class="n">axes</span><span class="p">)</span>
+		
+</div>
+<div class="viewcode-block" id="ZoomPlugin.onActionZoom"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.onActionZoom">[docs]</a>	<span class="k">def</span> <span class="nf">onActionZoom</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">print</span> <span class="s">&quot;onactionzoom&quot;</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">setMode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">syncToolbar</span><span class="p">()</span>
+		</div>
+<div class="viewcode-block" id="ZoomPlugin.onZoomFit"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.onZoomFit">[docs]</a>	<span class="k">def</span> <span class="nf">onZoomFit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+		<span class="c">#for i in range(self.dimensions):</span>
+		<span class="c">#	self.dialog.ranges[i] = None</span>
+		<span class="c">#	self.dialog.ranges_show[i] = None</span>
+		<span class="c">#	self.range_level = None</span>
+		<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="k">for</span> <span class="n">axisIndex</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+				<span class="n">linkButton</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linkButtons</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">]</span>
+				<span class="n">link</span> <span class="o">=</span> <span class="n">linkButton</span><span class="o">.</span><span class="n">link</span>
+				<span class="k">if</span> <span class="n">link</span><span class="p">:</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;sending link messages&quot;</span><span class="p">)</span>
+					<span class="n">link</span><span class="o">.</span><span class="n">sendRanges</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">],</span> <span class="n">linkButton</span><span class="p">)</span>
+					<span class="n">link</span><span class="o">.</span><span class="n">sendRangesShow</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">],</span> <span class="n">linkButton</span><span class="p">)</span>
+				
+		
+		<span class="n">action</span> <span class="o">=</span> <span class="n">undo</span><span class="o">.</span><span class="n">ActionZoom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">undoManager</span><span class="p">,</span> <span class="s">&quot;zoom to fit&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">set_ranges</span><span class="p">,</span>
+		                         <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">),</span>
+		                         <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">range_level_show</span><span class="p">,</span>
+						   		 <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">),</span>
+							     <span class="n">ranges_show</span><span class="o">=</span><span class="p">[</span><span class="bp">None</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">,</span> <span class="n">range_level_show</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+		<span class="c">#for layer in dialog.layers:</span>
+		<span class="c">#	layer.range_level = None # reset these... is this the right place?</span>
+		<span class="n">action</span><span class="o">.</span><span class="n">do</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">checkUndoRedo</span><span class="p">()</span>
+		
+		<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">linked_buttons</span> <span class="o">=</span> <span class="p">[</span><span class="n">button</span> <span class="k">for</span> <span class="n">button</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">linkButtons</span> <span class="k">if</span> <span class="n">button</span><span class="o">.</span><span class="n">link</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">]</span>
+			<span class="n">links</span> <span class="o">=</span> <span class="p">[</span><span class="n">button</span><span class="o">.</span><span class="n">link</span> <span class="k">for</span> <span class="n">button</span> <span class="ow">in</span> <span class="n">linked_buttons</span><span class="p">]</span>
+			<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">linked_buttons</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;sending compute message&quot;</span><span class="p">)</span>
+				<span class="n">vaex</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">Link</span><span class="o">.</span><span class="n">sendCompute</span><span class="p">(</span><span class="n">links</span><span class="p">,</span> <span class="n">linked_buttons</span><span class="p">)</span>
+			<span class="c">#linked_buttons[0].sendCompute(blacklist)</span>
+		<span class="c">#if linkButtonLast: # only send once</span>
+		<span class="c">#	link = linkButtonLast.link</span>
+		<span class="c">#	logger.debug(&quot;sending compute message&quot;)</span>
+		<span class="c">#	link.sendCompute(linkButton)</span>
+
+		<span class="c">#self.compute()</span>
+		<span class="c">#self.dataset.executor.execute()</span>
+		</div>
+<div class="viewcode-block" id="ZoomPlugin.onZoomUse"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.onZoomUse">[docs]</a>	<span class="k">def</span> <span class="nf">onZoomUse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+		<span class="c"># TODO: when this will be an option again, implement this as action</span>
+		<span class="c"># TODO: will we ever use this again? auto updates are much better</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">range_level</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="k">for</span> <span class="n">axisIndex</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+			<span class="n">linkButton</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linkButtons</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">]</span>
+			<span class="n">link</span> <span class="o">=</span> <span class="n">linkButton</span><span class="o">.</span><span class="n">link</span>
+			<span class="k">if</span> <span class="n">link</span><span class="p">:</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;sending link messages&quot;</span><span class="p">)</span>
+				<span class="n">link</span><span class="o">.</span><span class="n">sendRanges</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">],</span> <span class="n">linkButton</span><span class="p">)</span>
+				<span class="c">#link.sendRangesShow(self.dialog.ranges_show[axisIndex], linkButton)</span>
+		<span class="n">linked_buttons</span> <span class="o">=</span> <span class="p">[</span><span class="n">button</span> <span class="k">for</span> <span class="n">button</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">linkButtons</span> <span class="k">if</span> <span class="n">button</span><span class="o">.</span><span class="n">link</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">]</span>
+		<span class="n">links</span> <span class="o">=</span> <span class="p">[</span><span class="n">button</span><span class="o">.</span><span class="n">link</span> <span class="k">for</span> <span class="n">button</span> <span class="ow">in</span> <span class="n">linked_buttons</span><span class="p">]</span>
+		<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">linked_buttons</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;sending compute message&quot;</span><span class="p">)</span>
+			<span class="n">vaex</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">Link</span><span class="o">.</span><span class="n">sendCompute</span><span class="p">(</span><span class="n">links</span><span class="p">,</span> <span class="n">linked_buttons</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">executor</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+		</div>
+<div class="viewcode-block" id="ZoomPlugin.onZoomX"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.onZoomX">[docs]</a>	<span class="k">def</span> <span class="nf">onZoomX</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">xmin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">,</span> <span class="n">axes</span><span class="p">):</span>
+		
+		<span class="n">axisIndex</span> <span class="o">=</span> <span class="n">axes</span><span class="o">.</span><span class="n">xaxis_index</span>
+		<span class="c">#self.dialog.ranges_show[axisIndex] = xmin, xmax</span>
+		<span class="c"># move the link code to the set ranges</span>
+		<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">linkButton</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linkButtons</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">]</span>
+			<span class="n">link</span> <span class="o">=</span> <span class="n">linkButton</span><span class="o">.</span><span class="n">link</span>
+			<span class="k">if</span> <span class="n">link</span><span class="p">:</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;sending link messages&quot;</span><span class="p">)</span>
+				<span class="n">link</span><span class="o">.</span><span class="n">sendRangesShow</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">],</span> <span class="n">linkButton</span><span class="p">)</span>
+				<span class="n">link</span><span class="o">.</span><span class="n">sendPlot</span><span class="p">(</span><span class="n">linkButton</span><span class="p">)</span>
+		<span class="n">action</span> <span class="o">=</span> <span class="n">undo</span><span class="o">.</span><span class="n">ActionZoom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">undoManager</span><span class="p">,</span> <span class="s">&quot;zoom x [</span><span class="si">%f</span><span class="s">,</span><span class="si">%f</span><span class="s">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">xmin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">),</span>
+						   <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">set_ranges</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">),</span>
+						   <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">range_level_show</span><span class="p">,</span> <span class="p">[</span><span class="n">axisIndex</span><span class="p">],</span> <span class="n">ranges_show</span><span class="o">=</span><span class="p">[[</span><span class="n">xmin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">]])</span>
+		<span class="n">action</span><span class="o">.</span><span class="n">do</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">checkUndoRedo</span><span class="p">()</span>
+			</div>
+<div class="viewcode-block" id="ZoomPlugin.onZoomY"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.onZoomY">[docs]</a>	<span class="k">def</span> <span class="nf">onZoomY</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ymin</span><span class="p">,</span> <span class="n">ymax</span><span class="p">,</span> <span class="n">axes</span><span class="p">):</span>
+		<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span> <span class="c"># if 1d, y refers to range_level</span>
+			<span class="c">#self.range_level = ymin, ymax</span>
+			<span class="n">action</span> <span class="o">=</span> <span class="n">undo</span><span class="o">.</span><span class="n">ActionZoom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">undoManager</span><span class="p">,</span> <span class="s">&quot;change level [</span><span class="si">%f</span><span class="s">,</span><span class="si">%f</span><span class="s">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ymin</span><span class="p">,</span> <span class="n">ymax</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">set_ranges</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">),</span>
+							<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">range_level_show</span><span class="p">,</span> <span class="p">[],</span> <span class="n">range_level_show</span><span class="o">=</span><span class="p">[</span><span class="n">ymin</span><span class="p">,</span> <span class="n">ymax</span><span class="p">])</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="c">#self.dialog.ranges_show[axes.yaxis_index] = ymin, ymax</span>
+			<span class="n">action</span> <span class="o">=</span> <span class="n">undo</span><span class="o">.</span><span class="n">ActionZoom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">undoManager</span><span class="p">,</span> <span class="s">&quot;zoom y [</span><span class="si">%f</span><span class="s">,</span><span class="si">%f</span><span class="s">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ymin</span><span class="p">,</span> <span class="n">ymax</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">set_ranges</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">),</span>
+							<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">range_level_show</span><span class="p">,</span> <span class="p">[</span><span class="n">axes</span><span class="o">.</span><span class="n">yaxis_index</span><span class="p">],</span> <span class="n">ranges_show</span><span class="o">=</span><span class="p">[[</span><span class="n">ymin</span><span class="p">,</span> <span class="n">ymax</span><span class="p">]])</span>
+			
+		<span class="n">action</span><span class="o">.</span><span class="n">do</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">checkUndoRedo</span><span class="p">()</span>
+			</div>
+<div class="viewcode-block" id="ZoomPlugin.onZoomRect"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.onZoomRect">[docs]</a>	<span class="k">def</span> <span class="nf">onZoomRect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eclick</span><span class="p">,</span> <span class="n">erelease</span><span class="p">,</span> <span class="n">axes</span><span class="p">):</span>
+		<span class="n">x1</span><span class="p">,</span> <span class="n">y1</span> <span class="o">=</span> <span class="p">(</span><span class="n">eclick</span><span class="o">.</span><span class="n">xdata</span><span class="p">,</span> <span class="n">eclick</span><span class="o">.</span><span class="n">ydata</span><span class="p">)</span>
+		<span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="p">(</span><span class="n">erelease</span><span class="o">.</span><span class="n">xdata</span><span class="p">,</span> <span class="n">erelease</span><span class="o">.</span><span class="n">ydata</span><span class="p">)</span>
+		<span class="n">x</span> <span class="o">=</span> <span class="p">[</span><span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">]</span>
+		<span class="n">y</span> <span class="o">=</span> <span class="p">[</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">]</span>
+
+		<span class="n">range_level</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="n">ranges_show</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">ranges</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">axis_indices</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">xmin_show</span><span class="p">,</span> <span class="n">xmax_show</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+		<span class="n">ymin_show</span><span class="p">,</span> <span class="n">ymax_show</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">y</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+		<span class="c">#self.dialog.ranges_show[axes.xaxis_index] = xmin_show, xmax_show</span>
+		<span class="n">axis_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axes</span><span class="o">.</span><span class="n">xaxis_index</span><span class="p">)</span>
+		<span class="n">ranges_show</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">xmin_show</span><span class="p">,</span> <span class="n">xmax_show</span><span class="p">])</span>
+		<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span> <span class="c"># if 1d, y refers to range_level</span>
+			<span class="c">#self.range_level = ymin_show, ymax_show</span>
+			<span class="n">range_level</span> <span class="o">=</span>  <span class="n">ymin_show</span><span class="p">,</span> <span class="n">ymax_show</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;range refers to level: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">range_level_show</span><span class="p">,))</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="c">#self.dialog.ranges_show[axes.yaxis_index] = ymin_show, ymax_show</span>
+			<span class="n">axis_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axes</span><span class="o">.</span><span class="n">yaxis_index</span><span class="p">)</span>
+			<span class="n">ranges_show</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">ymin_show</span><span class="p">,</span> <span class="n">ymax_show</span><span class="p">])</span>
+			
+			
+		<span class="k">def</span> <span class="nf">delayed_zoom</span><span class="p">():</span>
+			<span class="n">action</span> <span class="o">=</span> <span class="n">undo</span><span class="o">.</span><span class="n">ActionZoom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">undoManager</span><span class="p">,</span> <span class="s">&quot;zoom to rect&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">set_ranges</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">),</span>
+							<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">,</span>
+							<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">range_level_show</span><span class="p">,</span> <span class="n">axis_indices</span><span class="p">,</span> <span class="n">ranges_show</span><span class="o">=</span><span class="n">ranges_show</span><span class="p">,</span> <span class="n">range_level_show</span><span class="o">=</span><span class="n">range_level</span><span class="p">)</span>
+			<span class="n">action</span><span class="o">.</span><span class="n">do</span><span class="p">()</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">checkUndoRedo</span><span class="p">()</span>
+		<span class="c">#self.dialog.queue_update(delayed_zoom, delay=300)</span>
+		<span class="n">delayed_zoom</span><span class="p">()</span>
+		
+		<span class="k">if</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="c">#self.dialog.ranges_show = list(ranges_show)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="n">axes</span><span class="o">.</span><span class="n">xaxis_index</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ranges_show</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="n">axes</span><span class="o">.</span><span class="n">yaxis_index</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ranges_show</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">check_aspect</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+				<span class="n">axes</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+				<span class="n">axes</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">range_level_show</span> <span class="o">=</span> <span class="n">range_level</span>
+				<span class="n">axes</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+				<span class="n">axes</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">range_level_show</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">queue_redraw</span><span class="p">()</span>
+			
+		<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+
+			<span class="k">for</span> <span class="n">axisIndex</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+				<span class="n">linkButton</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linkButtons</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">]</span>
+				<span class="n">link</span> <span class="o">=</span> <span class="n">linkButton</span><span class="o">.</span><span class="n">link</span>
+				<span class="k">if</span> <span class="n">link</span><span class="p">:</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;sending link messages&quot;</span><span class="p">)</span>
+					<span class="n">link</span><span class="o">.</span><span class="n">sendRangesShow</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="n">axisIndex</span><span class="p">],</span> <span class="n">linkButton</span><span class="p">)</span>
+					<span class="n">link</span><span class="o">.</span><span class="n">sendPlot</span><span class="p">(</span><span class="n">linkButton</span><span class="p">)</span>
+			
+			<span class="c">#self.axes.set_xlim(self.xmin_show, self.xmax_show)</span>
+			<span class="c">#self.axes.set_ylim(self.ymin_show, self.ymax_show)</span>
+			<span class="c">#self.canvas.draw()</span>
+			<span class="n">action</span> <span class="o">=</span> <span class="n">undo</span><span class="o">.</span><span class="n">ActionZoom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">undoManager</span><span class="p">,</span> <span class="s">&quot;zoom to rect&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_ranges</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dimensions</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">,</span>  <span class="bp">self</span><span class="o">.</span><span class="n">range_level</span><span class="p">,</span> <span class="n">axis_indices</span><span class="p">,</span> <span class="n">ranges_show</span><span class="o">=</span><span class="n">ranges_show</span><span class="p">,</span> <span class="n">range_level</span><span class="o">=</span><span class="n">range_level</span><span class="p">)</span>
+			<span class="n">action</span><span class="o">.</span><span class="n">do</span><span class="p">()</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">checkUndoRedo</span><span class="p">()</span>
+
+			<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+				<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autoRecalculate</span><span class="p">():</span>
+					<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">ranges_show</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">range_level</span> <span class="o">=</span> <span class="bp">None</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">executor</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+				<span class="k">else</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+		
+</div>
+<div class="viewcode-block" id="ZoomPlugin.syncToolbar"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.zoom.ZoomPlugin.syncToolbar">[docs]</a>	<span class="k">def</span> <span class="nf">syncToolbar</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">action_zoom</span><span class="p">]:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;sync action: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">action</span><span class="o">.</span><span class="n">text</span><span class="p">())</span>
+			<span class="n">subactions</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">menu</span><span class="p">()</span><span class="o">.</span><span class="n">actions</span><span class="p">()</span>
+			<span class="n">subaction_selected</span> <span class="o">=</span> <span class="p">[</span><span class="n">subaction</span> <span class="k">for</span> <span class="n">subaction</span> <span class="ow">in</span> <span class="n">subactions</span> <span class="k">if</span> <span class="n">subaction</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()]</span>
+			<span class="c">#if len(subaction_selected) &gt; 0:</span>
+			<span class="c">#	action.setText(subaction_selected[0].text())</span>
+			<span class="c">#	action.setIcon(subaction_selected[0].icon())</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot; subaction_selected: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">subaction_selected</span><span class="p">)</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot; action was selected?: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">action</span><span class="o">.</span><span class="n">isChecked</span><span class="p">())</span>
+			<span class="n">action</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">subaction_selected</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot; action  is selected?: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">action</span><span class="o">.</span><span class="n">isChecked</span><span class="p">())</span>
+		<span class="c">#logger.debug(&quot;last select action: %r&quot; % self.lastActionSelect.text())</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;last zoom action: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span><span class="o">.</span><span class="n">text</span><span class="p">())</span>
+		<span class="c">#self.action_select.setText(self.lastActionSelect.text())</span>
+		<span class="c">#self.action_select.setIcon(self.lastActionSelect.icon())</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span><span class="o">.</span><span class="n">text</span><span class="p">())</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">action_zoom</span><span class="o">.</span><span class="n">setIcon</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lastActionZoom</span><span class="o">.</span><span class="n">icon</span><span class="p">())</span>
+</pre></div></div></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

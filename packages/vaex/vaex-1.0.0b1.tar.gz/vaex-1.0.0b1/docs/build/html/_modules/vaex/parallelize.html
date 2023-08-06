@@ -1,0 +1,654 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.parallelize &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../index.html"/>
+        <link rel="up" title="vaex" href="../vaex.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.parallelize</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.parallelize</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">Queue</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+<span class="kn">from</span> <span class="nn">cStringIO</span> <span class="kn">import</span> <span class="n">StringIO</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">signal</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span>
+
+
+
+
+<span class="n">pickle_encoding</span> <span class="o">=</span> <span class="s">&quot;hex&quot;</span>
+<span class="n">pickle_protocol</span> <span class="o">=</span> <span class="mi">2</span>
+
+<div class="viewcode-block" id="log"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.log">[docs]</a><span class="k">def</span> <span class="nf">log</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+	<span class="c">#print &quot;LOG: &quot; + &quot; &quot;.join([str(k) for k in args])</span>
+	<span class="k">pass</span>
+	</div>
+<div class="viewcode-block" id="serialize"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.serialize">[docs]</a><span class="k">def</span> <span class="nf">serialize</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+	<span class="n">data</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">pickle_protocol</span><span class="p">)</span>
+	<span class="n">rawdata</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">pickle_encoding</span><span class="p">)</span>
+	<span class="k">return</span> <span class="n">rawdata</span>
+	</div>
+<div class="viewcode-block" id="deserialize"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.deserialize">[docs]</a><span class="k">def</span> <span class="nf">deserialize</span><span class="p">(</span><span class="n">rawdata</span><span class="p">):</span>
+	<span class="n">data</span> <span class="o">=</span> <span class="n">rawdata</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">pickle_encoding</span><span class="p">)</span>
+	<span class="n">obj</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+	<span class="k">return</span> <span class="n">obj</span>
+	</div>
+<div class="viewcode-block" id="InfoThread"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.InfoThread">[docs]</a><span class="k">class</span> <span class="nc">InfoThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullsize</span><span class="p">,</span> <span class="n">executions</span><span class="p">):</span>
+		<span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">fullsize</span> <span class="o">=</span> <span class="n">fullsize</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">executions</span> <span class="o">=</span> <span class="n">executions</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">setDaemon</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+		<span class="c">#self.</span>
+		
+<div class="viewcode-block" id="InfoThread.n_done"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.InfoThread.n_done">[docs]</a>	<span class="k">def</span> <span class="nf">n_done</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">n</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="k">for</span> <span class="n">execution</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">executions</span><span class="p">:</span>
+			<span class="n">n</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">execution</span><span class="o">.</span><span class="n">results</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">n</span>
+		</div>
+<div class="viewcode-block" id="InfoThread.run"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.InfoThread.run">[docs]</a>	<span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">while</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="n">count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_done</span><span class="p">()</span> <span class="c">#self.fullsize - self.taskQueue.qsize()</span>
+			<span class="k">print</span> <span class="s">&quot;</span><span class="si">%d</span><span class="s"> out of </span><span class="si">%d</span><span class="s"> tasks completed (</span><span class="si">%5.2f%%</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fullsize</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">count</span><span class="p">)</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">fullsize</span><span class="o">*</span><span class="mi">100</span><span class="p">)</span>
+			<span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+			</div></div>
+<div class="viewcode-block" id="Watchdog"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.Watchdog">[docs]</a><span class="k">class</span> <span class="nc">Watchdog</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">executions</span><span class="p">):</span>
+		<span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		<span class="c">#self.fullsize = fullsize</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">executions</span> <span class="o">=</span> <span class="n">executions</span>
+		<span class="c">#self.setDaemon(True):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">setDaemon</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+		
+<div class="viewcode-block" id="Watchdog.run"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.Watchdog.run">[docs]</a>	<span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">while</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+			<span class="k">for</span> <span class="n">execution</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">executions</span><span class="p">:</span>
+				<span class="k">print</span> <span class="n">execution</span><span class="o">.</span><span class="n">isAlive</span><span class="p">(),</span> <span class="n">execution</span><span class="o">.</span><span class="n">error</span>
+		
+</div></div>
+<span class="kn">import</span> <span class="nn">vaex.misc.progressbar</span>
+<div class="viewcode-block" id="InfoThreadProgressBar"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.InfoThreadProgressBar">[docs]</a><span class="k">class</span> <span class="nc">InfoThreadProgressBar</span><span class="p">(</span><span class="n">InfoThread</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullsize</span><span class="p">,</span> <span class="n">executions</span><span class="p">):</span>
+		<span class="n">InfoThread</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullsize</span><span class="p">,</span> <span class="n">executions</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">bar</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">misc</span><span class="o">.</span><span class="n">progressbar</span><span class="o">.</span><span class="n">ProgressBar</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">fullsize</span><span class="p">)</span>
+		
+<div class="viewcode-block" id="InfoThreadProgressBar.run"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.InfoThreadProgressBar.run">[docs]</a>	<span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="n">error</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="k">while</span> <span class="p">(</span><span class="ow">not</span> <span class="n">done</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="n">error</span><span class="p">):</span>
+			<span class="n">count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_done</span><span class="p">()</span> <span class="c">#self.fullsize - self.taskQueue.qsize()</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">bar</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">count</span><span class="p">)</span>
+			<span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+			<span class="n">done</span> <span class="o">=</span> <span class="n">count</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">fullsize</span>
+			<span class="k">for</span> <span class="n">execution</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">executions</span><span class="p">:</span>
+				<span class="k">if</span> <span class="n">execution</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+					<span class="n">error</span> <span class="o">=</span> <span class="bp">True</span> 
+</div></div>
+<div class="viewcode-block" id="LocalExecutor"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.LocalExecutor">[docs]</a><span class="k">class</span> <span class="nc">LocalExecutor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thread</span><span class="p">,</span> <span class="n">function</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thread</span> <span class="o">=</span> <span class="n">thread</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">function</span> <span class="o">=</span> <span class="n">function</span>
+		
+<div class="viewcode-block" id="LocalExecutor.stop"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.LocalExecutor.stop">[docs]</a>	<span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">pass</span>
+		</div>
+<div class="viewcode-block" id="LocalExecutor.init"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.LocalExecutor.init">[docs]</a>	<span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">pass</span>
+		</div>
+	<span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+		<span class="n">info</span> <span class="o">=</span> <span class="s">&quot;ok&quot;</span>
+		<span class="n">exc_info</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="n">result</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="n">info</span> <span class="o">=</span> <span class="s">&quot;exception&quot;</span>
+			<span class="n">exc_info</span> <span class="o">=</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+		<span class="k">return</span> <span class="n">info</span><span class="p">,</span> <span class="n">exc_info</span><span class="p">,</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="IOExecutor"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.IOExecutor">[docs]</a><span class="k">class</span> <span class="nc">IOExecutor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thread</span><span class="p">,</span> <span class="n">function</span><span class="p">,</span> <span class="n">init</span><span class="p">,</span> <span class="n">id_number</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thread</span> <span class="o">=</span> <span class="n">thread</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">function</span> <span class="o">=</span> <span class="n">function</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">initf</span> <span class="o">=</span> <span class="n">init</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">id_number</span> <span class="o">=</span> <span class="n">id_number</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">createIO</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="bp">False</span>
+
+	<span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;p: sending execute command&quot;</span><span class="p">)</span>
+		<span class="c">#os.close(w) # we are not gonna write</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;execute</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">serialize</span><span class="p">((</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)))</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;p: reading response&quot;</span><span class="p">)</span>
+		<span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+		<span class="c">#self.log(&quot;p: response:&quot;, `response`)</span>
+		<span class="n">error</span><span class="p">,</span> <span class="n">exc_info</span><span class="p">,</span> <span class="n">result</span> <span class="o">=</span> <span class="n">deserialize</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">error</span><span class="p">,</span> <span class="n">exc_info</span><span class="p">,</span> <span class="n">result</span>
+		
+<div class="viewcode-block" id="IOExecutor.init"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.IOExecutor.init">[docs]</a>	<span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">True</span>
+	</div>
+<div class="viewcode-block" id="IOExecutor.stop"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.IOExecutor.stop">[docs]</a>	<span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="n">error</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;p: sending stop command&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;stop</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;waitpid&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;waitpid done&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+		</div>
+<div class="viewcode-block" id="IOExecutor.join"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.IOExecutor.join">[docs]</a>	<span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">os</span><span class="o">.</span><span class="n">waitpid</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pid</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+	</div>
+<div class="viewcode-block" id="IOExecutor.log"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.IOExecutor.log">[docs]</a>	<span class="k">def</span> <span class="nf">log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+		<span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">thread</span><span class="o">.</span><span class="n">getName</span><span class="p">()</span><span class="o">+</span><span class="s">&quot;:&quot;</span><span class="p">,</span> <span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">args</span><span class="p">]))</span>
+</div></div>
+<div class="viewcode-block" id="ForkExecutor"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.ForkExecutor">[docs]</a><span class="k">class</span> <span class="nc">ForkExecutor</span><span class="p">(</span><span class="n">IOExecutor</span><span class="p">):</span>
+	<span class="c">#def __init__(self, thread, function):</span>
+	<span class="c">#	IOExecutor.__init__(self, thread, function)</span>
+		
+<div class="viewcode-block" id="ForkExecutor.createIO"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.ForkExecutor.createIO">[docs]</a>	<span class="k">def</span> <span class="nf">createIO</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;forking&quot;</span><span class="p">)</span>
+		<span class="c">#self.r, self.w = os.pipe()</span>
+		<span class="c">#self.output = os.fdopen(self.w, &#39;w&#39;)</span>
+		<span class="c">#self.input = os.fdopen(self.r, &#39;r&#39;)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">parent_input_p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">child_output_p</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">pipe</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">child_input_p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent_output_p</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">pipe</span><span class="p">()</span>
+		<span class="c">#self.r_c, self.w_c = os.pipe()</span>
+		<span class="c">#self.output_p = os.fdopen(self.w_p, &#39;w&#39;)</span>
+		<span class="c">#self.input_p = os.fdopen(self.r_p, &#39;r&#39;)</span>
+		<span class="c">#self.output_c = os.fdopen(self.w_c, &#39;w&#39;)</span>
+		<span class="c">#self.input_c = os.fdopen(self.r_c, &#39;r&#39;)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">pid</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">fork</span><span class="p">()</span>
+		<span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">pid</span><span class="p">:</span> <span class="c"># we are the child</span>
+			<span class="c">#if self.id_number != 0:</span>
+			<span class="c">#	signal.signal(signal.SIGINT, signal.SIG_IGN)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">child_output</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">fdopen</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">child_output_p</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">child_input</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">fdopen</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">child_input_p</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">child_output</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">input</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">child_input</span>
+			<span class="n">os</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent_output_p</span><span class="p">)</span>
+			<span class="n">os</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent_input_p</span><span class="p">)</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">childPart</span><span class="p">()</span>
+			<span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+				<span class="k">print</span> <span class="s">&quot;oops&quot;</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+			<span class="n">os</span><span class="o">.</span><span class="n">_exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">parent_output</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">fdopen</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent_output_p</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">parent_input</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">fdopen</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent_input_p</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent_output</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">input</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent_input</span>
+			<span class="n">os</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">child_output_p</span><span class="p">)</span>
+			<span class="n">os</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">child_input_p</span><span class="p">)</span>
+		<span class="c"># else just continue</span>
+			
+			</div>
+<div class="viewcode-block" id="ForkExecutor.childPart"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.ForkExecutor.childPart">[docs]</a>	<span class="k">def</span> <span class="nf">childPart</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;c: child&quot;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">initf</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">initf</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id_number</span><span class="p">)</span>
+		
+		<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;c: waiting for command...&quot;</span><span class="p">)</span>
+			<span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;command:&quot;</span><span class="p">,</span> <span class="n">command</span><span class="p">)</span>
+			<span class="k">if</span> <span class="n">command</span> <span class="o">==</span> <span class="s">&quot;execute&quot;</span><span class="p">:</span>
+				<span class="c"># execute...</span>
+				<span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;c: args:&quot;</span><span class="p">,</span> <span class="sb">`response`</span><span class="p">)</span>
+				<span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="n">deserialize</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+				<span class="n">info</span> <span class="o">=</span> <span class="s">&quot;ok&quot;</span>
+				<span class="n">exc_info</span> <span class="o">=</span> <span class="bp">None</span>
+				<span class="n">result</span> <span class="o">=</span> <span class="bp">None</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="c">#self.log(&quot;c: calling&quot;)</span>
+					<span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+					<span class="c">#self.log(&quot;c: result&quot; +result)</span>
+				<span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+					<span class="n">info</span> <span class="o">=</span> <span class="s">&quot;exception&quot;</span>
+					<span class="n">exc_info</span> <span class="o">=</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+					<span class="c">#raise &quot;bla&quot;</span>
+					<span class="c">#done = True</span>
+				<span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+					<span class="n">info</span> <span class="o">=</span> <span class="s">&quot;exception&quot;</span>
+					<span class="n">exc_info</span> <span class="o">=</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+					<span class="c">#raise &quot;bla&quot;</span>
+					<span class="c">#done = True</span>
+				<span class="c"># encode result</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;c: pickling&quot;</span><span class="p">)</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">serialize</span><span class="p">((</span><span class="n">info</span><span class="p">,</span> <span class="n">exc_info</span><span class="p">,</span> <span class="n">result</span><span class="p">)))</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;c: closing&quot;</span><span class="p">)</span>
+			<span class="k">elif</span> <span class="n">command</span> <span class="o">==</span> <span class="s">&quot;stop&quot;</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;c: stopping...&quot;</span><span class="p">)</span>
+				<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;c: closed, exiting&quot;</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;c: unknown command&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">command</span><span class="p">))</span>
+				<span class="c"># and exit</span>
+				<span class="c">#os._exit(0) # os._exit is used for children</span>
+	
+	
+		</div>
+<div class="viewcode-block" id="ForkExecutor.join"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.ForkExecutor.join">[docs]</a>	<span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">os</span><span class="o">.</span><span class="n">waitpid</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pid</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+	</div></div>
+<div class="viewcode-block" id="Execution"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.Execution">[docs]</a><span class="k">class</span> <span class="nc">Execution</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">taskQueue</span><span class="p">,</span> <span class="n">fork</span><span class="p">,</span> <span class="n">function</span><span class="p">,</span> <span class="n">init</span><span class="p">,</span> <span class="n">id_number</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">taskQueue</span> <span class="o">=</span> <span class="n">taskQueue</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">fork</span> <span class="o">=</span> <span class="n">fork</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">function</span> <span class="o">=</span> <span class="n">function</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">init</span> <span class="o">=</span> <span class="n">init</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">id_number</span> <span class="o">=</span> <span class="n">id_number</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="n">args</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fork</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">executor</span> <span class="o">=</span> <span class="n">ForkExecutor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">init</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">id_number</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">executor</span> <span class="o">=</span> <span class="n">LocalExecutor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">)</span>
+	
+<div class="viewcode-block" id="Execution.log"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.Execution.log">[docs]</a>	<span class="k">def</span> <span class="nf">log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+		<span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getName</span><span class="p">()</span><span class="o">+</span><span class="s">&quot;:&quot;</span><span class="p">,</span> <span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">args</span><span class="p">]))</span>
+		
+	</div>
+<div class="viewcode-block" id="Execution.run"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.Execution.run">[docs]</a>	<span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">task</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor</span><span class="o">.</span><span class="n">init</span><span class="p">():</span>
+			<span class="n">task</span> <span class="o">=</span> <span class="bp">None</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;starting&quot;</span><span class="p">)</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">taskQueue</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+			<span class="k">except</span> <span class="n">Queue</span><span class="o">.</span><span class="n">Empty</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;empty at first try&quot;</span><span class="p">)</span>
+			<span class="k">while</span> <span class="n">task</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">error</span> <span class="ow">is</span> <span class="bp">False</span><span class="p">:</span>
+				<span class="n">tasknr</span><span class="p">,</span> <span class="n">args</span> <span class="o">=</span> <span class="n">task</span>
+				<span class="n">args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+				<span class="n">common_args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+				<span class="n">args</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">common_args</span><span class="p">)</span>
+				<span class="n">kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span>
+				
+				<span class="n">info</span><span class="p">,</span> <span class="n">exc_info</span><span class="p">,</span> <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+				<span class="k">if</span> <span class="n">info</span> <span class="o">==</span> <span class="s">&quot;exception&quot;</span><span class="p">:</span>
+					<span class="k">print</span> <span class="n">exc_info</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="bp">True</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;r: got result&quot;</span><span class="p">)</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">tasknr</span><span class="p">,</span> <span class="n">result</span><span class="p">))</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">taskQueue</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+				<span class="k">except</span> <span class="n">Queue</span><span class="o">.</span><span class="n">Empty</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;empty queue&quot;</span><span class="p">)</span>
+					<span class="n">task</span> <span class="o">=</span> <span class="bp">None</span>
+			<span class="c">#if not self.error:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">executor</span><span class="o">.</span><span class="n">stop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;done&quot;</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s">&quot;failure starting slave&quot;</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="bp">True</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+</div></div>
+<div class="viewcode-block" id="countcores"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.countcores">[docs]</a><span class="k">def</span> <span class="nf">countcores</span><span class="p">():</span>
+	<span class="n">stdin</span><span class="p">,</span> <span class="n">stdout</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">popen2</span><span class="p">(</span><span class="s">&quot;cat /proc/cpuinfo | grep processor&quot;</span><span class="p">)</span>
+	<span class="n">lines</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+	<span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="timed"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.timed">[docs]</a><span class="k">def</span> <span class="nf">timed</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+		<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+		<span class="n">utime0</span><span class="p">,</span> <span class="n">stime0</span><span class="p">,</span> <span class="n">child_utime0</span><span class="p">,</span> <span class="n">child_stime0</span><span class="p">,</span> <span class="n">walltime0</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">times</span><span class="p">()</span>
+		<span class="n">result</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+		<span class="n">dt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+		<span class="n">utime</span><span class="p">,</span> <span class="n">stime</span><span class="p">,</span> <span class="n">child_utime</span><span class="p">,</span> <span class="n">child_stime</span><span class="p">,</span> <span class="n">walltime</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">times</span><span class="p">()</span>
+		<span class="c">#name = f.func_name</span>
+		<span class="k">print</span>
+		<span class="k">print</span> <span class="s">&quot;user time:            </span><span class="si">% 9.3f</span><span class="s"> sec.&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">utime</span><span class="o">-</span><span class="n">utime0</span><span class="p">)</span>
+		<span class="k">print</span> <span class="s">&quot;system time:          </span><span class="si">% 9.3f</span><span class="s"> sec.&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">stime</span><span class="o">-</span><span class="n">stime0</span><span class="p">)</span>
+		<span class="k">print</span> <span class="s">&quot;user time(children):  </span><span class="si">% 9.3f</span><span class="s"> sec.&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">child_utime</span><span class="o">-</span><span class="n">child_utime0</span><span class="p">)</span>
+		<span class="k">print</span> <span class="s">&quot;system time(children):</span><span class="si">% 9.3f</span><span class="s"> sec.&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">child_stime</span><span class="o">-</span><span class="n">child_stime0</span><span class="p">)</span>
+		<span class="k">print</span>
+		<span class="n">dt_total</span> <span class="o">=</span> <span class="n">child_utime</span><span class="o">-</span><span class="n">child_utime0</span> <span class="o">+</span> <span class="n">child_stime</span><span class="o">-</span><span class="n">child_stime0</span><span class="o">+</span><span class="n">utime</span><span class="o">-</span><span class="n">utime0</span><span class="o">+</span><span class="n">stime</span><span class="o">-</span><span class="n">stime0</span>
+		<span class="k">print</span> <span class="s">&quot;total cpu time:       </span><span class="si">% 9.3f</span><span class="s"> sec. (time it would take on a single cpu/core)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dt_total</span><span class="p">)</span>
+		<span class="k">print</span> <span class="s">&quot;elapsed time:         </span><span class="si">% 9.3f</span><span class="s"> sec. (normal wallclock time it took)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">walltime</span><span class="o">-</span><span class="n">walltime0</span><span class="p">)</span>
+		<span class="n">dt</span> <span class="o">=</span> <span class="n">walltime</span><span class="o">-</span><span class="n">walltime0</span>
+		<span class="k">if</span> <span class="n">dt</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">eff</span> <span class="o">=</span> <span class="mf">0.</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">eff</span> <span class="o">=</span> <span class="n">dt_total</span><span class="o">/</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+		<span class="k">print</span> <span class="s">&quot;efficiency factor     </span><span class="si">% 9.3f</span><span class="s">      (ratio of the two above ~= # cores)&quot;</span> <span class="o">%</span> <span class="n">eff</span>
+		<span class="k">return</span> <span class="n">result</span>
+	<span class="k">return</span> <span class="n">execute</span>
+</div>
+<div class="viewcode-block" id="parallelize"><a class="viewcode-back" href="../../vaex.html#vaex.parallelize.parallelize">[docs]</a><span class="k">def</span> <span class="nf">parallelize</span><span class="p">(</span><span class="n">cores</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">fork</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">flatten</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">info</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">infoclass</span><span class="o">=</span><span class="n">InfoThreadProgressBar</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Function decorater that executes the function in parallel</span>
+<span class="sd">	</span>
+<span class="sd">	Usage::</span>
+
+<span class="sd">		@parallelize(cores=10, info=True)</span>
+<span class="sd">		def f(x):</span>
+<span class="sd">			return x**2</span>
+<span class="sd">		</span>
+<span class="sd">		x = numpy.arange(0, 100, 0.1)</span>
+<span class="sd">		y = f(x) # this gets executed parallel</span>
+
+<span class="sd">	:param cores: number of cpus/cores to use (if None, it counts the cores using /proc/cpuinfo)</span>
+<span class="sd">	:param fork: fork a process (should always be true since of the GIT, but can be used with c modules that release the GIT)</span>
+<span class="sd">	:param flatten: if False and each return value is a list, final result will be a list of lists, if True, all lists are combined to one big list</span>
+<span class="sd">	:param info: show progress bar (see infoclass)</span>
+<span class="sd">	:param infoclass: class to instantiate that shows the progress (default shows progressbar)</span>
+<span class="sd">	:param init: function to be called in each forked process before executing, can be used to set the seed, takes a integer as parameter (number that identifies the process)</span>
+<span class="sd">	:param args: extra arguments passed to function</span>
+<span class="sd">	:param kwargs: extra keyword arguments passed to function</span>
+<span class="sd">			</span>
+<span class="sd">	Example::</span>
+<span class="sd">			</span>
+<span class="sd">		@parallelize(cores=10, info=True, n=2)</span>
+<span class="sd">		def f(x, n):</span>
+<span class="sd">			return x**n</span>
+<span class="sd">		</span>
+<span class="sd">		x = numpy.arange(0, 100, 0.1)</span>
+<span class="sd">		y = f(x) # this gets executed parallel</span>
+<span class="sd">			</span>
+<span class="sd">	</span>
+<span class="sd">	</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+	<span class="k">if</span> <span class="n">cores</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+		<span class="n">cores</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">()</span>
+	<span class="k">def</span> <span class="nf">wrapper</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+		<span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="o">*</span><span class="n">multiargs</span><span class="p">):</span>
+			<span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="nb">len</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">multiargs</span><span class="p">))</span>
+			<span class="n">N</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">multiargs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+			<span class="k">if</span> <span class="n">info</span><span class="p">:</span>
+				<span class="k">print</span> <span class="s">&quot;running </span><span class="si">%i</span><span class="s"> jobs on </span><span class="si">%i</span><span class="s"> cores&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">cores</span><span class="p">)</span>
+			<span class="n">taskQueue</span> <span class="o">=</span> <span class="n">Queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">multiargs</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+			<span class="c">#for timenr in range(times):</span>
+			<span class="c">#	taskQueue.put(timenr)</span>
+			<span class="k">for</span> <span class="n">tasknr</span><span class="p">,</span> <span class="n">_args</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">multiargs</span><span class="p">)):</span>
+				<span class="n">taskQueue</span><span class="o">.</span><span class="n">put</span><span class="p">((</span><span class="n">tasknr</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">_args</span><span class="p">)))</span>
+			<span class="c">#for timenr in range(times):</span>
+			<span class="c">#	result = f(*args, **kwargs)</span>
+			<span class="c">#	results.append(result)</span>
+			<span class="n">executions</span> <span class="o">=</span> <span class="p">[</span><span class="n">Execution</span><span class="p">(</span><span class="n">taskQueue</span><span class="p">,</span> <span class="n">fork</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">init</span><span class="p">,</span> <span class="n">corenr</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">corenr</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cores</span><span class="p">)]</span>
+			<span class="k">if</span> <span class="n">info</span><span class="p">:</span>
+				<span class="n">infoobj</span> <span class="o">=</span> <span class="n">infoclass</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">multiargs</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">executions</span><span class="p">)</span>
+				<span class="n">infoobj</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+			<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">execution</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">executions</span><span class="p">):</span>
+				<span class="n">execution</span><span class="o">.</span><span class="n">setName</span><span class="p">(</span><span class="s">&quot;T-</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+				<span class="n">execution</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+			<span class="c">#if 1:</span>
+			<span class="c">#	watchdog = Watchdog(executions)</span>
+			<span class="c">#	watchdog.start()</span>
+			<span class="n">error</span> <span class="o">=</span> <span class="bp">False</span>
+			<span class="k">for</span> <span class="n">execution</span> <span class="ow">in</span> <span class="n">executions</span><span class="p">:</span>
+				<span class="n">log</span><span class="p">(</span><span class="s">&quot;joining:&quot;</span><span class="p">,</span><span class="n">execution</span><span class="o">.</span><span class="n">getName</span><span class="p">())</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="n">execution</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+				<span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+					<span class="n">error</span> <span class="o">=</span> <span class="bp">True</span>
+				<span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">execution</span><span class="o">.</span><span class="n">results</span><span class="p">)</span>
+				<span class="k">if</span> <span class="n">execution</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+					<span class="n">error</span> <span class="o">=</span> <span class="bp">True</span> 
+			<span class="k">if</span> <span class="n">info</span><span class="p">:</span>
+				<span class="n">infoobj</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+			<span class="k">if</span> <span class="n">error</span><span class="p">:</span>
+				<span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;error&quot;</span>
+				<span class="n">results</span> <span class="o">=</span> <span class="bp">None</span>
+				<span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;error in one or more of the executors&quot;</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">results</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="nb">cmp</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">cmp</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+				<span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">k</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
+				<span class="c">#print &quot;bla&quot;, results</span>
+				<span class="k">if</span> <span class="n">flatten</span><span class="p">:</span>
+					<span class="n">flatresults</span> <span class="o">=</span> <span class="p">[]</span>
+					<span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+						<span class="n">flatresults</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+					<span class="n">results</span> <span class="o">=</span> <span class="n">flatresults</span>
+			<span class="k">return</span> <span class="n">results</span>
+		<span class="k">return</span> <span class="n">execute</span>
+	<span class="k">return</span> <span class="n">wrapper</span>
+			
+			</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+	<span class="nd">@timed</span>
+	<span class="nd">@parallelize</span><span class="p">(</span><span class="n">cores</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">fork</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">flatten</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="s">&quot;common argument&quot;</span><span class="p">)</span>
+	<span class="k">def</span> <span class="nf">testprime</span><span class="p">(</span><span class="n">from_nr</span><span class="p">,</span> <span class="n">to_nr</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">):</span>
+		<span class="c">#print text, from_nr, to_nr</span>
+		<span class="n">primes</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">from_nr</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">from_nr</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+		<span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">from_nr</span><span class="p">,</span> <span class="n">to_nr</span><span class="p">):</span>
+			<span class="n">isprime</span> <span class="o">=</span> <span class="bp">True</span>
+			<span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+			
+			<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+				<span class="k">if</span> <span class="n">p</span> <span class="o">%</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+					<span class="n">isprime</span> <span class="o">=</span> <span class="bp">False</span>
+					<span class="k">break</span>
+			<span class="k">if</span> <span class="n">isprime</span><span class="p">:</span>
+				<span class="n">primes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">primes</span>
+			
+	
+	<span class="n">testnumbers</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10001</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+	<span class="n">from_nrs</span> <span class="o">=</span> <span class="n">testnumbers</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+	<span class="n">to_nrs</span> <span class="o">=</span> <span class="n">testnumbers</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+	<span class="n">results</span> <span class="o">=</span> <span class="n">testprime</span><span class="p">(</span><span class="n">from_nrs</span><span class="p">,</span> <span class="n">to_nrs</span><span class="p">)</span>
+	<span class="c">#print results</span>
+	<span class="c">#print countcores()</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

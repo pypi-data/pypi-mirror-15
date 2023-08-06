@@ -1,0 +1,523 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.utils &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../index.html"/>
+        <link rel="up" title="vaex" href="../vaex.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.utils</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.utils</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">platform</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">concurrent.futures</span>
+<span class="n">is_frozen</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s">&#39;frozen&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+
+<span class="n">osname</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">darwin</span><span class="o">=</span><span class="s">&quot;osx&quot;</span><span class="p">,</span> <span class="n">linux</span><span class="o">=</span><span class="s">&quot;linux&quot;</span><span class="p">,</span> <span class="n">windows</span><span class="o">=</span><span class="s">&quot;windows&quot;</span><span class="p">)[</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span>
+
+<div class="viewcode-block" id="subdivide"><a class="viewcode-back" href="../../vaex.html#vaex.utils.subdivide">[docs]</a><span class="k">def</span> <span class="nf">subdivide</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="n">parts</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Generates a list with start end stop indices of length parts, [(0, length/parts), ..., (.., length)]&quot;&quot;&quot;</span>
+	<span class="k">if</span> <span class="n">max_length</span><span class="p">:</span>
+		<span class="n">i1</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+			<span class="n">i2</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="n">i1</span> <span class="o">+</span> <span class="n">max_length</span><span class="p">)</span>
+			<span class="c">#print i1, i2</span>
+			<span class="k">yield</span> <span class="n">i1</span><span class="p">,</span> <span class="n">i2</span>
+			<span class="n">i1</span> <span class="o">=</span> <span class="n">i2</span>
+			<span class="k">if</span> <span class="n">i1</span> <span class="o">==</span> <span class="n">length</span><span class="p">:</span>
+				<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="n">part_length</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">length</span><span class="p">)</span><span class="o">/</span><span class="n">parts</span><span class="p">))</span>
+		<span class="c">#subblock_count = math.ceil(total_length/subblock_size)</span>
+		<span class="c">#args_list = []</span>
+		<span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">parts</span><span class="p">):</span>
+			<span class="n">i1</span><span class="p">,</span> <span class="n">i2</span> <span class="o">=</span> <span class="n">index</span> <span class="o">*</span> <span class="n">part_length</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="p">(</span><span class="n">index</span> <span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">part_length</span><span class="p">)</span>
+			<span class="k">yield</span> <span class="n">i1</span><span class="p">,</span> <span class="n">i2</span></div>
+
+
+<div class="viewcode-block" id="submit_subdivide"><a class="viewcode-back" href="../../vaex.html#vaex.utils.submit_subdivide">[docs]</a><span class="k">def</span> <span class="nf">submit_subdivide</span><span class="p">(</span><span class="n">thread_count</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">length</span><span class="p">,</span> <span class="n">max_length</span><span class="p">):</span>
+	<span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">thread_pool</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">futures</span><span class="o">.</span><span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">thread_count</span><span class="p">)</span>
+	<span class="c">#thread_pool = concurrent.futures.ProcessPoolExecutor(thread_count)</span>
+	<span class="k">for</span> <span class="n">i1</span><span class="p">,</span> <span class="n">i2</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">subdivide</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="n">max_length</span><span class="p">)):</span>
+		<span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">thread_pool</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">))</span>
+	<span class="k">return</span> <span class="n">futures</span></div>
+
+<div class="viewcode-block" id="linspace_centers"><a class="viewcode-back" href="../../vaex.html#vaex.utils.linspace_centers">[docs]</a><span class="k">def</span> <span class="nf">linspace_centers</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">N</span><span class="p">):</span>
+	<span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">N</span><span class="o">+</span><span class="mf">0.</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">stop</span><span class="o">-</span><span class="n">start</span><span class="p">)</span> <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">stop</span><span class="o">-</span><span class="n">start</span><span class="p">)</span><span class="o">/</span><span class="n">N</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="n">start</span></div>
+
+<div class="viewcode-block" id="multisum"><a class="viewcode-back" href="../../vaex.html#vaex.utils.multisum">[docs]</a><span class="k">def</span> <span class="nf">multisum</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">axes</span><span class="p">):</span>
+	<span class="n">correction</span> <span class="o">=</span> <span class="mi">0</span>
+	<span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">:</span>
+		<span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nansum</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="o">-</span><span class="n">correction</span><span class="p">)</span>
+		<span class="n">correction</span> <span class="o">+=</span> <span class="mi">1</span>
+	<span class="k">return</span> <span class="n">a</span></div>
+
+<div class="viewcode-block" id="disjoined"><a class="viewcode-back" href="../../vaex.html#vaex.utils.disjoined">[docs]</a><span class="k">def</span> <span class="nf">disjoined</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+	<span class="c"># create marginalized distributions and multiple them together</span>
+	<span class="n">data_disjoined</span> <span class="o">=</span> <span class="bp">None</span>
+	<span class="n">dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+	<span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">):</span>
+		<span class="n">axes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
+		<span class="n">axes</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+		<span class="n">data1d</span> <span class="o">=</span> <span class="n">multisum</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">axes</span><span class="p">)</span>
+		<span class="n">shape</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">)]</span>
+		<span class="n">shape</span><span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data1d</span><span class="p">)</span>
+		<span class="n">data1d</span> <span class="o">=</span> <span class="n">data1d</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">shape</span><span class="p">))</span>
+		<span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">data_disjoined</span> <span class="o">=</span> <span class="n">data1d</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">data_disjoined</span> <span class="o">=</span> <span class="n">data_disjoined</span> <span class="o">*</span> <span class="n">data1d</span>
+	<span class="k">return</span> <span class="n">data_disjoined</span></div>
+
+
+
+<div class="viewcode-block" id="get_data_file"><a class="viewcode-back" href="../../vaex.html#vaex.utils.get_data_file">[docs]</a><span class="k">def</span> <span class="nf">get_data_file</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+	<span class="k">try</span><span class="p">:</span> <span class="c"># this works for egg like stuff, but fails for py2app apps</span>
+		<span class="kn">from</span> <span class="nn">pkg_resources</span> <span class="kn">import</span> <span class="n">Requirement</span><span class="p">,</span> <span class="n">resource_filename</span>
+		<span class="n">path</span> <span class="o">=</span> <span class="n">resource_filename</span><span class="p">(</span><span class="n">Requirement</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="s">&quot;vaex&quot;</span><span class="p">),</span> <span class="n">filename</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+			<span class="k">return</span> <span class="n">path</span>
+	<span class="k">except</span><span class="p">:</span>
+		<span class="k">pass</span>
+	<span class="c"># this is where we expect data to be in normal installations</span>
+	<span class="k">for</span> <span class="n">extra</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&quot;&quot;</span><span class="p">,</span> <span class="s">&quot;data&quot;</span><span class="p">,</span> <span class="s">&quot;data/dist&quot;</span><span class="p">,</span> <span class="s">&quot;../data&quot;</span><span class="p">,</span> <span class="s">&quot;../data/dist&quot;</span><span class="p">]:</span>
+		<span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">),</span> <span class="s">&quot;..&quot;</span><span class="p">,</span> <span class="s">&quot;..&quot;</span><span class="p">,</span> <span class="n">extra</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+			<span class="k">return</span> <span class="n">path</span>
+		<span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span> <span class="n">extra</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+			<span class="k">return</span> <span class="n">path</span>
+		<span class="c"># if all fails..</span>
+		<span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">get_root_path</span><span class="p">(),</span> <span class="n">extra</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+			<span class="k">return</span> <span class="n">path</span></div>
+
+<div class="viewcode-block" id="get_root_path"><a class="viewcode-back" href="../../vaex.html#vaex.utils.get_root_path">[docs]</a><span class="k">def</span> <span class="nf">get_root_path</span><span class="p">():</span>
+	<span class="n">osname</span> <span class="o">=</span> <span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+	<span class="c">#if (osname == &quot;linux&quot;) and is_frozen: # we are using pyinstaller</span>
+	<span class="k">if</span> <span class="n">is_frozen</span><span class="p">:</span> <span class="c"># we are using pyinstaller or py2app</span>
+		<span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">)</span></div>
+	
+	
+<div class="viewcode-block" id="os_open"><a class="viewcode-back" href="../../vaex.html#vaex.utils.os_open">[docs]</a><span class="k">def</span> <span class="nf">os_open</span><span class="p">(</span><span class="n">document</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Open document by the default handler of the OS, could be a url opened by a browser, a text file by an editor etc&quot;&quot;&quot;</span>
+	<span class="n">osname</span> <span class="o">=</span> <span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+	<span class="k">if</span> <span class="n">osname</span> <span class="o">==</span> <span class="s">&quot;darwin&quot;</span><span class="p">:</span>
+		<span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&quot;open </span><span class="se">\&quot;</span><span class="s">&quot;</span> <span class="o">+</span><span class="n">document</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\&quot;</span><span class="s">&quot;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="n">osname</span> <span class="o">==</span> <span class="s">&quot;linux&quot;</span><span class="p">:</span>
+		<span class="n">cmd</span> <span class="o">=</span> <span class="s">&quot;xdg-open </span><span class="se">\&quot;</span><span class="s">&quot;</span> <span class="o">+</span><span class="n">document</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\&quot;</span><span class="s">&amp;&quot;</span>
+		<span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span>
+	<span class="k">if</span> <span class="n">osname</span> <span class="o">==</span> <span class="s">&quot;windows&quot;</span><span class="p">:</span>
+		<span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&quot;start </span><span class="se">\&quot;</span><span class="s">&quot;</span> <span class="o">+</span><span class="n">document</span> <span class="o">+</span><span class="s">&quot;</span><span class="se">\&quot;</span><span class="s">&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="filesize_format"><a class="viewcode-back" href="../../vaex.html#vaex.utils.filesize_format">[docs]</a><span class="k">def</span> <span class="nf">filesize_format</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+	<span class="k">for</span> <span class="n">unit</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;bytes&#39;</span><span class="p">,</span><span class="s">&#39;KiB&#39;</span><span class="p">,</span><span class="s">&#39;MiB&#39;</span><span class="p">,</span><span class="s">&#39;GiB&#39;</span><span class="p">]:</span>
+		<span class="k">if</span> <span class="n">value</span> <span class="o">&lt;</span> <span class="mf">1024.0</span><span class="p">:</span>
+			<span class="k">return</span> <span class="s">&quot;</span><span class="si">%3.1f%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">)</span>
+		<span class="n">value</span> <span class="o">/=</span> <span class="mf">1024.0</span>
+	<span class="k">return</span> <span class="s">&quot;</span><span class="si">%3.1f%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s">&#39;TiB&#39;</span><span class="p">)</span></div>
+
+
+
+<span class="n">log_timer</span> <span class="o">=</span> <span class="bp">True</span>
+<div class="viewcode-block" id="Timer"><a class="viewcode-back" href="../../vaex.html#vaex.utils.Timer">[docs]</a><span class="k">class</span> <span class="nc">Timer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span>
+
+	<span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">if</span> <span class="n">log_timer</span><span class="p">:</span>
+			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s"> starting&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">print</span><span class="p">((</span><span class="s">&#39;[</span><span class="si">%s</span><span class="s"> starting]...&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">tstart</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+	<span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">traceback</span><span class="p">):</span>
+		<span class="k">if</span> <span class="n">log_timer</span><span class="p">:</span>
+			<span class="n">msg</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s"> done, </span><span class="si">%s</span><span class="s">s elapsed&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">tstart</span><span class="p">)</span>
+			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">print</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+			<span class="k">if</span> <span class="nb">type</span> <span class="ow">or</span> <span class="n">value</span> <span class="ow">or</span> <span class="n">traceback</span><span class="p">:</span>
+				<span class="k">print</span><span class="p">((</span><span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">traceback</span><span class="p">))</span>
+		<span class="k">return</span> <span class="bp">False</span></div>
+
+<div class="viewcode-block" id="get_private_dir"><a class="viewcode-back" href="../../vaex.html#vaex.utils.get_private_dir">[docs]</a><span class="k">def</span> <span class="nf">get_private_dir</span><span class="p">():</span>
+	<span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="s">&#39;~/.vaex&#39;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+		<span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+	<span class="k">return</span> <span class="n">path</span></div>
+
+<div class="viewcode-block" id="make_list"><a class="viewcode-back" href="../../vaex.html#vaex.utils.make_list">[docs]</a><span class="k">def</span> <span class="nf">make_list</span><span class="p">(</span><span class="n">sequence</span><span class="p">):</span>
+	<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">sequence</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+		<span class="k">return</span> <span class="n">sequence</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">sequence</span><span class="p">)</span></div>
+
+<span class="kn">import</span> <span class="nn">progressbar</span>
+<span class="c">#from progressbar import AnimatedMarker, Bar, BouncingBar, Counter, ETA, \</span>
+<span class="c">#   FileTransferSpeed, FormatLabel, Percentage, \</span>
+<span class="c">#    ProgressBar, ReverseBar, RotatingMarker, \</span>
+<span class="c">#    SimpleProgress, Timer, AdaptiveETA, AbsoluteETA, AdaptiveTransferSpeed</span>
+<span class="c">#from progressbar.widgets import TimeSensitiveWidgetBase, FormatWidgetMixin</span>
+
+<div class="viewcode-block" id="CpuUsage"><a class="viewcode-back" href="../../vaex.html#vaex.utils.CpuUsage">[docs]</a><span class="k">class</span> <span class="nc">CpuUsage</span><span class="p">(</span><span class="n">progressbar</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">FormatWidgetMixin</span><span class="p">,</span> <span class="n">progressbar</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">TimeSensitiveWidgetBase</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="s">&#39;CPU Usage: </span><span class="si">%(cpu_usage)s%%</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">usage_format</span><span class="o">=</span><span class="s">&quot;</span><span class="si">% 5d</span><span class="s">&quot;</span><span class="p">):</span>
+		<span class="nb">super</span><span class="p">(</span><span class="n">CpuUsage</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="n">format</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">usage_format</span> <span class="o">=</span> <span class="n">usage_format</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">utime_0</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">stime_0</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">walltime_0</span> <span class="o">=</span> <span class="bp">None</span>
+
+	<span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+		<span class="n">utime</span><span class="p">,</span> <span class="n">stime</span><span class="p">,</span> <span class="n">child_utime</span><span class="p">,</span> <span class="n">child_stime</span><span class="p">,</span> <span class="n">walltime</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">times</span><span class="p">()</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">utime_0</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">utime_0</span> <span class="o">=</span> <span class="n">utime</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">stime_0</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">stime_0</span> <span class="o">=</span> <span class="n">stime</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">walltime_0</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">walltime_0</span> <span class="o">=</span> <span class="n">walltime</span>
+		<span class="n">data</span><span class="p">[</span><span class="s">&quot;utime_0&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">utime_0</span>
+		<span class="n">data</span><span class="p">[</span><span class="s">&quot;stime_0&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stime_0</span>
+		<span class="n">data</span><span class="p">[</span><span class="s">&quot;walltime_0&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">walltime_0</span>
+
+		<span class="n">delta_time</span> <span class="o">=</span> <span class="n">utime</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">utime_0</span> <span class="o">+</span> <span class="n">stime</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">stime_0</span>
+		<span class="n">delta_walltime</span> <span class="o">=</span> <span class="n">walltime</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">walltime_0</span>
+		<span class="c">#print delta_time, delta_walltime, utime, self.utime_0, stime, self.stime_0</span>
+		<span class="k">if</span> <span class="n">delta_walltime</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">data</span><span class="p">[</span><span class="s">&quot;cpu_usage&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;---&quot;</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">cpu_usage</span> <span class="o">=</span> <span class="n">delta_time</span><span class="o">/</span><span class="p">(</span><span class="n">delta_walltime</span> <span class="o">*</span> <span class="mf">1.</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span>
+			<span class="n">data</span><span class="p">[</span><span class="s">&quot;cpu_usage&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">usage_format</span> <span class="o">%</span> <span class="n">cpu_usage</span>
+		<span class="c">#utime0, stime0, child_utime0, child_stime0, walltime0 = os.times()</span>
+		<span class="k">return</span> <span class="n">progressbar_mod</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">FormatWidgetMixin</span><span class="o">.</span><span class="n">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span></div>
+<span class="n">progressbar_mod</span> <span class="o">=</span> <span class="n">progressbar</span>
+<div class="viewcode-block" id="progressbar"><a class="viewcode-back" href="../../vaex.html#vaex.utils.progressbar">[docs]</a><span class="k">def</span> <span class="nf">progressbar</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">&quot;processing&quot;</span><span class="p">,</span> <span class="n">max_value</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+	<span class="n">widgets</span> <span class="o">=</span> <span class="p">[</span>
+		<span class="n">name</span><span class="p">,</span>
+        <span class="s">&#39;: &#39;</span><span class="p">,</span> <span class="n">progressbar_mod</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">Percentage</span><span class="p">(),</span>
+        <span class="s">&#39; &#39;</span><span class="p">,</span> <span class="n">progressbar_mod</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">Bar</span><span class="p">(),</span>
+        <span class="s">&#39; &#39;</span><span class="p">,</span> <span class="n">progressbar_mod</span><span class="o">.</span><span class="n">widgets</span><span class="o">.</span><span class="n">ETA</span><span class="p">(),</span>
+        <span class="c">#&#39; &#39;, progressbar_mod.widgets.AdaptiveETA(),</span>
+		<span class="s">&#39; &#39;</span><span class="p">,</span> <span class="n">CpuUsage</span><span class="p">()</span>
+    <span class="p">]</span>
+	<span class="n">bar</span> <span class="o">=</span> <span class="n">progressbar_mod</span><span class="o">.</span><span class="n">ProgressBar</span><span class="p">(</span><span class="n">widgets</span><span class="o">=</span><span class="n">widgets</span><span class="p">,</span> <span class="n">max_value</span><span class="o">=</span><span class="n">max_value</span><span class="p">)</span>
+	<span class="n">bar</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+	<span class="k">return</span> <span class="n">bar</span></div>
+	<span class="c">#FormatLabel(&#39;Processed: %(value)d lines (in: %(elapsed)s)&#39;)</span>
+
+<div class="viewcode-block" id="progressbar_callable"><a class="viewcode-back" href="../../vaex.html#vaex.utils.progressbar_callable">[docs]</a><span class="k">def</span> <span class="nf">progressbar_callable</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">&quot;processing&quot;</span><span class="p">,</span> <span class="n">max_value</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+	<span class="n">bar</span> <span class="o">=</span> <span class="n">progressbar</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">max_value</span><span class="o">=</span><span class="n">max_value</span><span class="p">)</span>
+	<span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="n">fraction</span><span class="p">):</span>
+		<span class="n">bar</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">fraction</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">fraction</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="n">bar</span><span class="o">.</span><span class="n">finish</span><span class="p">()</span>
+		<span class="k">return</span> <span class="bp">True</span>
+	<span class="k">return</span> <span class="n">update</span></div>
+
+
+<div class="viewcode-block" id="confirm_on_console"><a class="viewcode-back" href="../../vaex.html#vaex.utils.confirm_on_console">[docs]</a><span class="k">def</span> <span class="nf">confirm_on_console</span><span class="p">(</span><span class="n">topic</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+	<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+	<span class="k">print</span><span class="p">(</span><span class="n">topic</span><span class="p">)</span>
+	<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+		<span class="n">output</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="n">msg</span> <span class="o">+</span><span class="s">&quot;:[y/n]&quot;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s">&quot;y&quot;</span><span class="p">:</span>
+			<span class="k">return</span> <span class="bp">True</span>
+		<span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s">&quot;n&quot;</span><span class="p">:</span>
+			<span class="k">return</span> <span class="bp">False</span></div>
+
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">yaml</span>
+
+<div class="viewcode-block" id="yaml_dump"><a class="viewcode-back" href="../../vaex.html#vaex.utils.yaml_dump">[docs]</a><span class="k">def</span> <span class="nf">yaml_dump</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+	<span class="n">yaml</span><span class="o">.</span><span class="n">safe_dump</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">default_flow_style</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s">&#39;utf-8&#39;</span><span class="p">,</span>  <span class="n">allow_unicode</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span></div>
+<div class="viewcode-block" id="yaml_load"><a class="viewcode-back" href="../../vaex.html#vaex.utils.yaml_load">[docs]</a><span class="k">def</span> <span class="nf">yaml_load</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+	<span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="write_json_or_yaml"><a class="viewcode-back" href="../../vaex.html#vaex.utils.write_json_or_yaml">[docs]</a><span class="k">def</span> <span class="nf">write_json_or_yaml</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+	<span class="n">base</span><span class="p">,</span> <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+	<span class="k">if</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&quot;.json&quot;</span><span class="p">:</span>
+		<span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+	<span class="k">elif</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&quot;.yaml&quot;</span><span class="p">:</span>
+		<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+			<span class="n">yaml_dump</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;file should end in .json or .yaml (not </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">ext</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="read_json_or_yaml"><a class="viewcode-back" href="../../vaex.html#vaex.utils.read_json_or_yaml">[docs]</a><span class="k">def</span> <span class="nf">read_json_or_yaml</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+	<span class="n">base</span><span class="p">,</span> <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+	<span class="k">if</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&quot;.json&quot;</span><span class="p">:</span>
+		<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+	<span class="k">elif</span> <span class="n">ext</span> <span class="o">==</span> <span class="s">&quot;.yaml&quot;</span><span class="p">:</span>
+		<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">yaml_load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;file should end in .json or .yaml (not </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">ext</span><span class="p">)</span></div>
+
+<span class="c"># from http://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts</span>
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="n">_mapping_tag</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">resolver</span><span class="o">.</span><span class="n">BaseResolver</span><span class="o">.</span><span class="n">DEFAULT_MAPPING_TAG</span>
+
+<div class="viewcode-block" id="dict_representer"><a class="viewcode-back" href="../../vaex.html#vaex.utils.dict_representer">[docs]</a><span class="k">def</span> <span class="nf">dict_representer</span><span class="p">(</span><span class="n">dumper</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">dumper</span><span class="o">.</span><span class="n">represent_dict</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s">&quot;iteritems&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="dict_constructor"><a class="viewcode-back" href="../../vaex.html#vaex.utils.dict_constructor">[docs]</a><span class="k">def</span> <span class="nf">dict_constructor</span><span class="p">(</span><span class="n">loader</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">collections</span><span class="o">.</span><span class="n">OrderedDict</span><span class="p">(</span><span class="n">loader</span><span class="o">.</span><span class="n">construct_pairs</span><span class="p">(</span><span class="n">node</span><span class="p">))</span></div>
+
+<span class="n">yaml</span><span class="o">.</span><span class="n">add_representer</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">OrderedDict</span><span class="p">,</span> <span class="n">dict_representer</span><span class="p">,</span> <span class="n">yaml</span><span class="o">.</span><span class="n">SafeDumper</span><span class="p">)</span>
+<span class="n">yaml</span><span class="o">.</span><span class="n">add_constructor</span><span class="p">(</span><span class="n">_mapping_tag</span><span class="p">,</span> <span class="n">dict_constructor</span><span class="p">,</span> <span class="n">yaml</span><span class="o">.</span><span class="n">SafeLoader</span><span class="p">)</span>
+
+<span class="kn">import</span> <span class="nn">psutil</span>
+<div class="viewcode-block" id="check_memory_usage"><a class="viewcode-back" href="../../vaex.html#vaex.utils.check_memory_usage">[docs]</a><span class="k">def</span> <span class="nf">check_memory_usage</span><span class="p">(</span><span class="n">bytes_needed</span><span class="p">,</span> <span class="n">confirm</span><span class="p">):</span>
+	<span class="k">if</span> <span class="n">bytes_needed</span> <span class="o">&gt;</span> <span class="n">psutil</span><span class="o">.</span><span class="n">virtual_memory</span><span class="p">()</span><span class="o">.</span><span class="n">available</span><span class="p">:</span>
+		<span class="k">if</span> <span class="n">bytes_needed</span> <span class="o">&lt;</span> <span class="p">(</span><span class="n">psutil</span><span class="o">.</span><span class="n">virtual_memory</span><span class="p">()</span><span class="o">.</span><span class="n">available</span> <span class="o">+</span><span class="n">psutil</span><span class="o">.</span><span class="n">swap_memory</span><span class="p">()</span><span class="o">.</span><span class="n">free</span><span class="p">):</span>
+			<span class="n">text</span> <span class="o">=</span> <span class="s">&quot;Action requires </span><span class="si">%s</span><span class="s">, you have enough swap memory available but it will make your computer slower, do you want to continue?&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">filesize_format</span><span class="p">(</span><span class="n">bytes_needed</span><span class="p">),)</span>
+			<span class="k">return</span> <span class="n">confirm</span><span class="p">(</span><span class="s">&quot;Memory usage issue&quot;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">text</span> <span class="o">=</span> <span class="s">&quot;Action requires </span><span class="si">%s</span><span class="s">, you do not have enough swap memory available, do you want try anyway?&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">filesize_format</span><span class="p">(</span><span class="n">bytes_needed</span><span class="p">),)</span>
+			<span class="k">return</span> <span class="n">confirm</span><span class="p">(</span><span class="s">&quot;Memory usage issue&quot;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span>
+	<span class="k">return</span> <span class="bp">True</span></div>
+
+<span class="kn">import</span> <span class="nn">six</span>
+
+<div class="viewcode-block" id="ensure_string"><a class="viewcode-back" href="../../vaex.html#vaex.utils.ensure_string">[docs]</a><span class="k">def</span> <span class="nf">ensure_string</span><span class="p">(</span><span class="n">string_or_bytes</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s">&quot;utf-8&quot;</span><span class="p">):</span>
+	<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">string_or_bytes</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
+		<span class="k">return</span> <span class="n">string_or_bytes</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="k">return</span> <span class="n">string_or_bytes</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">encoding</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="filename_shorten"><a class="viewcode-back" href="../../vaex.html#vaex.utils.filename_shorten">[docs]</a><span class="k">def</span> <span class="nf">filename_shorten</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">150</span><span class="p">):</span>
+	<span class="c">#parts = path.split(os.path.sep)</span>
+	<span class="n">parts</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+	<span class="n">tail</span> <span class="o">=</span> <span class="n">path</span>
+	<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+		<span class="n">tail</span><span class="p">,</span> <span class="n">head</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">tail</span><span class="p">)</span>
+		<span class="c">#print &quot;&gt;&gt;&quot;, tail, head</span>
+		<span class="k">if</span> <span class="ow">not</span> <span class="n">head</span><span class="p">:</span>
+			<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+			<span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tail</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">head</span><span class="p">)</span>
+	<span class="n">parts</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>
+	<span class="c">#print &quot;parts&quot;, parts, os.path.join(*parts)</span>
+	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">4</span><span class="p">:</span>
+		<span class="n">first</span><span class="p">,</span> <span class="n">middle</span><span class="p">,</span> <span class="n">last</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+		<span class="c">#print first, middle, last</span>
+		<span class="k">while</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">middle</span> <span class="o">+</span> <span class="p">[</span><span class="n">last</span><span class="p">])))</span> <span class="o">&lt;=</span> <span class="n">max_length</span><span class="p">)</span> <span class="ow">and</span> <span class="n">middle</span><span class="p">:</span>
+			<span class="n">last</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">middle</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">last</span><span class="p">)</span>
+			<span class="n">middle</span> <span class="o">=</span> <span class="n">middle</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+		<span class="k">if</span> <span class="n">middle</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="s">&quot;...&quot;</span><span class="p">,</span> <span class="n">last</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">last</span><span class="p">)</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="k">return</span> <span class="n">path</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

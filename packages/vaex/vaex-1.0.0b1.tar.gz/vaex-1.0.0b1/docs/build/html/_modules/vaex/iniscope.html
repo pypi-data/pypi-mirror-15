@@ -1,0 +1,737 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.iniscope &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../index.html"/>
+        <link rel="up" title="vaex" href="../vaex.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.iniscope</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.iniscope</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">absolute_import</span>
+<span class="kn">import</span> <span class="nn">ConfigParser</span> <span class="kn">as</span> <span class="nn">configparser</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">glob</span>
+
+<span class="kn">import</span> <span class="nn">vaex.logging</span> <span class="kn">as</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">vaex.misc.ordereddict</span>
+
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;gd.utils.iniscope&quot;</span><span class="p">)</span>
+
+<span class="n">enable_logging</span> <span class="o">=</span> <span class="bp">True</span>
+<span class="n">enable_imports</span> <span class="o">=</span> <span class="bp">True</span>
+
+<span class="n">module_exts</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;.py&quot;</span><span class="p">]</span>
+<span class="n">imported</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="recursive_import"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.recursive_import">[docs]</a><span class="k">def</span> <span class="nf">recursive_import</span><span class="p">(</span><span class="n">basedirname</span><span class="p">,</span> <span class="n">dirname</span><span class="p">):</span>
+	<span class="k">if</span> <span class="ow">not</span> <span class="n">enable_imports</span><span class="p">:</span>
+		<span class="k">return</span>
+	<span class="k">if</span> <span class="n">dirname</span> <span class="ow">in</span> <span class="n">imported</span><span class="p">:</span>
+		<span class="k">return</span>
+	<span class="n">imported</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dirname</span><span class="p">)</span>
+	<span class="n">filenames</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirname</span><span class="p">,</span> <span class="s">&quot;*&quot;</span><span class="p">))</span>
+	<span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">filenames</span><span class="p">:</span>
+		<span class="k">if</span>  <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+			<span class="c">#print &quot;DIR&quot;, filename</span>
+			<span class="n">recursive_import</span><span class="p">(</span><span class="n">basedirname</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">name</span><span class="p">,</span> <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+			<span class="k">if</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">module_exts</span><span class="p">:</span>
+				<span class="n">modulename</span> <span class="o">=</span> <span class="n">name</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">basedirname</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="s">&quot;.&quot;</span><span class="p">)</span>
+				<span class="c">#print &quot;MOD&quot;, modulename</span>
+				<span class="c">#if enable_logging:</span>
+				<span class="c">#	logger.debug(&quot;basedir: %s; name: %s; modulename: %s&quot; % (basedirname, name, modulename))</span>
+				<span class="k">exec</span> <span class="s">&quot;import </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">modulename</span>
+				
+				</div>
+<div class="viewcode-block" id="SubScope"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.SubScope">[docs]</a><span class="k">class</span> <span class="nc">SubScope</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="nb">globals</span><span class="o">=</span><span class="p">[],</span> <span class="n">includes</span><span class="o">=</span><span class="p">[],</span> <span class="n">configurations</span><span class="o">=</span><span class="p">[]):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">scope</span> <span class="o">=</span> <span class="n">scope</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">globals</span> <span class="o">=</span> <span class="nb">globals</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">includes</span> <span class="o">=</span> <span class="n">includes</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="n">configurations</span>
+		
+<div class="viewcode-block" id="SubScope.load"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.SubScope.load">[docs]</a>	<span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">subscope</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scope</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">subscope</span><span class="o">.</span><span class="n">configurations</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configurations</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">subscope</span><span class="o">.</span><span class="n">globals</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">globals</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">subscope</span><span class="o">.</span><span class="n">readfiles</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">includes</span><span class="p">)</span>
+		
+		
+		</div></div>
+<div class="viewcode-block" id="IniScope"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.IniScope">[docs]</a><span class="k">class</span> <span class="nc">IniScope</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">aliases</span><span class="o">=</span><span class="p">{},</span> <span class="nb">globals</span><span class="o">=</span><span class="p">[],</span> <span class="n">load</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">configurations</span><span class="o">=</span><span class="p">[],</span> <span class="o">**</span><span class="n">defaults</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">filename</span> <span class="o">=</span> <span class="n">filename</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">aliases</span> <span class="o">=</span> <span class="n">aliases</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">globals</span> <span class="o">=</span> <span class="nb">globals</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">defaults</span> <span class="o">=</span> <span class="n">defaults</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">allfiles</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="n">configurations</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+		<span class="k">if</span> <span class="n">load</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">readfiles</span><span class="p">()</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">init</span><span class="p">()</span>
+			
+<div class="viewcode-block" id="IniScope.clone"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.IniScope.clone">[docs]</a>	<span class="k">def</span> <span class="nf">clone</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">clone</span> <span class="o">=</span> <span class="n">IniScope</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="n">aliases</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">,</span> <span class="nb">globals</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">globals</span><span class="p">)</span>
+		<span class="n">clone</span><span class="o">.</span><span class="n">dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">)</span>
+		<span class="n">clone</span><span class="o">.</span><span class="n">allfiles</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">allfiles</span><span class="p">)</span>
+		<span class="n">clone</span><span class="o">.</span><span class="n">ini</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ini</span>
+		<span class="n">clone</span><span class="o">.</span><span class="n">defaults</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="p">)</span>
+		<span class="n">clone</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configurations</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">clone</span>
+		</div>
+	<span class="k">def</span> <span class="nf">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+		<span class="c">#print &quot;set:&quot;, name</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+	<span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>  <span class="n">name</span><span class="p">):</span>
+		<span class="c">#print &quot;get:&quot;, name</span>
+		<span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">:</span>
+			<span class="c">#print self.ini.has_option(&quot;globals&quot;, name)</span>
+			<span class="c">#print dict(self.ini.items(&quot;globals&quot;))</span>
+			<span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+			<span class="c"># first look for section</span>
+			<span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">createobj_fromini</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">configurations</span><span class="p">)</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;found </span><span class="si">%r</span><span class="s"> in section&quot;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+				<span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+			<span class="c"># then &#39;overriden&#39; globals</span>
+			<span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+				<span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">globals</span><span class="p">):</span>
+					<span class="n">v</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">globals</span><span class="p">)[</span><span class="n">name</span><span class="p">]</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+					<span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;found </span><span class="si">%r</span><span class="s"> in globals(override)&quot;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+			<span class="c"># then globals...</span>
+			<span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+				<span class="c"># in reverse order of &#39;configurations&#39;</span>
+				<span class="k">for</span> <span class="n">conf</span> <span class="ow">in</span> <span class="p">([</span><span class="s">&quot;&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">configurations</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+					<span class="n">itemname</span> <span class="o">=</span> <span class="s">&quot;globals&quot;</span> <span class="o">+</span><span class="s">&quot;:&quot;</span> <span class="o">+</span><span class="n">conf</span> <span class="k">if</span> <span class="n">conf</span> <span class="k">else</span> <span class="s">&quot;globals&quot;</span>
+					<span class="k">if</span> <span class="n">itemname</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+						<span class="n">items</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="n">itemname</span><span class="p">))</span>
+						<span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+							<span class="n">value</span> <span class="o">=</span> <span class="n">items</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+							<span class="k">try</span><span class="p">:</span>
+								<span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+								<span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+							<span class="k">except</span><span class="p">:</span>
+								<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error evaluating global </span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+								<span class="k">raise</span>
+							<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">: </span><span class="si">%s</span><span class="s">=</span><span class="si">%r</span><span class="s"> (expr: </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">itemname</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">value</span><span class="p">))</span>
+					<span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+						<span class="k">break</span>
+			<span class="c">#logger.debug(&quot;setting alias: %s=%s &quot; % (name, value))</span>
+			<span class="sd">&quot;&quot;&quot;if &quot;parameters&quot; in ini.sections():</span>
+<span class="sd">				for name, value in ini.items(&quot;parameters&quot;):</span>
+<span class="sd">					v = eval(value, globals(), self)</span>
+<span class="sd">					logger.debug(&quot;parameter: %s=%r (expr: %s)&quot; % (name, v, value))</span>
+<span class="sd">					self[name] = v</span>
+<span class="sd">				</span>
+<span class="sd">			elif self.ini.has_option(&quot;globals&quot;, name):</span>
+<span class="sd">				#print name, &quot;in globals&quot;</span>
+<span class="sd">				self.dict[name] = eval(self.ini.get(&quot;globals&quot;, name), globals(), self)</span>
+<span class="sd">			elif self.ini.has_option(&quot;globals&quot;, name):</span>
+<span class="sd">				#print name, &quot;in globals&quot;</span>
+<span class="sd">				self.dict[name] = eval(self.ini.get(&quot;globals&quot;, name), globals(), self)&quot;&quot;&quot;</span>
+			<span class="c">#else:</span>
+				<span class="c">#print &gt;&gt;sys.stderr, &quot;count not resolve %r&quot; % name</span>
+				<span class="c">#print &gt;&gt;sys.stderr, &quot;sections&quot;, self.ini.sections()</span>
+				<span class="c">#print &gt;&gt;sys.stderr, &quot;globals&quot;, [name for name, value in self.ini.items(&quot;globals&quot;)]</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+	
+	<span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="o">.</span><span class="n">__contains__</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+	
+<div class="viewcode-block" id="IniScope.flush"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.IniScope.flush">[docs]</a>	<span class="k">def</span> <span class="nf">flush</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+	</div>
+	<span class="k">def</span> <span class="nf">__delitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+		<span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+		
+<div class="viewcode-block" id="IniScope.reset"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.IniScope.reset">[docs]</a>	<span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="p">)</span>
+		<span class="k">def</span> <span class="nf">prt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+			<span class="k">print</span> <span class="s">&quot;dsaaaaaaaaaaaaaaaa&quot;</span>
+			<span class="k">print</span> <span class="n">args</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">[</span><span class="s">&quot;print&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">prt</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ini</span> <span class="o">=</span> <span class="n">configparser</span><span class="o">.</span><span class="n">ConfigParser</span><span class="p">(</span><span class="n">dict_type</span><span class="o">=</span><span class="n">vaex</span><span class="o">.</span><span class="n">misc</span><span class="o">.</span><span class="n">ordereddict</span><span class="o">.</span><span class="n">OrderedDict</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="o">.</span><span class="n">optionxform</span> <span class="o">=</span> <span class="nb">str</span>
+		</div>
+	<span class="k">def</span> <span class="nf">_followincludes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">allfilenames</span><span class="p">):</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;follow include for </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">filename</span><span class="p">)</span>
+		<span class="n">tempini</span> <span class="o">=</span> <span class="n">configparser</span><span class="o">.</span><span class="n">ConfigParser</span><span class="p">()</span>
+		<span class="n">tempini</span><span class="o">.</span><span class="n">optionxform</span> <span class="o">=</span> <span class="nb">str</span>
+		<span class="n">filename</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="c"># strip spaces</span>
+		<span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+			<span class="k">print</span> <span class="s">&quot;error: file </span><span class="si">%s</span><span class="s"> missing&quot;</span> <span class="o">%</span> <span class="n">filename</span>
+			<span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> 
+		<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+			<span class="n">tempini</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+			<span class="k">if</span> <span class="s">&quot;include&quot;</span> <span class="ow">in</span> <span class="n">tempini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+				<span class="n">values</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">tempini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;include&quot;</span><span class="p">))</span>
+				<span class="k">if</span> <span class="s">&quot;before&quot;</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+					<span class="n">dirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+					<span class="n">before_filenames</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s">&quot;before&quot;</span><span class="p">],</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+					<span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">before_filenames</span><span class="p">:</span>
+						<span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirname</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span> 
+						<span class="c">#print name, f </span>
+						<span class="c">#allfilenames.append(f)</span>
+						<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;including </span><span class="si">%s</span><span class="s"> (before)&quot;</span> <span class="o">%</span> <span class="n">f</span><span class="p">)</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">_followincludes</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">allfilenames</span><span class="p">)</span>
+ 
+			<span class="n">allfilenames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+			<span class="k">if</span> <span class="s">&quot;include&quot;</span> <span class="ow">in</span> <span class="n">tempini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+				<span class="k">if</span> <span class="s">&quot;after&quot;</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+					<span class="n">dirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+					<span class="n">before_filenames</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s">&quot;after&quot;</span><span class="p">],</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+					<span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">before_filenames</span><span class="p">:</span>
+						<span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirname</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+						<span class="c">#print name, f </span>
+						<span class="c">#allfilenames.append(f)</span>
+						<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;including </span><span class="si">%s</span><span class="s"> (after)&quot;</span> <span class="o">%</span> <span class="n">f</span><span class="p">)</span> 
+						<span class="bp">self</span><span class="o">.</span><span class="n">_followincludes</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">allfilenames</span><span class="p">)</span>
+<div class="viewcode-block" id="IniScope.re_readfiles"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.IniScope.re_readfiles">[docs]</a>	<span class="k">def</span> <span class="nf">re_readfiles</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">extrafilenames</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_readfiles</span><span class="p">(</span><span class="o">*</span><span class="n">extrafilenames</span><span class="p">)</span>
+		</div>
+<div class="viewcode-block" id="IniScope.readfiles"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.IniScope.readfiles">[docs]</a>	<span class="k">def</span> <span class="nf">readfiles</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">extrafilenames</span><span class="p">):</span>
+		<span class="c">#self.dict[&quot;__filename__&quot;] #f = os.path.abspath(os.path.join(dirname, name))</span>
+		<span class="k">assert</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">),</span> <span class="s">&quot;missing ini file: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="sb">`self.filename`</span>
+		<span class="n">allfilenames</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">]</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">extrafilenames</span><span class="p">)</span>
+		<span class="n">newallfilenames</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="c">#print &quot;all filenames&quot;, allfilenames</span>
+		<span class="c">#tempscope = AutoloadScope(self.filenames, self.aliases, self.globals, **self.defaults)</span>
+		<span class="c">#tempscope.init()</span>
+		<span class="c">#tempscope.readfiles()</span>
+		<span class="c">#print tempscope.ini.items(&quot;include&quot;)</span>
+		<span class="c">#dsa</span>
+		<span class="c">#tempscope.ini[&quot;</span>
+		<span class="c">#for name, value in self.globals:</span>
+		<span class="c">#	self[name] = value</span>
+		<span class="c">#	logger.debug(&quot;(overriding) setting global: %s=%s &quot; % (name, value))</span>
+		<span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">allfilenames</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">_followincludes</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">newallfilenames</span><span class="p">)</span>
+				<span class="c">#allfilenames.append(filename)</span>
+		 
+		<span class="c">#print newallfilenames</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">allfiles</span> <span class="o">=</span> <span class="n">newallfilenames</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_readfiles</span><span class="p">()</span>
+	</div>
+	<span class="k">def</span> <span class="nf">_readfiles</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">extrafilenames</span><span class="p">):</span>
+		<span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">allfiles</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">extrafilenames</span><span class="p">):</span>
+			<span class="c">#print &gt;&gt;sys.stderr, filename</span>
+			<span class="c">#print &gt;&gt;sys.stdout, filename</span>
+			<span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+				<span class="k">print</span> <span class="s">&quot;file % missing&quot;</span> <span class="o">%</span> <span class="n">filename</span>
+				<span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+		<span class="c">#print self.ini.sections()</span>
+		<span class="n">ini</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ini</span>
+		<span class="k">if</span> <span class="s">&quot;imports&quot;</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+			<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;imports&quot;</span><span class="p">):</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;import: </span><span class="si">%s</span><span class="s"> (</span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+				<span class="k">exec</span> <span class="s">&quot;import </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">name</span>
+				<span class="n">basename</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+				<span class="c">#print &quot;   basename&quot;, basename</span>
+				<span class="n">basemodule</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">basename</span><span class="p">)</span>
+				<span class="n">module</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+				<span class="bp">self</span><span class="p">[</span><span class="n">basename</span><span class="p">]</span> <span class="o">=</span> <span class="n">basemodule</span>
+				<span class="k">if</span> <span class="n">value</span> <span class="o">==</span> <span class="s">&quot;recursive&quot;</span><span class="p">:</span>
+					<span class="n">dirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">__file__</span><span class="p">)</span>
+					<span class="c">#print module, dirname</span>
+					<span class="n">basedirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">basemodule</span><span class="o">.</span><span class="n">__file__</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+					<span class="n">recursive_import</span><span class="p">(</span><span class="n">basedirname</span><span class="p">,</span> <span class="n">dirname</span><span class="p">)</span>
+					<span class="c">#print dirname</span>
+					<span class="c">#sys.exit(0)</span>
+		<span class="k">if</span> <span class="s">&quot;parameters&quot;</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+			<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">):</span>
+				<span class="n">v</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;parameter: </span><span class="si">%s</span><span class="s">=</span><span class="si">%r</span><span class="s"> (expr: </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+				<span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+		<span class="k">if</span> <span class="s">&quot;print&quot;</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+			<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;print&quot;</span><span class="p">):</span>
+				<span class="n">v</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;print: </span><span class="si">%s</span><span class="s">=</span><span class="si">%r</span><span class="s"> (expr: </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+		<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">:</span>
+			<span class="n">ini</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s">&quot;alias&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;setting alias: </span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+		<span class="bp">self</span><span class="p">[</span><span class="s">&quot;scope&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span>
+		
+		<span class="k">return</span>
+		<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">globals</span><span class="p">:</span>
+			<span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;(overriding) setting global: </span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+		<span class="k">for</span> <span class="n">conf</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&quot;&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">configurations</span><span class="p">:</span>
+			<span class="n">itemname</span> <span class="o">=</span> <span class="s">&quot;globals&quot;</span> <span class="o">+</span><span class="s">&quot;:&quot;</span> <span class="o">+</span><span class="n">conf</span> <span class="k">if</span> <span class="n">conf</span> <span class="k">else</span> <span class="s">&quot;globals&quot;</span>
+			<span class="k">if</span> <span class="n">itemname</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+				<span class="bp">self</span><span class="p">[</span><span class="s">&quot;configuration&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span>
+				<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="n">itemname</span><span class="p">):</span>
+					<span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">globals</span><span class="p">):</span> <span class="c">#dict(ini.items(&quot;globals&quot;)):</span>
+						<span class="k">try</span><span class="p">:</span>
+							<span class="n">v</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+						<span class="k">except</span><span class="p">:</span>
+							<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error evaluating global </span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+							<span class="k">raise</span>
+						<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">: </span><span class="si">%s</span><span class="s">=</span><span class="si">%r</span><span class="s"> (expr: </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">itemname</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+						<span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+		<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">:</span>
+			<span class="n">ini</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s">&quot;alias&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;setting alias: </span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+		<span class="k">if</span> <span class="s">&quot;parameters&quot;</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+			<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">):</span>
+				<span class="n">v</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;parameter: </span><span class="si">%s</span><span class="s">=</span><span class="si">%r</span><span class="s"> (expr: </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+				<span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+				<span class="c">#print &quot;param:&quot;, name, value</span>
+		<span class="c">#print self.aliases</span>
+			
+		
+		
+<div class="viewcode-block" id="IniScope.init"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.IniScope.init">[docs]</a>	<span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span>
+		<span class="n">ini</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ini</span>
+		<span class="n">aliases</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span>
+		<span class="k">if</span> <span class="s">&quot;imports&quot;</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+			<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;imports&quot;</span><span class="p">):</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;import: </span><span class="si">%s</span><span class="s"> (</span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+				<span class="k">exec</span> <span class="s">&quot;import </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">name</span>
+				<span class="n">basename</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+				<span class="c">#print &quot;   basename&quot;, basename</span>
+				<span class="n">basemodule</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">basename</span><span class="p">)</span>
+				<span class="n">module</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+				<span class="bp">self</span><span class="p">[</span><span class="n">basename</span><span class="p">]</span> <span class="o">=</span> <span class="n">basemodule</span>
+				<span class="k">if</span> <span class="n">value</span> <span class="o">==</span> <span class="s">&quot;recursive&quot;</span><span class="p">:</span>
+					<span class="n">dirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">__file__</span><span class="p">)</span>
+					<span class="c">#print module, dirname</span>
+					<span class="n">basedirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">basemodule</span><span class="o">.</span><span class="n">__file__</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+					<span class="n">recursive_import</span><span class="p">(</span><span class="n">basedirname</span><span class="p">,</span> <span class="n">dirname</span><span class="p">)</span>
+					<span class="c">#print dirname</span>
+					<span class="c">#sys.exit(0)</span>
+		<span class="k">if</span> <span class="s">&quot;globals&quot;</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+			<span class="bp">self</span><span class="p">[</span><span class="s">&quot;configuration&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span>
+			<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;globals&quot;</span><span class="p">):</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="n">v</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+				<span class="k">except</span><span class="p">:</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error evaluating global </span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+					<span class="k">raise</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;global: </span><span class="si">%s</span><span class="s">=</span><span class="si">%r</span><span class="s"> (expr: </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+				<span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+		<span class="k">if</span> <span class="s">&quot;parameters&quot;</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+			<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">):</span>
+				<span class="n">v</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="bp">self</span><span class="p">)</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;parameter: </span><span class="si">%s</span><span class="s">=</span><span class="si">%r</span><span class="s"> (expr: </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+				<span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+				<span class="c"># &quot;param:&quot;, name, value</span>
+		<span class="c">#print aliases</span>
+		<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">aliases</span><span class="p">:</span>
+			<span class="n">ini</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s">&quot;alias&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;setting alias: </span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+		<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">globals</span><span class="p">:</span>
+			<span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;(overriding) setting global: </span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+
+</div></div>
+<div class="viewcode-block" id="createobj_fromini"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.createobj_fromini">[docs]</a><span class="k">def</span> <span class="nf">createobj_fromini</span><span class="p">(</span><span class="n">ini</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">configurations</span><span class="p">):</span>
+	<span class="c">#def get(name):</span>
+	<span class="c">#	print &quot;$$$$$$$$$$$$&quot;, name</span>
+	<span class="c">#	return createobj_fromini(ini, name, scope)</span>
+	<span class="k">if</span> <span class="n">enable_logging</span><span class="p">:</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;create: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+	<span class="n">items</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+	<span class="k">for</span> <span class="n">conf</span> <span class="ow">in</span> <span class="n">configurations</span><span class="p">:</span>
+		<span class="n">keyname</span> <span class="o">=</span> <span class="n">name</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="n">conf</span>
+		<span class="k">if</span> <span class="n">keyname</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+			<span class="n">items</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="n">keyname</span><span class="p">)))</span>
+	<span class="n">kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+	<span class="n">args</span> <span class="o">=</span> <span class="bp">None</span>
+	<span class="n">classname</span> <span class="o">=</span> <span class="bp">None</span>
+	<span class="n">constructor</span> <span class="o">=</span> <span class="bp">None</span>
+	<span class="n">post</span> <span class="o">=</span> <span class="bp">None</span>
+	<span class="c">#print len(items), &quot;alias&quot; in dict(items), dict(items)</span>
+	<span class="c">#scope[&quot;get&quot;] = get</span>
+	<span class="k">if</span> <span class="s">&quot;alias&quot;</span> <span class="ow">in</span> <span class="nb">dict</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
+		<span class="n">value</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">items</span><span class="p">)[</span><span class="s">&quot;alias&quot;</span><span class="p">]</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">obj</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">scope</span><span class="p">)</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="k">if</span> <span class="n">enable_logging</span><span class="p">:</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error evaluating alias </span><span class="si">%s</span><span class="s"> (value is </span><span class="si">%r</span><span class="s">)[1]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+			<span class="k">raise</span>
+		<span class="k">if</span> <span class="n">enable_logging</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;alias : </span><span class="si">%s</span><span class="s"> -&gt; </span><span class="si">%r</span><span class="s"> (expr: </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+		<span class="c">#obj = createobj_fromini(ini, dict(items)[&quot;alias&quot;], scope)</span>
+		<span class="c">#scope[&quot;get&quot;] = get</span>
+	<span class="k">elif</span> <span class="s">&quot;alias_condition&quot;</span> <span class="ow">in</span> <span class="nb">dict</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
+		<span class="k">if</span> <span class="n">enable_logging</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;alias (true) </span><span class="si">%s</span><span class="s"> -&gt; </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">items</span><span class="p">)[</span><span class="s">&quot;alias_true&quot;</span><span class="p">]))</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;alias (false) </span><span class="si">%s</span><span class="s"> -&gt; </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">items</span><span class="p">)[</span><span class="s">&quot;alias_false&quot;</span><span class="p">]))</span>
+		<span class="n">expr</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">items</span><span class="p">)[</span><span class="s">&quot;alias_condition&quot;</span><span class="p">]</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">result</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">scope</span><span class="p">)</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="k">if</span> <span class="n">enable_logging</span><span class="p">:</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error evaluating key </span><span class="si">%s</span><span class="s"> in section </span><span class="si">%s</span><span class="s"> (value is </span><span class="si">%r</span><span class="s">)[2]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">item</span><span class="p">))</span>
+			<span class="k">raise</span>
+		<span class="k">if</span> <span class="n">enable_logging</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;condition: </span><span class="si">%s</span><span class="s"> == </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">result</span><span class="p">))</span>
+		<span class="k">if</span> <span class="n">result</span><span class="p">:</span>
+			<span class="n">obj</span> <span class="o">=</span> <span class="n">createobj_fromini</span><span class="p">(</span><span class="n">ini</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">items</span><span class="p">)[</span><span class="s">&quot;alias_true&quot;</span><span class="p">],</span> <span class="n">scope</span><span class="p">,</span> <span class="n">configurations</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">obj</span> <span class="o">=</span> <span class="n">createobj_fromini</span><span class="p">(</span><span class="n">ini</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">items</span><span class="p">)[</span><span class="s">&quot;alias_false&quot;</span><span class="p">],</span> <span class="n">scope</span><span class="p">,</span> <span class="n">configurations</span><span class="p">)</span>
+		<span class="c">#scope[&quot;get&quot;] = get</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="k">if</span> <span class="s">&quot;clone&quot;</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+			<span class="n">cloneditems</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="n">items</span><span class="p">[</span><span class="s">&quot;clone&quot;</span><span class="p">]))</span>
+			<span class="n">cloneditems</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">items</span><span class="p">)</span>
+			<span class="n">items</span> <span class="o">=</span> <span class="n">cloneditems</span>
+			<span class="k">del</span> <span class="n">items</span><span class="p">[</span><span class="s">&quot;clone&quot;</span><span class="p">]</span>
+		<span class="k">if</span> <span class="s">&quot;__post__&quot;</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+			<span class="n">post</span> <span class="o">=</span> <span class="n">items</span><span class="p">[</span><span class="s">&quot;__post__&quot;</span><span class="p">]</span>
+			<span class="k">del</span> <span class="n">items</span><span class="p">[</span><span class="s">&quot;__post__&quot;</span><span class="p">]</span>
+		<span class="k">for</span> <span class="n">arg</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">items</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+			<span class="c">#print name, &quot;:&quot;, arg</span>
+			<span class="k">if</span> <span class="n">arg</span> <span class="o">==</span> <span class="s">&quot;class&quot;</span><span class="p">:</span>
+				<span class="n">classname</span> <span class="o">=</span> <span class="n">value</span>
+			<span class="k">elif</span> <span class="n">arg</span> <span class="o">==</span> <span class="s">&quot;constructor&quot;</span><span class="p">:</span>
+				<span class="n">constructor</span> <span class="o">=</span> <span class="n">value</span>
+			<span class="k">elif</span> <span class="n">arg</span> <span class="o">==</span> <span class="s">&quot;args&quot;</span><span class="p">:</span>
+				<span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
+				<span class="n">items</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;,&quot;</span><span class="p">)</span>
+				<span class="n">args</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">scope</span><span class="p">)</span>
+				<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+					<span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+						<span class="k">if</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">:</span>
+							<span class="n">item</span> <span class="o">=</span> <span class="n">scope</span><span class="p">[</span><span class="n">item</span><span class="p">]</span>
+						<span class="k">elif</span> <span class="n">ini</span><span class="o">.</span><span class="n">has_section</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+							<span class="n">item</span> <span class="o">=</span> <span class="n">createobj_fromini</span><span class="p">(</span><span class="n">ini</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">configurations</span><span class="p">)</span>
+							<span class="c">#scope[&quot;get&quot;] = get</span>
+						<span class="k">else</span><span class="p">:</span>
+							<span class="k">try</span><span class="p">:</span>
+								<span class="n">item</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">scope</span><span class="p">)</span>
+							<span class="k">except</span><span class="p">:</span>
+								<span class="k">if</span> <span class="n">enable_logging</span><span class="p">:</span>
+									<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error evaluating key </span><span class="si">%s</span><span class="s"> in section </span><span class="si">%s</span><span class="s"> (value is </span><span class="si">%r</span><span class="s">)[3]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">item</span><span class="p">))</span>
+								<span class="k">raise</span>
+						<span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">if</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">:</span>
+					<span class="n">value</span> <span class="o">=</span> <span class="n">scope</span><span class="p">[</span><span class="n">value</span><span class="p">]</span>
+				<span class="k">elif</span> <span class="n">ini</span><span class="o">.</span><span class="n">has_section</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+					<span class="c">#print &quot;create obj&quot;</span>
+					<span class="n">value</span> <span class="o">=</span> <span class="n">createobj_fromini</span><span class="p">(</span><span class="n">ini</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">configurations</span><span class="p">)</span>
+					<span class="c">#scope[&quot;get&quot;] = get</span>
+				<span class="k">elif</span> <span class="n">value</span> <span class="o">==</span> <span class="s">&quot;parameter&quot;</span><span class="p">:</span>
+					<span class="n">nestedname</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s">.</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span>
+					<span class="k">if</span> <span class="n">nestedname</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">:</span>
+						<span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span> <span class="s">&quot;missing parameter: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">nestedname</span>
+					<span class="n">value</span> <span class="o">=</span> <span class="n">scope</span><span class="p">[</span><span class="n">nestedname</span><span class="p">]</span>
+				<span class="k">else</span><span class="p">:</span>
+					<span class="k">try</span><span class="p">:</span>
+						<span class="n">value</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">scope</span><span class="p">)</span>
+					<span class="k">except</span><span class="p">:</span>
+						<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error evaluating key </span><span class="si">%s</span><span class="s"> in section </span><span class="si">%s</span><span class="s"> (value is </span><span class="si">%r</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+						<span class="k">raise</span>
+				<span class="n">kwargs</span><span class="p">[</span><span class="n">arg</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+		<span class="k">assert</span> <span class="n">classname</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;class attribute not given for section: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">name</span>
+		<span class="n">fullclassname</span> <span class="o">=</span> <span class="n">classname</span>
+		<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">modulename</span><span class="p">,</span> <span class="n">classname</span> <span class="o">=</span> <span class="n">fullclassname</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+			<span class="n">mod</span> <span class="o">=</span> <span class="nb">__import__</span><span class="p">(</span><span class="n">modulename</span><span class="p">)</span>
+			<span class="n">obj</span> <span class="o">=</span> <span class="n">mod</span>
+			<span class="k">for</span> <span class="n">attrname</span> <span class="ow">in</span> <span class="n">fullclassname</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]:</span>
+				<span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attrname</span><span class="p">)</span>
+			<span class="c">#print obj</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">obj</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">fullclassname</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">scope</span><span class="p">)</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error evaluating classname: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">fullclassname</span><span class="p">)</span>
+			<span class="k">raise</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="k">if</span> <span class="n">constructor</span><span class="p">:</span>
+				<span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
+				<span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">constructor</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;,&quot;</span><span class="p">):</span>
+					<span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="n">param</span><span class="p">])</span>
+				<span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">if</span> <span class="n">args</span><span class="p">:</span>
+					<span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+				<span class="k">else</span><span class="p">:</span>
+					<span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error constructing object of class: </span><span class="si">%s</span><span class="s"> (section </span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">fullclassname</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+			<span class="k">raise</span>
+			<span class="c">#import pdb;</span>
+			<span class="c">#pdb.set_trace()</span>
+		<span class="c">#print name</span>
+	<span class="n">scope</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">obj</span>
+	<span class="k">if</span> <span class="n">post</span><span class="p">:</span>
+		<span class="k">print</span> <span class="s">&quot;EXECUTING post: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">post</span>
+		<span class="nb">eval</span><span class="p">(</span><span class="n">post</span><span class="p">,</span> <span class="nb">globals</span><span class="p">(),</span> <span class="n">scope</span><span class="p">)</span>
+	<span class="k">return</span> <span class="n">obj</span>
+</div>
+<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+	<span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+		<span class="k">print</span> <span class="s">&quot;[</span><span class="si">%s</span><span class="s">]&quot;</span> <span class="o">%</span> <span class="n">section</span>
+		<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="n">section</span><span class="p">):</span>
+			<span class="k">print</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s">=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+			
+
+<span class="c">#$scope = Scope()</span>
+<div class="viewcode-block" id="creategalaxy"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.creategalaxy">[docs]</a><span class="k">def</span> <span class="nf">creategalaxy</span><span class="p">():</span>
+	<span class="n">parameters</span> <span class="o">=</span> <span class="p">{}</span>
+	<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">):</span>
+		<span class="n">parameters</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+	<span class="n">galaxy</span> <span class="o">=</span> <span class="n">createobj_fromini</span><span class="p">(</span><span class="n">ini</span><span class="p">,</span> <span class="s">&quot;galaxy&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="p">[])</span>
+	<span class="k">return</span> <span class="n">galaxy</span>
+	</div>
+<div class="viewcode-block" id="loadini"><a class="viewcode-back" href="../../vaex.html#vaex.iniscope.loadini">[docs]</a><span class="k">def</span> <span class="nf">loadini</span><span class="p">(</span><span class="n">modelpath</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">objectname</span><span class="o">=</span><span class="s">&quot;galaxy&quot;</span><span class="p">,</span> <span class="n">filenames</span><span class="o">=</span><span class="p">[],</span> <span class="n">aliases</span><span class="o">=</span><span class="p">{},</span> <span class="nb">globals</span><span class="o">=</span><span class="p">[]):</span>
+	<span class="k">global</span> <span class="n">enable_imports</span>
+	<span class="c">#assert scope is None</span>
+	<span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+		<span class="n">scope</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+	<span class="c">#filename = sys.argv[1]</span>
+	<span class="n">scope</span><span class="p">[</span><span class="s">&quot;modelpath&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">modelpath</span>
+	<span class="c">#filenames = []</span>
+	
+	<span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">modelpath</span><span class="p">,</span> <span class="s">&quot;galaxymodel.ini&quot;</span><span class="p">)</span>
+	<span class="n">filenames</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+	<span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">modelpath</span><span class="p">,</span> <span class="s">&quot;galaxy.ini&quot;</span><span class="p">)</span>
+	<span class="n">filenames</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+	
+	<span class="n">allfilenames</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">filenames</span><span class="p">:</span>
+		<span class="n">ini</span> <span class="o">=</span> <span class="n">configparser</span><span class="o">.</span><span class="n">ConfigParser</span><span class="p">()</span>
+		<span class="n">ini</span><span class="o">.</span><span class="n">optionxform</span> <span class="o">=</span> <span class="nb">str</span>
+		<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+			<span class="n">ini</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+			<span class="k">if</span> <span class="s">&quot;options&quot;</span> <span class="ow">in</span> <span class="n">ini</span><span class="o">.</span><span class="n">sections</span><span class="p">():</span>
+				<span class="n">values</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">ini</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="s">&quot;options&quot;</span><span class="p">))</span>
+				<span class="k">if</span> <span class="s">&quot;include&quot;</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+					<span class="n">dirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+					<span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirname</span><span class="p">,</span> <span class="n">values</span><span class="p">[</span><span class="s">&quot;include&quot;</span><span class="p">]))</span> 
+					<span class="n">allfilenames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+					<span class="c">#print values[&quot;include&quot;], dirname</span>
+					<span class="k">assert</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">f</span><span class="p">),</span> <span class="s">&quot;filename </span><span class="si">%s</span><span class="s"> doesn&#39;t exist&quot;</span> <span class="o">%</span> <span class="n">f</span>
+			<span class="n">allfilenames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+	
+	<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;used ini files: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">allfilenames</span><span class="p">)</span>
+	<span class="c">#assert os.path.exists(filename), &quot;%s not found&quot; % filename </span>
+	<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="n">IniScope</span><span class="p">):</span>
+		<span class="n">scope</span> <span class="o">=</span> <span class="n">scope</span><span class="o">.</span><span class="n">dict</span> 
+	<span class="n">scope</span> <span class="o">=</span> <span class="n">IniScope</span><span class="p">(</span><span class="n">allfilenames</span><span class="p">,</span> <span class="n">aliases</span><span class="p">,</span> <span class="nb">globals</span><span class="p">,</span> <span class="o">**</span><span class="n">scope</span><span class="p">)</span>
+	<span class="n">scope</span><span class="o">.</span><span class="n">readfiles</span><span class="p">()</span>
+	<span class="n">ini</span> <span class="o">=</span> <span class="n">scope</span><span class="o">.</span><span class="n">ini</span>
+	<span class="c">#assert os.path.exists(filename), &quot;%s not found&quot; % filename</span>
+	<span class="c">#if os.path.exists(filename):</span>
+	<span class="c">#	ini.read(filename)</span>
+	<span class="c">#for filename in filenames:</span>
+	<span class="c">#	ini.read(filename)</span>
+	<span class="n">scope</span><span class="o">.</span><span class="n">init</span><span class="p">()</span>
+	<span class="c">#createobj_fromini(ini, objectname, scope)</span>
+	<span class="c">#print scope.keys()</span>
+	<span class="c">#enable_imports = False</span>
+	<span class="k">return</span> <span class="n">ini</span><span class="p">,</span> <span class="n">scope</span>
+	
+<span class="c">#print creategalaxy()</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

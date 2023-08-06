@@ -1,0 +1,504 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.ui.plugin.dispersions &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../../../index.html"/>
+        <link rel="up" title="vaex.ui.plugin" href="../plugin.html"/> 
+
+  
+  <script src="../../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../../../vaex.html">vaex</a> &raquo;</li>
+      
+          <li><a href="../plugin.html">vaex.ui.plugin</a> &raquo;</li>
+      
+    <li>vaex.ui.plugin.dispersions</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.ui.plugin.dispersions</h1><div class="highlight"><pre>
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;maartenbreddels&#39;</span>
+
+<span class="kn">import</span> <span class="nn">functools</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.patches</span> <span class="kn">as</span> <span class="nn">patches</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.artist</span> <span class="kn">as</span> <span class="nn">artist</span>
+
+<span class="kn">import</span> <span class="nn">vaex.ui.plugin</span>
+<span class="kn">from</span> <span class="nn">vaex.ui.qt</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">vaex.logging</span>
+
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;plugin.dispersions&quot;</span><span class="p">)</span>
+
+
+<span class="kn">import</span> <span class="nn">matplotlib.transforms</span> <span class="kn">as</span> <span class="nn">transforms</span>
+<span class="kn">from</span> <span class="nn">matplotlib.path</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<div class="viewcode-block" id="DispersionEllipse"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionEllipse">[docs]</a><span class="k">class</span> <span class="nc">DispersionEllipse</span><span class="p">(</span><span class="n">patches</span><span class="o">.</span><span class="n">Patch</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	This ellipse has it&#39;s center in user coordinates, and the width and height in device coordinates</span>
+<span class="sd">	such that is is not deformed</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+	<span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="s">&quot;DispersionEllipse(</span><span class="si">%s</span><span class="s">,</span><span class="si">%s</span><span class="s">;</span><span class="si">%s</span><span class="s">x</span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+										 <span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">height</span><span class="p">)</span>
+
+	<span class="c">#@docstring.dedent_interpd</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">xy</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">angle</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		*xy*</span>
+<span class="sd">		  center of ellipse</span>
+
+<span class="sd">		*width*</span>
+<span class="sd">		  total length (diameter) of horizontal axis</span>
+
+<span class="sd">		*height*</span>
+<span class="sd">		  total length (diameter) of vertical axis</span>
+
+<span class="sd">		*angle*</span>
+<span class="sd">		  rotation in degrees (anti-clockwise)</span>
+
+<span class="sd">		Valid kwargs are:</span>
+<span class="sd">		%(Patch)s</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+		<span class="n">patches</span><span class="o">.</span><span class="n">Patch</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">xy</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">height</span> <span class="o">=</span> <span class="n">width</span><span class="p">,</span> <span class="n">height</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">scale</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">angle</span> <span class="o">=</span> <span class="n">angle</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_path</span> <span class="o">=</span> <span class="n">Path</span><span class="o">.</span><span class="n">unit_circle</span><span class="p">()</span>
+		<span class="c"># Note: This cannot be calculated until this is added to an Axes</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_patch_transform</span> <span class="o">=</span> <span class="n">transforms</span><span class="o">.</span><span class="n">IdentityTransform</span><span class="p">()</span>
+
+	<span class="k">def</span> <span class="nf">_recompute_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot;NOTE: This cannot be called until after this has been added</span>
+<span class="sd">				 to an Axes, otherwise unit conversion will fail. This</span>
+<span class="sd">				 maxes it very important to call the accessor method and</span>
+<span class="sd">				 not directly access the transformation member variable.</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+		<span class="n">center</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">convert_xunits</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+				  <span class="bp">self</span><span class="o">.</span><span class="n">convert_yunits</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+		<span class="n">width</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">width</span> <span class="c">#self.convert_xunits(self.width)</span>
+		<span class="n">height</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">height</span> <span class="c">#self.convert_yunits(self.height)</span>
+		<span class="n">trans</span> <span class="o">=</span> <span class="n">artist</span><span class="o">.</span><span class="n">Artist</span><span class="o">.</span><span class="n">get_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_patch_transform</span> <span class="o">=</span> <span class="n">transforms</span><span class="o">.</span><span class="n">Affine2D</span><span class="p">()</span> \
+			<span class="o">.</span><span class="n">scale</span><span class="p">(</span><span class="n">width</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">,</span> <span class="n">height</span> <span class="o">*</span> <span class="mf">0.5</span><span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">)</span> \
+			<span class="o">.</span><span class="n">rotate_deg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">angle</span><span class="p">)</span> \
+			<span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="o">*</span><span class="n">trans</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">center</span><span class="p">))</span>
+
+<div class="viewcode-block" id="DispersionEllipse.get_path"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionEllipse.get_path">[docs]</a>	<span class="k">def</span> <span class="nf">get_path</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Return the vertices of the rectangle</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_path</span>
+</div>
+<div class="viewcode-block" id="DispersionEllipse.get_transform"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionEllipse.get_transform">[docs]</a>	<span class="k">def</span> <span class="nf">get_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Return the :class:`~matplotlib.transforms.Transform` applied</span>
+<span class="sd">		to the :class:`Patch`.</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_patch_transform</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DispersionEllipse.get_patch_transform"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionEllipse.get_patch_transform">[docs]</a>	<span class="k">def</span> <span class="nf">get_patch_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_recompute_transform</span><span class="p">()</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_patch_transform</span>
+</div>
+<div class="viewcode-block" id="DispersionEllipse.contains"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionEllipse.contains">[docs]</a>	<span class="k">def</span> <span class="nf">contains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+		<span class="k">if</span> <span class="n">ev</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">ev</span><span class="o">.</span><span class="n">y</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="k">return</span> <span class="bp">False</span><span class="p">,</span> <span class="p">{}</span>
+		<span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_transform</span><span class="p">()</span><span class="o">.</span><span class="n">inverted</span><span class="p">()</span><span class="o">.</span><span class="n">transform_point</span><span class="p">((</span><span class="n">ev</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">ev</span><span class="o">.</span><span class="n">y</span><span class="p">))</span>
+		<span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="p">{}</span>
+
+</div></div>
+<div class="viewcode-block" id="DispersionPlugin"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionPlugin">[docs]</a><span class="k">class</span> <span class="nc">DispersionPlugin</span><span class="p">(</span><span class="n">vaex</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">plugin</span><span class="o">.</span><span class="n">PluginLayer</span><span class="p">):</span>
+	<span class="n">name</span> <span class="o">=</span> <span class="s">&quot;dispersion&quot;</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">layer</span><span class="p">):</span>
+		<span class="nb">super</span><span class="p">(</span><span class="n">DispersionPlugin</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">layer</span><span class="p">)</span>
+		<span class="n">dialog</span><span class="o">.</span><span class="n">plug_page</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plug_page</span><span class="p">,</span> <span class="s">&quot;Dispersions&quot;</span><span class="p">,</span> <span class="mf">2.25</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+		<span class="n">dialog</span><span class="o">.</span><span class="n">plug_grids</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">define_grids</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">draw_grids</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DispersionPlugin.define_grids"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionPlugin.define_grids">[docs]</a>	<span class="k">def</span> <span class="nf">define_grids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">grids</span><span class="p">):</span>
+		<span class="c">#grids.define_grid(&quot;counts_vector&quot;, self.dialog.gridsize_vector, &quot;VZ*0+1&quot;)</span>
+
+		<span class="c"># covariance matrix terms</span>
+		<span class="c"># diagonals</span>
+		<span class="k">for</span> <span class="n">dimension</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+			<span class="n">axis_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">axisnames</span><span class="p">[</span><span class="n">dimension</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+			<span class="n">expression</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">[</span><span class="n">dimension</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+			<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expression</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+				<span class="n">grids</span><span class="o">.</span><span class="n">define_grid</span><span class="p">(</span><span class="n">axis_name</span> <span class="o">+</span> <span class="s">&quot;_mom1&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">vector_grid_size</span><span class="p">,</span> <span class="n">expression</span><span class="p">)</span>
+				<span class="n">grids</span><span class="o">.</span><span class="n">define_grid</span><span class="p">(</span><span class="n">axis_name</span> <span class="o">+</span> <span class="s">&quot;_mom2&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">vector_grid_size</span><span class="p">,</span> <span class="s">&quot;(&quot;</span> <span class="o">+</span> <span class="n">expression</span> <span class="o">+</span> <span class="s">&quot;)**2&quot;</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">grids</span><span class="o">.</span><span class="n">define_grid</span><span class="p">(</span><span class="n">axis_name</span> <span class="o">+</span> <span class="s">&quot;_mom1&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">vector_grid_size</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+				<span class="n">grids</span><span class="o">.</span><span class="n">define_grid</span><span class="p">(</span><span class="n">axis_name</span> <span class="o">+</span> <span class="s">&quot;_mom2&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">vector_grid_size</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+		<span class="k">if</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="k">for</span> <span class="n">dimension1</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+				<span class="k">for</span> <span class="n">dimension2</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dimension1</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+					<span class="n">axis_name1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">axisnames</span><span class="p">[</span><span class="n">dimension1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+					<span class="n">axis_name2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">axisnames</span><span class="p">[</span><span class="n">dimension2</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+					<span class="n">expression1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">[</span><span class="n">dimension1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+					<span class="n">expression2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">[</span><span class="n">dimension2</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+					<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expression1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span>  <span class="nb">len</span><span class="p">(</span><span class="n">expression2</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+						<span class="n">grids</span><span class="o">.</span><span class="n">define_grid</span><span class="p">(</span><span class="s">&quot;cov_&quot;</span> <span class="o">+</span> <span class="n">axis_name1</span> <span class="o">+</span><span class="s">&quot;_&quot;</span> <span class="o">+</span><span class="n">axis_name2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">vector_grid_size</span><span class="p">,</span> <span class="s">&quot;(&quot;</span> <span class="o">+</span> <span class="n">expression1</span> <span class="o">+</span> <span class="s">&quot;)*(&quot;</span> <span class="o">+</span> <span class="n">expression2</span> <span class="o">+</span><span class="s">&quot;)&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DispersionPlugin.draw_grids"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionPlugin.draw_grids">[docs]</a>	<span class="k">def</span> <span class="nf">draw_grids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">,</span> <span class="n">grid_map</span><span class="p">,</span> <span class="n">grid_map_vector</span><span class="p">):</span>
+		<span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">dispersions_draw</span><span class="p">:</span>
+			<span class="k">return</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ellipses</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">dispersions</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">counts</span> <span class="o">=</span> <span class="n">grid_map_vector</span><span class="p">[</span><span class="s">&quot;counts&quot;</span><span class="p">]</span>
+		<span class="c">#print &quot;counts check&quot;, np.sum(counts), np.sum(grid_map[&quot;counts&quot;])</span>
+		<span class="c">#print counts</span>
+		<span class="c">#print grid_map_vector.keys()</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+			<span class="n">axis_name1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">axisnames</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+			<span class="n">axis_name2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">axisnames</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+			<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+				<span class="n">meanx</span> <span class="o">=</span> <span class="n">grid_map_vector</span><span class="p">[</span><span class="n">axis_name1</span> <span class="o">+</span> <span class="s">&quot;_mom1&quot;</span><span class="p">]</span><span class="o">/</span><span class="n">counts</span>
+				<span class="n">meany</span> <span class="o">=</span> <span class="n">grid_map_vector</span><span class="p">[</span><span class="n">axis_name2</span> <span class="o">+</span> <span class="s">&quot;_mom1&quot;</span><span class="p">]</span><span class="o">/</span><span class="n">counts</span>
+				<span class="n">varx</span>  <span class="o">=</span> <span class="n">grid_map_vector</span><span class="p">[</span><span class="n">axis_name1</span> <span class="o">+</span> <span class="s">&quot;_mom2&quot;</span><span class="p">]</span><span class="o">/</span><span class="n">counts</span>
+				<span class="n">vary</span>  <span class="o">=</span> <span class="n">grid_map_vector</span><span class="p">[</span><span class="n">axis_name2</span> <span class="o">+</span> <span class="s">&quot;_mom2&quot;</span><span class="p">]</span><span class="o">/</span><span class="n">counts</span>
+				<span class="n">covxy</span> <span class="o">=</span> <span class="n">grid_map_vector</span><span class="p">[</span><span class="s">&quot;cov_&quot;</span> <span class="o">+</span><span class="n">axis_name1</span> <span class="o">+</span> <span class="s">&quot;_&quot;</span> <span class="o">+</span><span class="n">axis_name2</span><span class="p">]</span><span class="o">/</span><span class="n">counts</span> <span class="o">-</span> <span class="n">meanx</span><span class="o">*</span><span class="n">meany</span>
+				<span class="n">sigmax</span> <span class="o">=</span> <span class="p">(</span><span class="n">varx</span><span class="o">-</span><span class="n">meanx</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mf">0.5</span>
+				<span class="n">sigmay</span> <span class="o">=</span> <span class="p">(</span><span class="n">vary</span><span class="o">-</span><span class="n">meany</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mf">0.5</span>
+				<span class="n">mask</span> <span class="o">=</span> <span class="n">counts</span> <span class="o">&gt;</span> <span class="mi">0</span>
+				<span class="n">x</span> <span class="o">=</span> <span class="n">grid_map_vector</span><span class="p">[</span><span class="s">&quot;x&quot;</span><span class="p">]</span>
+				<span class="n">y</span> <span class="o">=</span> <span class="n">grid_map_vector</span><span class="p">[</span><span class="s">&quot;y&quot;</span><span class="p">]</span>
+				<span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+
+
+				<span class="n">vmax</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">sigmax</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">sigmay</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+
+				<span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">get_width_height</span><span class="p">()</span>
+				<span class="c">#print &quot;width,height&quot;, width, height</span>
+				<span class="n">max_size</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">height</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">vector_grid_size</span><span class="p">)</span><span class="c"># * 0.9</span>
+				<span class="c">#print max_size</span>
+				<span class="c">#identity_transform = matplotlib.transforms.IdentityTransform()</span>
+				<span class="c">#deltax = self.dialog.ranges_show[0][1] - self.dialog.ranges_show[0][0]</span>
+				<span class="c">#deltay = self.dialog.ranges_show[1][1] - self.dialog.ranges_show[1][0]</span>
+				<span class="c">#aspect = deltay / float(height) / (deltax/float(width))</span>
+				<span class="c">#for grid in [x, y, sigmax, sigmay, covxy, counts, mask]:</span>
+				<span class="c">#	print grid.shape</span>
+				<span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">sigmax</span><span class="p">,</span> <span class="n">sigmay</span><span class="p">,</span> <span class="n">covxy</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">y</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">sigmax</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">sigmay</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">covxy</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)):</span>
+					<span class="k">try</span><span class="p">:</span>
+						<span class="n">covmatrix</span> <span class="o">=</span> <span class="p">[[</span><span class="n">sigmax</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">covxy</span><span class="p">],</span> <span class="p">[</span><span class="n">covxy</span><span class="p">,</span> <span class="n">sigmay</span><span class="o">**</span><span class="mi">2</span><span class="p">]]</span>
+						<span class="n">eigen_values</span><span class="p">,</span> <span class="n">eigen_vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eig</span><span class="p">(</span><span class="n">covmatrix</span><span class="p">)</span>
+					<span class="k">except</span><span class="p">:</span>
+						<span class="k">pass</span>
+					<span class="k">else</span><span class="p">:</span>
+						<span class="n">scaling</span> <span class="o">=</span> <span class="mf">1.</span><span class="o">/</span><span class="n">vmax</span> <span class="o">*</span> <span class="n">max_size</span>
+						<span class="n">device_width</span> <span class="o">=</span>  <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">eigen_values</span><span class="p">))</span> <span class="o">*</span> <span class="n">scaling</span><span class="p">)</span>
+						<span class="n">device_height</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">eigen_values</span><span class="p">))</span> <span class="o">*</span> <span class="n">scaling</span><span class="p">)</span>
+						<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dispersions_unit_length</span><span class="p">:</span>
+							<span class="n">length</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">device_width</span><span class="o">**</span><span class="mi">2</span><span class="o">+</span><span class="n">device_height</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+							<span class="n">device_width</span>  <span class="o">/=</span> <span class="nb">float</span><span class="p">(</span><span class="n">length</span><span class="p">)</span> <span class="o">/</span> <span class="n">max_size</span>
+							<span class="n">device_height</span> <span class="o">/=</span> <span class="nb">float</span><span class="p">(</span><span class="n">length</span><span class="p">)</span> <span class="o">/</span> <span class="n">max_size</span>
+						<span class="c">#ellipse_width = np.sqrt(np.max(eigen_values)) * scaling / width * deltax</span>
+						<span class="c">#ellipse_height = np.sqrt(np.min(eigen_values)) * scaling / height * deltay</span>
+						<span class="c">#ellipse_height /= aspect</span>
+						<span class="k">if</span> <span class="n">sigmax</span> <span class="o">&lt;</span> <span class="n">sigmay</span><span class="p">:</span> <span class="c"># if x was smaller, the largest eigenvalue corresponds to the y value</span>
+							<span class="n">device_width</span><span class="p">,</span> <span class="n">device_height</span> <span class="o">=</span> <span class="n">device_height</span><span class="p">,</span> <span class="n">device_width</span>
+							<span class="c">#ellipse_width, ellipse_height = ellipse_height, ellipse_width</span>
+						<span class="c">#ellipse_height /= aspect</span>
+						<span class="n">angle</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">covxy</span> <span class="o">/</span> <span class="p">(</span><span class="n">sigmax</span><span class="o">**</span><span class="mi">2</span><span class="o">-</span><span class="n">sigmay</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span><span class="o">/</span><span class="mf">2.</span>
+						<span class="c">#angle2 = np.arctan(2*covxy / (sigmax**2-sigmay**2))/2.</span>
+						<span class="c">#angle = angle2 = 0</span>
+						<span class="c">#print aspect, sigmax, sigmay, sigmax/sigmay, covxy/(sigmax*sigmay), ellipse_width/ellipse_height</span>
+						<span class="c">#aspect = 0.1</span>
+						<span class="c">#m = [[np.cos(angle2), np.sin(angle2)*aspect], [-np.sin(angle2), np.cos(angle2)*aspect]]</span>
+						<span class="c">#ellipse_width, ellipse_height = np.dot(m, [ellipse_width, ellipse_height])</span>
+						<span class="c">#print covxy/(sigmax*sigmay), angle, sigmax, sigmay, covxy</span>
+						<span class="c">#device_x, device_y = axes.transData.transform((x, y))</span>
+						<span class="c">#print device_x, device_y, device_width, device_height</span>
+						<span class="c">#ellipse = patches.Ellipse(xy=(device_x, device_y), width=device_width, height=device_height, angle=angle, transform=identity_transform,</span>
+						<span class="c">#                         alpha=0.4, color=&quot;blue&quot;) #rand()*360</span>
+						<span class="c">#ellipse = patches.Ellipse(xy=(x, y), width=ellipse_width, height=ellipse_height, angle=np.degrees(angle),</span>
+						<span class="c">#                         alpha=0.4, color=&quot;blue&quot;) #rand()*360</span>
+						<span class="n">ellipse</span> <span class="o">=</span> <span class="n">DispersionEllipse</span><span class="p">(</span><span class="n">xy</span><span class="o">=</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span> <span class="n">width</span><span class="o">=</span><span class="n">device_width</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="n">device_height</span><span class="p">,</span> <span class="n">angle</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">angle</span><span class="p">),</span> <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion</span><span class="p">,</span>
+												  <span class="n">alpha</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">facecolor</span><span class="o">=</span><span class="s">&quot;green&quot;</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="s">&quot;black&quot;</span><span class="p">)</span> <span class="c">#rand()*360</span>
+
+						<span class="n">axes</span><span class="o">.</span><span class="n">add_artist</span><span class="p">(</span><span class="n">ellipse</span><span class="p">)</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">ellipses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ellipse</span><span class="p">)</span>
+						<span class="c">#axes.quiver()</span>
+
+						<span class="c">#[Ellipse(xy=rand(2)*10, width=rand(), height=rand(), angle=rand()*360)</span>
+
+
+
+
+	<span class="c">#@staticmethod</span>
+	<span class="c">#def useon(dialog_class):</span>
+	<span class="c">#	return issubclass(dialog_class, vaex.plot_windows.VolumeRenderingPlotDialog)</span>
+</div>
+<div class="viewcode-block" id="DispersionPlugin.plug_page"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionPlugin.plug_page">[docs]</a>	<span class="k">def</span> <span class="nf">plug_page</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+		<span class="n">layout</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QGridLayout</span><span class="p">()</span>
+		<span class="n">page</span><span class="o">.</span><span class="n">setLayout</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="p">)</span>
+		<span class="n">layout</span><span class="o">.</span><span class="n">setSpacing</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+		<span class="n">layout</span><span class="o">.</span><span class="n">setContentsMargins</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+		<span class="n">layout</span><span class="o">.</span><span class="n">setAlignment</span><span class="p">(</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">AlignTop</span><span class="p">)</span>
+
+
+		<span class="n">row</span> <span class="o">=</span> <span class="mi">0</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">dispersions_draw</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;disp_draw&quot;</span><span class="p">,</span> <span class="s">&quot;True&quot;</span><span class="p">)))</span>
+		<span class="k">def</span> <span class="nf">setter</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dispersions_draw</span> <span class="o">=</span> <span class="n">value</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dispersions_draw_checkbox</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">create_checkbox</span><span class="p">(</span><span class="n">page</span><span class="p">,</span> <span class="s">&quot;Draw dispersion tensors&quot;</span><span class="p">,</span> <span class="k">lambda</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dispersions_draw</span><span class="p">,</span> <span class="n">setter</span><span class="p">)</span>
+		<span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dispersions_draw_checkbox</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+		<span class="n">row</span> <span class="o">+=</span> <span class="mi">1</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">dispersions_unit_length</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;disp_unit&quot;</span><span class="p">,</span> <span class="s">&quot;False&quot;</span><span class="p">)))</span>
+		<span class="k">def</span> <span class="nf">setter</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dispersions_unit_length</span> <span class="o">=</span> <span class="n">value</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dispersions_unit_lengthcheckbox</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">create_checkbox</span><span class="p">(</span><span class="n">page</span><span class="p">,</span> <span class="s">&quot;Unit length&quot;</span><span class="p">,</span> <span class="k">lambda</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dispersions_unit_length</span><span class="p">,</span> <span class="n">setter</span><span class="p">)</span>
+		<span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dispersions_unit_lengthcheckbox</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+		<span class="n">row</span> <span class="o">+=</span> <span class="mi">1</span>
+
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">expressions</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">expression_boxes</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+		<span class="k">for</span> <span class="n">dimension</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
+			<span class="n">axis_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">axisnames</span><span class="p">[</span><span class="n">dimension</span><span class="p">]</span>
+			<span class="n">expression_box</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QComboBox</span><span class="p">(</span><span class="n">page</span><span class="p">)</span>
+			<span class="n">expression_box</span><span class="o">.</span><span class="n">setEditable</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+			<span class="n">expression_box</span><span class="o">.</span><span class="n">setMinimumContentsLength</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">expression_boxes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">expression_box</span><span class="p">)</span>
+
+			<span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QLabel</span><span class="p">(</span><span class="n">axis_name</span> <span class="o">+</span> <span class="s">&#39;-axis:&#39;</span><span class="p">,</span> <span class="n">page</span><span class="p">),</span> <span class="n">row</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">expression_box</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">AlignLeft</span><span class="p">)</span>
+
+			<span class="n">expression</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;disp&quot;</span><span class="o">+</span><span class="n">axis_name</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="s">&quot;&quot;</span><span class="p">)</span>
+			<span class="n">expression_box</span><span class="o">.</span><span class="n">lineEdit</span><span class="p">()</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="n">expression</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">expression</span><span class="p">)</span>
+			<span class="c">#self.onExpressionChangedPartials.append()</span>
+			<span class="c">#expression_box.lineEdit().editingFinished.connect(self.onExpressionChangedPartials[axisIndex])</span>
+			<span class="n">calllback</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onExpressionChanged</span><span class="p">,</span> <span class="n">axis_index</span><span class="o">=</span><span class="n">dimension</span><span class="p">)</span>
+			<span class="n">expression_box</span><span class="o">.</span><span class="n">lineEdit</span><span class="p">()</span><span class="o">.</span><span class="n">editingFinished</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">calllback</span><span class="p">)</span>
+			<span class="n">row</span> <span class="o">+=</span> <span class="mi">1</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;disp_scale&quot;</span><span class="p">,</span> <span class="s">&quot;1&quot;</span><span class="p">))</span>
+		<span class="k">def</span> <span class="nf">setter</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion</span> <span class="o">=</span> <span class="n">value</span>
+			<span class="k">for</span> <span class="n">ellipse</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ellipses</span><span class="p">:</span>
+				<span class="n">ellipse</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">draw</span><span class="p">()</span>
+			<span class="c">#self.dialog.plot()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion_label</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion_slider</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion_value_label</span> <span class="o">=</span>\
+				<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">create_slider</span><span class="p">(</span><span class="n">page</span><span class="p">,</span> <span class="s">&quot;scale: &quot;</span><span class="p">,</span> <span class="mf">1.</span><span class="o">/</span><span class="mi">100</span><span class="p">,</span> <span class="mf">100.</span><span class="p">,</span> <span class="k">lambda</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion</span><span class="p">,</span> <span class="n">setter</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="s">&quot; {0:&gt;05.2f}&quot;</span><span class="p">,</span> <span class="n">transform</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="mi">10</span><span class="o">**</span><span class="n">x</span><span class="p">,</span> <span class="n">inverse</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+		<span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion_label</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+		<span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion_slider</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+		<span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scale_dispersion_value_label</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+		<span class="n">row</span> <span class="o">+=</span> <span class="mi">1</span>
+
+</div>
+<div class="viewcode-block" id="DispersionPlugin.onExpressionChanged"><a class="viewcode-back" href="../../../../api/vaex.ui.plugin.html#vaex.ui.plugin.dispersions.DispersionPlugin.onExpressionChanged">[docs]</a>	<span class="k">def</span> <span class="nf">onExpressionChanged</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">axis_index</span><span class="o">=-</span><span class="mi">1</span><span class="p">):</span>
+		<span class="n">text</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expression_boxes</span><span class="p">[</span><span class="n">axis_index</span><span class="p">]</span><span class="o">.</span><span class="n">lineEdit</span><span class="p">()</span><span class="o">.</span><span class="n">text</span><span class="p">())</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;text set for axis </span><span class="si">%i</span><span class="s">: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">axis_index</span><span class="p">,</span> <span class="n">text</span><span class="p">))</span>
+		<span class="k">if</span> <span class="n">text</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">[</span><span class="n">axis_index</span><span class="p">]:</span>
+			<span class="n">axis_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">axisnames</span><span class="p">[</span><span class="n">axis_index</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">[</span><span class="n">axis_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">text</span>
+			<span class="k">if</span> <span class="n">text</span> <span class="o">==</span> <span class="s">&quot;&quot;</span><span class="p">:</span> <span class="c"># check if we can replot without doing the whole calculation</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">non_empty</span> <span class="o">=</span> <span class="p">[</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">expressions</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+				<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">non_empty</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">):</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">dialog</span><span class="o">.</span><span class="n">jobsManager</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;nothing changed&quot;</span><span class="p">)</span>
+</pre></div></div></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

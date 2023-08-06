@@ -1,0 +1,372 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.execution &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../index.html"/>
+        <link rel="up" title="vaex" href="../vaex.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.execution</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.execution</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">vaex.vaexfast</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">vaex.utils</span> <span class="kn">import</span> <span class="n">Timer</span>
+<span class="kn">import</span> <span class="nn">vaex.events</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">multithreading</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">vaex.ui.expressions</span> <span class="kn">as</span> <span class="nn">expr</span>
+<span class="kn">import</span> <span class="nn">numexpr</span> <span class="kn">as</span> <span class="nn">ne</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="nb">reduce</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;breddels&#39;</span>
+
+<span class="n">buffer_size_default</span> <span class="o">=</span> <span class="mf">1e6</span> <span class="c"># TODO: this should not be fixed, larger means faster but also large memory usage</span>
+
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">queue</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="n">lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+<span class="kn">import</span> <span class="nn">vaex.multithreading</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;vaex.execution&quot;</span><span class="p">)</span>
+
+<span class="n">thread_count_default</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">()</span>
+
+<div class="viewcode-block" id="UserAbort"><a class="viewcode-back" href="../../vaex.html#vaex.execution.UserAbort">[docs]</a><span class="k">class</span> <span class="nc">UserAbort</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reason</span><span class="p">):</span>
+		<span class="nb">super</span><span class="p">(</span><span class="n">UserAbort</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">reason</span><span class="p">)</span></div>
+<div class="viewcode-block" id="Column"><a class="viewcode-back" href="../../vaex.html#vaex.execution.Column">[docs]</a><span class="k">class</span> <span class="nc">Column</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span><span class="s">&#39;Column&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;dataset&#39;</span><span class="p">,</span> <span class="s">&#39;expression&#39;</span><span class="p">])):</span>
+<div class="viewcode-block" id="Column.needs_copy"><a class="viewcode-back" href="../../vaex.html#vaex.execution.Column.needs_copy">[docs]</a>	<span class="k">def</span> <span class="nf">needs_copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="ow">not</span> \
+			<span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">expression</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">column_names</span>  \
+			<span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">expression</span><span class="p">],</span> <span class="n">vaex</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">_ColumnConcatenatedLazy</span><span class="p">)</span>\
+			<span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">expression</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">type</span><span class="o">==</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span> \
+			<span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">expression</span><span class="p">]</span><span class="o">.</span><span class="n">strides</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">8</span> \
+			<span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">expression</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">virtual_columns</span><span class="p">)</span></div></div>
+				<span class="c">#and False:</span>
+
+<div class="viewcode-block" id="Job"><a class="viewcode-back" href="../../vaex.html#vaex.execution.Job">[docs]</a><span class="k">class</span> <span class="nc">Job</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">order</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">task</span> <span class="o">=</span> <span class="n">task</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">order</span> <span class="o">=</span> <span class="n">order</span></div>
+
+<span class="c"># mutex for numexpr, it is not thread save</span>
+<span class="n">ne_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Executor"><a class="viewcode-back" href="../../vaex.html#vaex.execution.Executor">[docs]</a><span class="k">class</span> <span class="nc">Executor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thread_pool</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">buffer_size</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">thread_mover</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thread_pool</span> <span class="o">=</span> <span class="n">thread_pool</span> <span class="ow">or</span> <span class="n">vaex</span><span class="o">.</span><span class="n">multithreading</span><span class="o">.</span><span class="n">ThreadPoolIndex</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">buffer_size</span> <span class="o">=</span> <span class="n">buffer_size</span> <span class="ow">or</span> <span class="n">buffer_size_default</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">signal_begin</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="s">&quot;begin&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">signal_progress</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="s">&quot;progress&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">signal_end</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="s">&quot;end&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">signal_cancel</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="s">&quot;cancel&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thread_mover</span> <span class="o">=</span> <span class="n">thread_mover</span> <span class="ow">or</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_is_executing</span> <span class="o">=</span> <span class="bp">False</span>
+
+<div class="viewcode-block" id="Executor.schedule"><a class="viewcode-back" href="../../vaex.html#vaex.execution.Executor.schedule">[docs]</a>	<span class="k">def</span> <span class="nf">schedule</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">task</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">task</span></div>
+
+<div class="viewcode-block" id="Executor.run"><a class="viewcode-back" href="../../vaex.html#vaex.execution.Executor.run">[docs]</a>	<span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">):</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;added task: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">task</span><span class="p">)</span>
+		<span class="n">previous_queue</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span> <span class="o">=</span> <span class="p">[</span><span class="n">task</span><span class="p">]</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+		<span class="k">finally</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span> <span class="o">=</span> <span class="n">previous_queue</span>
+		<span class="k">return</span> <span class="n">task</span><span class="o">.</span><span class="n">_value</span></div>
+
+<div class="viewcode-block" id="Executor.execute"><a class="viewcode-back" href="../../vaex.html#vaex.execution.Executor.execute">[docs]</a>	<span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_executing</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;nested execute call&quot;</span><span class="p">)</span>
+			<span class="c"># this situation may happen since in this methods, via a callback (to update a progressbar) we enter</span>
+			<span class="c"># Qt&#39;s eventloop, which may execute code that will call execute again</span>
+			<span class="c"># as long as that code is using async tasks (i.e. promises) we can simple return here, since after</span>
+			<span class="c"># the execute is almost finished, any new tasks added to the task_queue will get executing</span>
+			<span class="k">return</span>
+		<span class="c"># u &#39;column&#39; is uniquely identified by a tuple of (dataset, expression)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_is_executing</span> <span class="o">=</span> <span class="bp">True</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;executing queue: </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span><span class="p">))</span>
+			<span class="n">task_queue_all</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="c">#for task in self.task_queue:</span>
+			<span class="c">#$	print task, task.expressions_all</span>
+			<span class="n">datasets</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">dataset</span> <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_queue_all</span><span class="p">)</span>
+			<span class="n">cancelled</span> <span class="o">=</span> <span class="p">[</span><span class="bp">False</span><span class="p">]</span>
+			<span class="k">def</span> <span class="nf">cancel</span><span class="p">():</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;cancelling&quot;</span><span class="p">)</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">signal_cancel</span><span class="o">.</span><span class="n">emit</span><span class="p">()</span>
+				<span class="n">cancelled</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="c"># process tasks per dataset</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">signal_begin</span><span class="o">.</span><span class="n">emit</span><span class="p">()</span>
+				<span class="k">for</span> <span class="n">dataset</span> <span class="ow">in</span> <span class="n">datasets</span><span class="p">:</span>
+					<span class="n">task_queue</span> <span class="o">=</span> <span class="p">[</span><span class="n">task</span> <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_queue_all</span> <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">dataset</span> <span class="o">==</span> <span class="n">dataset</span><span class="p">]</span>
+					<span class="n">expressions</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">expression</span> <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_queue</span> <span class="k">for</span> <span class="n">expression</span> <span class="ow">in</span> <span class="n">task</span><span class="o">.</span><span class="n">expressions_all</span><span class="p">))</span>
+
+					<span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_queue</span><span class="p">:</span>
+						<span class="n">task</span><span class="o">.</span><span class="n">_results</span> <span class="o">=</span> <span class="p">[]</span>
+						<span class="n">task</span><span class="o">.</span><span class="n">signal_progress</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+					<span class="n">block_scopes</span> <span class="o">=</span> <span class="p">[</span><span class="n">dataset</span><span class="o">.</span><span class="n">_block_scope</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffer_size</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">thread_pool</span><span class="o">.</span><span class="n">nthreads</span><span class="p">)]</span>
+					<span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="n">thread_index</span><span class="p">,</span> <span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">):</span>
+						<span class="k">if</span> <span class="ow">not</span> <span class="n">cancelled</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+							<span class="n">block_scope</span> <span class="o">=</span> <span class="n">block_scopes</span><span class="p">[</span><span class="n">thread_index</span><span class="p">]</span>
+							<span class="n">block_scope</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">)</span>
+							<span class="c">#with ne_lock:</span>
+							<span class="n">block_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">expression</span><span class="p">:</span><span class="n">block_scope</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">expression</span><span class="p">)</span> <span class="k">for</span> <span class="n">expression</span> <span class="ow">in</span> <span class="n">expressions</span><span class="p">}</span>
+							<span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_queue</span><span class="p">:</span>
+								<span class="n">blocks</span> <span class="o">=</span> <span class="p">[</span><span class="n">block_dict</span><span class="p">[</span><span class="n">expression</span><span class="p">]</span> <span class="k">for</span> <span class="n">expression</span> <span class="ow">in</span> <span class="n">task</span><span class="o">.</span><span class="n">expressions_all</span><span class="p">]</span>
+								<span class="k">if</span> <span class="ow">not</span> <span class="n">cancelled</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+									<span class="n">task</span><span class="o">.</span><span class="n">_results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">thread_index</span><span class="p">,</span> <span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">,</span> <span class="o">*</span><span class="n">blocks</span><span class="p">))</span>
+								<span class="c"># don&#39;t call directly, since ui&#39;s don&#39;t like being updated from a different thread</span>
+								<span class="c">#self.thread_mover(task.signal_progress, float(i2)/length)</span>
+								<span class="c">#time.sleep(0.3)</span>
+
+					<span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+					<span class="c">#print self.thread_pool.map()</span>
+					<span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">thread_pool</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process</span><span class="p">,</span> <span class="n">vaex</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">subdivide</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer_size</span><span class="p">),</span>\
+														<span class="n">progress</span><span class="o">=</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="nb">all</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">signal_progress</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">p</span><span class="p">))</span> <span class="ow">and</span>\
+																<span class="nb">all</span><span class="p">([</span><span class="nb">all</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">signal_progress</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">p</span><span class="p">))</span> <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_queue</span><span class="p">]),</span>
+														<span class="n">cancel</span><span class="o">=</span><span class="n">cancel</span><span class="p">):</span>
+						<span class="k">pass</span> <span class="c"># just eat all element</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">_is_executing</span> <span class="o">=</span> <span class="bp">False</span>
+			<span class="k">except</span><span class="p">:</span>
+				<span class="c"># on any error we flush the task queue</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">signal_cancel</span><span class="o">.</span><span class="n">emit</span><span class="p">()</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s">&quot;error in task, flush task queue&quot;</span><span class="p">)</span>
+				<span class="k">raise</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;executing took </span><span class="si">%r</span><span class="s"> seconds&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">))</span>
+			<span class="c"># while processing the self.task_queue, new elements will be added to it, so copy it</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;cancelled: </span><span class="si">%r</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">cancelled</span><span class="p">)</span>
+			<span class="k">if</span> <span class="n">cancelled</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+				<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;execution aborted&quot;</span><span class="p">)</span>
+				<span class="n">task_queue</span> <span class="o">=</span> <span class="n">task_queue_all</span>
+				<span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_queue</span><span class="p">:</span>
+					<span class="n">task</span><span class="o">.</span><span class="n">_result</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">_results</span><span class="p">)</span>
+					<span class="c">#task.reject(UserAbort(&quot;cancelled&quot;))</span>
+					<span class="c"># remove references</span>
+					<span class="n">task</span><span class="o">.</span><span class="n">_result</span> <span class="o">=</span> <span class="bp">None</span>
+					<span class="n">task</span><span class="o">.</span><span class="n">_results</span> <span class="o">=</span> <span class="bp">None</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">task_queue</span> <span class="o">=</span> <span class="n">task_queue_all</span>
+				<span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_queue</span><span class="p">:</span>
+					<span class="n">task</span><span class="o">.</span><span class="n">_result</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">_results</span><span class="p">)</span>
+					<span class="n">task</span><span class="o">.</span><span class="n">fulfill</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">_result</span><span class="p">)</span>
+					<span class="c"># remove references</span>
+					<span class="n">task</span><span class="o">.</span><span class="n">_result</span> <span class="o">=</span> <span class="bp">None</span>
+					<span class="n">task</span><span class="o">.</span><span class="n">_results</span> <span class="o">=</span> <span class="bp">None</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">signal_end</span><span class="o">.</span><span class="n">emit</span><span class="p">()</span>
+				<span class="c"># if new tasks were added as a result of this, execute them immediately</span>
+				<span class="c"># TODO: we may want to include infinite recursion protection</span>
+				<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+		<span class="k">finally</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">_is_executing</span> <span class="o">=</span> <span class="bp">False</span></div></div>
+
+<span class="c">#default_executor = None</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

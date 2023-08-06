@@ -1,0 +1,555 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.multithreading &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../index.html"/>
+        <link rel="up" title="vaex" href="../vaex.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.multithreading</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.multithreading</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">queue</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">vaex.utils</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+
+<span class="n">thread_count_default</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">()</span><span class="c"># * 2 + 1</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;vaex.multithreading&quot;</span><span class="p">)</span>
+
+
+<span class="n">cancel_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+<span class="n">print_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+<div class="viewcode-block" id="MiniJob"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.MiniJob">[docs]</a><span class="k">class</span> <span class="nc">MiniJob</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">callable</span><span class="p">,</span> <span class="n">queue_out</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thread_index</span> <span class="o">=</span> <span class="bp">None</span> <span class="c">#thread_index</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">callable</span> <span class="o">=</span> <span class="nb">callable</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span> <span class="o">=</span> <span class="n">queue_out</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="n">args</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">exc_info</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">cancelled</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+
+<div class="viewcode-block" id="MiniJob.cancel"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.MiniJob.cancel">[docs]</a>	<span class="k">def</span> <span class="nf">cancel</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">cancelled</span> <span class="o">=</span> <span class="bp">True</span></div>
+
+	<span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thread_index</span><span class="p">):</span>
+		<span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cancelled</span><span class="p">:</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">callable</span><span class="p">(</span><span class="n">thread_index</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+				<span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+					<span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cancelled</span><span class="p">:</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">result</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+					<span class="c">#else:</span>
+					<span class="c">#	self.queue_out(None)</span>
+			<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+				<span class="n">exc_info</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+				<span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+					<span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cancelled</span><span class="p">:</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">exc_info</span> <span class="o">=</span> <span class="n">exc_info</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+					<span class="c">#else:</span>
+					<span class="c">#	self.queue_out(None)</span>
+
+<div class="viewcode-block" id="ThreadPoolIndex"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPoolIndex">[docs]</a><span class="k">class</span> <span class="nc">ThreadPoolIndex</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nthreads</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span> <span class="o">=</span> <span class="n">nthreads</span> <span class="ow">or</span> <span class="n">thread_count_default</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">jobs</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">threads</span> <span class="o">=</span> <span class="p">[</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="p">{</span><span class="s">&quot;index&quot;</span><span class="p">:</span><span class="n">i</span><span class="p">})</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span><span class="p">)]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thread_locks</span> <span class="o">=</span> <span class="p">[</span><span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span><span class="p">)]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">queue_in</span> <span class="o">=</span> <span class="p">[]</span> <span class="c">#queue.Queue()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">new_jobs_event</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+		<span class="k">for</span> <span class="n">thread</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">threads</span><span class="p">:</span>
+			<span class="n">thread</span><span class="o">.</span><span class="n">setDaemon</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+			<span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">exception_occurred</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_working</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+
+<div class="viewcode-block" id="ThreadPoolIndex.map"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPoolIndex.map">[docs]</a>	<span class="k">def</span> <span class="nf">map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">callable</span><span class="p">,</span> <span class="n">iterator</span><span class="p">,</span> <span class="n">on_error</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">progress</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">cancel</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">progress</span> <span class="o">=</span> <span class="n">progress</span> <span class="ow">or</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="bp">True</span><span class="p">)</span>
+		<span class="n">cancel</span> <span class="o">=</span> <span class="n">cancel</span> <span class="ow">or</span> <span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="bp">True</span><span class="p">)</span>
+		<span class="k">try</span><span class="p">:</span>
+			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_working</span><span class="p">:</span>
+				<span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;reentered ThreadPoolIndex.map&quot;</span><span class="p">)</span>
+			<span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">_working</span> <span class="o">=</span> <span class="bp">True</span>
+				<span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">jobs</span> <span class="o">=</span> <span class="p">[]</span>
+				<span class="n">alljobs</span> <span class="o">=</span> <span class="p">[]</span>
+				<span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">iterator</span><span class="p">:</span>
+					<span class="n">job</span> <span class="o">=</span> <span class="n">MiniJob</span><span class="p">(</span><span class="nb">callable</span><span class="o">=</span><span class="nb">callable</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">element</span><span class="p">,</span> <span class="n">queue_out</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="p">)</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+					<span class="n">alljobs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+					<span class="n">count</span> <span class="o">+=</span><span class="mi">1</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">new_jobs_event</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+				<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+				<span class="n">yielded</span> <span class="o">=</span> <span class="mi">0</span>
+				<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+					<span class="n">job</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+					<span class="k">if</span> <span class="mi">1</span><span class="p">:</span>
+						<span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">exc_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+							<span class="k">for</span> <span class="n">other_job</span> <span class="ow">in</span> <span class="n">alljobs</span><span class="p">:</span>
+								<span class="n">other_job</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+							<span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+								<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+							<span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+								<span class="k">raise</span> <span class="n">job</span><span class="o">.</span><span class="n">exc_info</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">with_traceback</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">exc_info</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+							<span class="k">else</span><span class="p">:</span>
+								<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;real traceback: </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_tb</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">exc_info</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+								<span class="k">raise</span> <span class="n">job</span><span class="o">.</span><span class="n">exc_info</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="c">#(element[2])</span>
+						<span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+						<span class="n">yielded</span> <span class="o">+=</span> <span class="mi">1</span>
+						<span class="k">if</span> <span class="n">progress</span><span class="p">(</span><span class="n">yielded</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="n">count</span><span class="p">))</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+							<span class="k">for</span> <span class="n">other_job</span> <span class="ow">in</span> <span class="n">alljobs</span><span class="p">:</span>
+								<span class="n">other_job</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+							<span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+								<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+							<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+						<span class="k">else</span><span class="p">:</span>
+							<span class="n">done</span> <span class="o">=</span> <span class="n">yielded</span> <span class="o">==</span> <span class="n">count</span>
+			<span class="k">return</span> <span class="n">results</span>
+		<span class="k">finally</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">_working</span> <span class="o">=</span> <span class="bp">False</span>
+			<span class="c">#self.jobs = []</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">new_jobs_event</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ThreadPoolIndex.execute"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPoolIndex.execute">[docs]</a>	<span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+		<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+			<span class="c">#print &quot;waiting..&quot;, index</span>
+			<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+			<span class="n">empty</span> <span class="o">=</span> <span class="bp">True</span>
+			<span class="k">while</span> <span class="n">empty</span><span class="p">:</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="n">job</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+					<span class="n">empty</span> <span class="o">=</span> <span class="bp">False</span>
+				<span class="k">except</span> <span class="ne">IndexError</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">new_jobs_event</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+			<span class="n">job</span><span class="p">(</span><span class="n">index</span><span class="p">)</span></div>
+
+	<span class="k">def</span> <span class="nf">_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">callable</span><span class="p">,</span> <span class="n">iterator</span><span class="p">,</span> <span class="n">on_error</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">progress</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">cancel</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">progress</span> <span class="o">=</span> <span class="n">progress</span> <span class="ow">or</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="bp">True</span><span class="p">)</span>
+		<span class="n">cancel</span> <span class="o">=</span> <span class="n">cancel</span> <span class="ow">or</span> <span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="bp">True</span><span class="p">)</span>
+
+		<span class="k">try</span><span class="p">:</span>
+			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_working</span><span class="p">:</span>
+				<span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;reentered ThreadPoolIndex.map&quot;</span><span class="p">)</span>
+			<span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">_working</span> <span class="o">=</span> <span class="bp">True</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">exception_occurred</span> <span class="o">=</span> <span class="bp">False</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">callable</span> <span class="o">=</span> <span class="nb">callable</span>
+				<span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+				<span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">iterator</span><span class="p">:</span>
+					<span class="c">#print &quot;put in queue&quot;, element</span>
+					<span class="c">#logger.debug(&quot;put in queue: %r&quot;, element)</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">queue_in</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">element</span><span class="p">)</span>
+					<span class="c">#$$self.queue_in.unfinished_tasks += 1</span>
+					<span class="n">count</span> <span class="o">+=</span><span class="mi">1</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">new_jobs_event</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+				<span class="c">#self.queue_in.put(element)</span>
+				<span class="c">#self.queue_in.put(element)</span>
+				<span class="c">#try:</span>
+				<span class="c">#for element in iterator:</span>
+				<span class="c">#	self.queue_in.not_empty.notify()</span>
+				<span class="c">#except:</span>
+				<span class="c">#	pass</span>
+
+				<span class="k">def</span> <span class="nf">stop</span><span class="p">():</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">exception_occurred</span> <span class="o">=</span> <span class="bp">True</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;wait for queue_in&quot;</span><span class="p">)</span>
+					<span class="c">#self.queue_in.join()</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">queue_in</span> <span class="o">=</span> <span class="p">[]</span>
+					<span class="c"># now we know all threads are waiting for the queue_in, so they will not fill queue_out</span>
+					<span class="c"># but, it ma still contain elements, like exceptions, so flush it</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;flush queue_out&quot;</span><span class="p">)</span>
+					<span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+						<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+					<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;flush queue_out done&quot;</span><span class="p">)</span>
+				<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+				<span class="n">yielded</span> <span class="o">=</span> <span class="mi">0</span>
+				<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+					<span class="c">#logger.debug(&quot;...&quot;)</span>
+					<span class="n">element</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+					<span class="c">#logger.debug(&quot;got queue element&quot;)</span>
+					<span class="c">#print &quot;get from queue&quot;, element</span>
+					<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">element</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">element</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="ne">Exception</span><span class="p">):</span>
+						<span class="k">if</span> <span class="n">on_error</span><span class="p">:</span>
+							<span class="n">on_error</span><span class="p">(</span><span class="n">element</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+							<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+						<span class="k">else</span><span class="p">:</span>
+							<span class="c">#print &quot;RAISE&quot;</span>
+							<span class="n">stop</span><span class="p">()</span>
+							<span class="c">#print(&quot;********************&quot;)</span>
+							<span class="c">#print(element)</span>
+							<span class="c">#raise element[1]</span>
+							<span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+								<span class="k">raise</span> <span class="n">element</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">with_traceback</span><span class="p">(</span><span class="n">element</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+							<span class="k">else</span><span class="p">:</span>
+								<span class="k">raise</span> <span class="n">element</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="c">#(element[2])</span>
+							<span class="c">#raise element[0](element[1])</span>
+							<span class="c">#raise element[0].__class__(None, element[2])</span>
+							<span class="c">#TODO: 2to3 gave this suggestion: raise element[1].with_traceback(element[2])</span>
+							<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+					<span class="k">else</span><span class="p">:</span>
+						<span class="c">#yield element</span>
+						<span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">element</span><span class="p">)</span>
+						<span class="n">yielded</span> <span class="o">+=</span> <span class="mi">1</span>
+						<span class="k">if</span> <span class="n">progress</span><span class="p">(</span><span class="n">yielded</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="n">count</span><span class="p">))</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+							<span class="n">stop</span><span class="p">()</span>
+							<span class="n">cancel</span><span class="p">()</span>
+							<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+						<span class="k">else</span><span class="p">:</span>
+							<span class="n">done</span> <span class="o">=</span> <span class="n">yielded</span> <span class="o">==</span> <span class="n">count</span>
+			<span class="k">return</span> <span class="n">results</span>
+		<span class="k">finally</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">_working</span> <span class="o">=</span> <span class="bp">False</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">new_jobs_event</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="ThreadPoolIndex.close"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPoolIndex.close">[docs]</a>	<span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">callable</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="c">#print &quot;closing threads&quot;</span>
+		<span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span><span class="p">):</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">queue_in</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">new_jobs_event</span><span class="o">.</span><span class="n">set</span><span class="p">()</span></div>
+
+
+	<span class="k">def</span> <span class="nf">_execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+		<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+			<span class="c">#print &quot;waiting..&quot;, index</span>
+			<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+			<span class="n">empty</span> <span class="o">=</span> <span class="bp">True</span>
+			<span class="k">while</span> <span class="n">empty</span><span class="p">:</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="n">args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_in</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+					<span class="n">empty</span> <span class="o">=</span> <span class="bp">False</span>
+				<span class="k">except</span> <span class="ne">IndexError</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">new_jobs_event</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+			<span class="c">#logger.debug(&quot;took %f to get a job&quot;, time.time() - t0)</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">exception_occurred</span><span class="p">:</span>
+					<span class="k">pass</span> <span class="c"># just eat the whole queue after an exception</span>
+					<span class="c">#print &quot;thread: %s just eat queue item %r&quot; % (index, args)</span>
+				<span class="k">else</span><span class="p">:</span>
+					<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">callable</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+						<span class="c">#print &quot;ending thread..&quot;</span>
+						<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+					<span class="k">else</span><span class="p">:</span>
+						<span class="c">#print &quot;running..&quot;, index</span>
+						<span class="k">try</span><span class="p">:</span>
+							<span class="c">#lock.acquire()</span>
+							<span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">callable</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+							<span class="c">#self.queue_in.task_done()</span>
+							<span class="c">#lock.release()</span>
+						<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+							<span class="n">exc_info</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+							<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">exc_info</span><span class="p">)</span>
+						<span class="k">else</span><span class="p">:</span>
+							<span class="bp">self</span><span class="o">.</span><span class="n">queue_out</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+			<span class="k">finally</span><span class="p">:</span>
+				<span class="c">#self.queue_in.task_done()</span>
+				<span class="k">pass</span>
+
+					<span class="c">#print &quot;done..&quot;, index</span>
+					<span class="c">#self.semaphore_outrelease()</span>
+			<span class="c">#print &quot;thread closed&quot;</span>
+
+
+
+<div class="viewcode-block" id="ThreadPoolIndex.run_blocks"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPoolIndex.run_blocks">[docs]</a>	<span class="k">def</span> <span class="nf">run_blocks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">callabble</span><span class="p">,</span> <span class="n">total_length</span><span class="p">,</span> <span class="n">parts</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">on_error</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+		<span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">callabble</span><span class="p">,</span> <span class="n">vaex</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">subdivide</span><span class="p">(</span><span class="n">total_length</span><span class="p">,</span> <span class="n">parts</span><span class="p">),</span> <span class="n">on_error</span><span class="o">=</span><span class="n">on_error</span><span class="p">):</span>
+			<span class="k">yield</span> <span class="n">result</span></div></div>
+
+
+<span class="n">main_pool</span> <span class="o">=</span> <span class="bp">None</span> <span class="c">#ThreadPoolIndex()</span>
+<div class="viewcode-block" id="get_main_pool"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.get_main_pool">[docs]</a><span class="k">def</span> <span class="nf">get_main_pool</span><span class="p">():</span>
+	<span class="k">global</span> <span class="n">main_pool</span>
+	<span class="k">if</span> <span class="n">main_pool</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+		<span class="n">main_pool</span> <span class="o">=</span> <span class="n">ThreadPoolIndex</span><span class="p">()</span>
+	<span class="k">return</span> <span class="n">main_pool</span></div>
+
+<div class="viewcode-block" id="ThreadPool"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPool">[docs]</a><span class="k">class</span> <span class="nc">ThreadPool</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nthreads</span><span class="o">=</span><span class="n">thread_count_default</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span> <span class="o">=</span> <span class="n">nthreads</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">threads</span> <span class="o">=</span> <span class="p">[</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="p">{</span><span class="s">&quot;index&quot;</span><span class="p">:</span><span class="n">i</span><span class="p">})</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nthreads</span><span class="p">)]</span>
+		<span class="c">#self.semaphores_in = [threading.Semaphore(0) for i in range(nthreads)]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">queues_in</span> <span class="o">=</span> <span class="p">[</span><span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nthreads</span><span class="p">)]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">queues_out</span> <span class="o">=</span> <span class="p">[</span><span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nthreads</span><span class="p">)]</span>
+		<span class="k">for</span> <span class="n">thread</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">threads</span><span class="p">:</span>
+			<span class="n">thread</span><span class="o">.</span><span class="n">setDaemon</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+			<span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+<div class="viewcode-block" id="ThreadPool.close"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPool.close">[docs]</a>	<span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">callable</span> <span class="o">=</span> <span class="bp">None</span>
+		<span class="c">#print &quot;closing threads&quot;</span>
+		<span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span><span class="p">):</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">queues_in</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ThreadPool.execute"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPool.execute">[docs]</a>	<span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+		<span class="c">#print &quot;index&quot;, index</span>
+		<span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+		<span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
+			<span class="c">#print &quot;waiting..&quot;, index</span>
+			<span class="n">args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queues_in</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">callable</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+				<span class="c">#print &quot;ending thread..&quot;</span>
+				<span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="c">#print &quot;running..&quot;, index</span>
+				<span class="k">try</span><span class="p">:</span>
+					<span class="c">#lock.acquire()</span>
+					<span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">callable</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+					<span class="c">#lock.release()</span>
+				<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+					<span class="n">exc_info</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">queues_out</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">exc_info</span><span class="p">)</span>
+				<span class="k">else</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">queues_out</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">result</span><span class="p">)</span></div>
+				<span class="c">#print &quot;done..&quot;, index</span>
+				<span class="c">#self.semaphore_outrelease()</span>
+		<span class="c">#print &quot;thread closed&quot;</span>
+
+<div class="viewcode-block" id="ThreadPool.run_parallel"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPool.run_parallel">[docs]</a>	<span class="k">def</span> <span class="nf">run_parallel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">callable</span><span class="p">,</span> <span class="n">args_list</span><span class="o">=</span><span class="p">[]):</span>
+		<span class="c">#lock.acquire()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">callable</span> <span class="o">=</span> <span class="nb">callable</span>
+		<span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span><span class="p">):</span>
+			<span class="k">if</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">args_list</span><span class="p">)</span> <span class="p">:</span>
+				<span class="n">args</span> <span class="o">=</span> <span class="n">args_list</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">queues_in</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+		<span class="c">#for thread in self.threads:</span>
+		<span class="c">#	self.queue_out.get()</span>
+		<span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">queue</span><span class="o">.</span><span class="n">get</span><span class="p">()</span> <span class="k">for</span> <span class="n">queue</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">queues_out</span><span class="p">]</span>
+		<span class="c">#lock.release()</span>
+		<span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="ThreadPool.run_blocks"><a class="viewcode-back" href="../../vaex.html#vaex.multithreading.ThreadPool.run_blocks">[docs]</a>	<span class="k">def</span> <span class="nf">run_blocks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">callable</span><span class="p">,</span> <span class="n">total_length</span><span class="p">):</span>
+		<span class="n">subblock_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">total_length</span><span class="p">)</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span><span class="p">))</span>
+		<span class="c">#subblock_count = math.ceil(total_length/subblock_size)</span>
+		<span class="n">args_list</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nthreads</span><span class="p">):</span>
+			<span class="n">i1</span><span class="p">,</span> <span class="n">i2</span> <span class="o">=</span> <span class="n">index</span> <span class="o">*</span> <span class="n">subblock_size</span><span class="p">,</span> <span class="p">(</span><span class="n">index</span> <span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">subblock_size</span>
+			<span class="k">if</span> <span class="n">i2</span> <span class="o">&gt;</span> <span class="n">total_length</span><span class="p">:</span> <span class="c"># last one can be a bit longer</span>
+				<span class="n">i2</span> <span class="o">=</span> <span class="n">total_length</span>
+			<span class="n">args_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">))</span>
+		<span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_parallel</span><span class="p">(</span><span class="nb">callable</span><span class="p">,</span> <span class="n">args_list</span><span class="p">)</span>
+		<span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+			<span class="c">#print result, isinstance(result, tuple)#, len(result) &gt; 1, isinstance(result[1], Exception)</span>
+			<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="ne">Exception</span><span class="p">):</span>
+				<span class="k">raise</span> <span class="n">result</span><span class="p">[</span><span class="mi">1</span><span class="p">](</span><span class="bp">None</span><span class="p">,</span> <span class="n">result</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+				<span class="c"># TODO: 2to3 gave this suggestion raise result[1].with_traceback(result[2])</span>
+		<span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<span class="c">#pool = ThreadPool()</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

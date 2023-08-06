@@ -1,0 +1,407 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-60052576-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vaex.ui.table &mdash; vaex  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="vaex  documentation" href="../../../index.html"/>
+        <link rel="up" title="vaex" href="../../vaex.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> vaex
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installing.html">Download and installing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../gallery.html">Gallery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tipsandfaq.html">Tips and FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../credits.html">Credits</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">vaex</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+          <li><a href="../../vaex.html">vaex</a> &raquo;</li>
+      
+    <li>vaex.ui.table</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vaex.ui.table</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="kn">import</span> <span class="nn">math</span>
+
+<span class="kn">from</span> <span class="nn">vaex.ui.qt</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">vaex.logging</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">vaex</span><span class="o">.</span><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;vaex.table&quot;</span><span class="p">)</span>
+
+
+<span class="n">PAGE_LIMIT</span> <span class="o">=</span> <span class="nb">long</span><span class="p">(</span><span class="mf">1e7</span><span class="p">)</span>
+
+<div class="viewcode-block" id="FullTableModel"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.FullTableModel">[docs]</a><span class="k">class</span> <span class="nc">FullTableModel</span><span class="p">(</span><span class="n">QtCore</span><span class="o">.</span><span class="n">QAbstractTableModel</span><span class="p">):</span> 
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span>  <span class="n">page_size</span><span class="p">,</span> <span class="n">page</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span> 
+		<span class="n">QtCore</span><span class="o">.</span><span class="n">QAbstractTableModel</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span> 
+		<span class="bp">self</span><span class="o">.</span><span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">page_size</span> <span class="o">=</span> <span class="n">page_size</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">page</span> <span class="o">=</span> <span class="n">page</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">row_count_start</span> <span class="o">=</span> <span class="mi">1</span>
+	
+<div class="viewcode-block" id="FullTableModel.rowCount"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.FullTableModel.rowCount">[docs]</a>	<span class="k">def</span> <span class="nf">rowCount</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">):</span> 
+		<span class="c">#print self.dataset._length</span>
+		<span class="c">#return int(self.dataset._length)</span>
+		<span class="n">left_over</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">page</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span>
+		<span class="k">if</span> <span class="n">left_over</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="k">return</span> <span class="mi">0</span>
+		<span class="k">elif</span> <span class="n">left_over</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span><span class="p">:</span>
+			<span class="k">return</span> <span class="n">left_over</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span>
+		</div>
+<div class="viewcode-block" id="FullTableModel.set_page"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.FullTableModel.set_page">[docs]</a>	<span class="k">def</span> <span class="nf">set_page</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">page</span> <span class="o">=</span> <span class="n">page</span>
+</div>
+<div class="viewcode-block" id="FullTableModel.get_row_offset"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.FullTableModel.get_row_offset">[docs]</a>	<span class="k">def</span> <span class="nf">get_row_offset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">page</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span>
+</div>
+<div class="viewcode-block" id="FullTableModel.columnCount"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.FullTableModel.columnCount">[docs]</a>	<span class="k">def</span> <span class="nf">columnCount</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">):</span> 
+		<span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">all_column_names</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span>
+</div>
+<div class="viewcode-block" id="FullTableModel.data"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.FullTableModel.data">[docs]</a>	<span class="k">def</span> <span class="nf">data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">role</span><span class="p">):</span>
+		<span class="c">#return &quot;&quot;</span>
+		<span class="n">row_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_row_offset</span><span class="p">()</span>
+		<span class="k">if</span> <span class="ow">not</span> <span class="n">index</span><span class="o">.</span><span class="n">isValid</span><span class="p">():</span> 
+			<span class="k">return</span> <span class="bp">None</span>
+		<span class="k">elif</span> <span class="n">role</span> <span class="o">!=</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">DisplayRole</span><span class="p">:</span> 
+			<span class="k">return</span> <span class="bp">None</span>
+		<span class="k">if</span> <span class="n">index</span><span class="o">.</span><span class="n">column</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="k">return</span> <span class="s">&quot;{:,}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">index</span><span class="o">.</span><span class="n">row</span><span class="p">()</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">row_count_start</span> <span class="o">+</span> <span class="n">row_offset</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">column</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">all_columns</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">all_column_names</span><span class="p">[</span><span class="n">index</span><span class="o">.</span><span class="n">column</span><span class="p">()</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span>
+			<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+				<span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">column</span><span class="p">[</span><span class="n">row_offset</span> <span class="o">+</span> <span class="n">index</span><span class="o">.</span><span class="n">row</span><span class="p">()])</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">return</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">column</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="FullTableModel.headerData"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.FullTableModel.headerData">[docs]</a>	<span class="k">def</span> <span class="nf">headerData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">orientation</span><span class="p">,</span> <span class="n">role</span><span class="p">):</span>
+		<span class="c">#print index</span>
+		<span class="n">row_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_row_offset</span><span class="p">()</span>
+		<span class="k">if</span> <span class="n">orientation</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">Horizontal</span> <span class="ow">and</span> <span class="n">role</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">DisplayRole</span><span class="p">:</span>
+			<span class="k">if</span> <span class="n">index</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+				<span class="k">return</span> <span class="s">&quot;row&quot;</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">all_column_names</span><span class="p">[</span><span class="n">index</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+		<span class="c">#if orientation == QtCore.Qt.Vertical and role == QtCore.Qt.DisplayRole:</span>
+		<span class="c">#	return str(index+self.row_count_start + row_offset)</span>
+		<span class="k">return</span> <span class="bp">None</span>
+</div></div>
+<div class="viewcode-block" id="TableDialog"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.TableDialog">[docs]</a><span class="k">class</span> <span class="nc">TableDialog</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QDialog</span><span class="p">):</span>
+	<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">parent</span><span class="p">):</span>
+		<span class="nb">super</span><span class="p">(</span><span class="n">TableDialog</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span>
+		<span class="c">#self.setModal(False)</span>
+		<span class="c">#self.setWindowFlags(QtCore.Qt#.FramelessWindowHint)</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="mi">700</span><span class="p">,</span> <span class="mi">500</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QTableView</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">setSelectionBehavior</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QAbstractItemView</span><span class="o">.</span><span class="n">SelectRows</span><span class="p">);</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">header</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">column_names</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span> <span class="o">=</span> <span class="n">FullTableModel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">,</span> <span class="n">PAGE_LIMIT</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">setModel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">pressed</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onSelectRow</span><span class="p">)</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">verticalHeader</span><span class="p">()</span><span class="o">.</span><span class="n">setResizeMode</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QHeaderView</span><span class="o">.</span><span class="n">Interactive</span><span class="p">)</span>
+		
+		<span class="k">if</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">column_names</span><span class="p">:</span>
+				<span class="n">item</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QListWidgetItem</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">list1d</span><span class="p">)</span>
+				<span class="n">item</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+				<span class="n">item</span><span class="o">.</span><span class="n">setCheckState</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+				<span class="c">#self.list1d.</span>
+
+		<span class="k">print</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span>
+		<span class="n">pages</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span><span class="o">*</span><span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span><span class="p">))</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">boxlayout</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QVBoxLayout</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">header_layout</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QHBoxLayout</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">spinner</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QSpinBox</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">label_prefix</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QLabel</span><span class="p">(</span><span class="s">&quot;should not see me&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">label_postfix</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QLabel</span><span class="p">(</span><span class="s">&quot;should not see me&quot;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">header_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">label_prefix</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">header_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">header_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">label_postfix</span><span class="p">)</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">count_from_zero</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QCheckBox</span><span class="p">(</span><span class="s">&quot;count rows from zero&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">boxlayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">count_from_zero</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">boxlayout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">header_layout</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">boxlayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="p">)</span>
+		<span class="c">#self.setCentralWidget(self.splitter)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">setLayout</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">boxlayout</span><span class="p">)</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="o">.</span><span class="n">setRange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">pages</span><span class="p">)</span>
+		<span class="c">#self.spinner.setValue(1)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="o">.</span><span class="n">valueChanged</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onValueChanged</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">count_from_zero</span><span class="o">.</span><span class="n">stateChanged</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onStateCountFromZero</span><span class="p">)</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">row_selection_listeners</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">onRowSelect</span><span class="p">)</span>
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">selected_row_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">onRowSelect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">selected_row_index</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_check_pages</span><span class="p">()</span>
+		
+<div class="viewcode-block" id="TableDialog.onStateCountFromZero"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.TableDialog.onStateCountFromZero">[docs]</a>	<span class="k">def</span> <span class="nf">onStateCountFromZero</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">row_count_start</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">Checked</span> <span class="k">else</span> <span class="mi">1</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_update_info</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+		<span class="c"># hide/show to force an update</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+		<span class="c">#self.tableView.repaint()</span>
+		<span class="c">#self.tableModel.update()</span>
+		<span class="c">#self.resize(self.size())</span>
+		</div>
+	<span class="k">def</span> <span class="nf">_check_pages</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">pages</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span><span class="o">*</span><span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span><span class="p">))</span>
+		<span class="n">current_page</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span>
+		<span class="c"># if 2 pages, pages 0 and 1 are ok..</span>
+		<span class="k">if</span> <span class="n">current_page</span> <span class="o">&gt;</span> <span class="n">pages</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span> <span class="c"># oops, spinner has invalid value</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="n">pages</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="c"># then again, gui has page+1</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_update_info</span><span class="p">()</span>
+
+	<span class="k">def</span> <span class="nf">_update_info</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">pages</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span><span class="o">*</span><span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span><span class="p">))</span>
+		<span class="n">current_page</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span>
+		<span class="n">row_from</span> <span class="o">=</span> <span class="n">current_page</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span> <span class="o">+</span>	<span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">row_count_start</span>
+		<span class="n">row_to</span> <span class="o">=</span> <span class="n">row_from</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span> <span class="o">-</span><span class="mi">1</span>
+		<span class="k">if</span> <span class="n">row_to</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">):</span>
+			<span class="n">row_to</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">row_count_start</span>
+		<span class="n">info_text</span> <span class="o">=</span> <span class="s">&quot;of {pages:,} (row {row_from:,} to {row_to:,})&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="nb">locals</span><span class="p">())</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">label_postfix</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="n">info_text</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="o">.</span><span class="n">setRange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">pages</span><span class="p">)</span>
+		
+		<span class="n">rows_visible</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span> <span class="k">if</span> <span class="n">pages</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span>
+		
+		<span class="n">info_text_pre</span> <span class="o">=</span> <span class="s">&quot;showing {rows_visible:,} rows on page&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="nb">locals</span><span class="p">())</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">label_prefix</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="n">info_text_pre</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TableDialog.onRowSelect"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.TableDialog.onRowSelect">[docs]</a>	<span class="k">def</span> <span class="nf">onRowSelect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">row</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_check_pages</span><span class="p">()</span>
+		<span class="k">if</span> <span class="n">row</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="k">return</span>
+		<span class="n">page</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span> <span class="o">*</span> <span class="mf">1.</span><span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span><span class="p">)</span>
+		<span class="n">row_offset</span> <span class="o">=</span> <span class="n">row</span> <span class="o">-</span> <span class="n">page</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span>
+		<span class="c">#selection_model = self.tableView.selectionModel()</span>
+		<span class="c">#item_model = QtGui.QAbstractItemModel()</span>
+		<span class="c">#index = item_model.createIndex(row_offset)</span>
+		<span class="c">#selection_model.setCurrentIndex(index)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">selectRow</span><span class="p">(</span><span class="n">row_offset</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="n">page</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="c"># in GUI, pages starts from 1</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_update_info</span><span class="p">()</span>
+		<span class="c">#self.tableView.resizeColumnToContents(0)</span>
+		</div>
+<div class="viewcode-block" id="TableDialog.onValueChanged"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.TableDialog.onValueChanged">[docs]</a>	<span class="k">def</span> <span class="nf">onValueChanged</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">set_page</span><span class="p">(</span><span class="n">value</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="c"># in GUI, pages start counting from 1, in the code from 0</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_check_row_select</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_update_info</span><span class="p">()</span>
+		<span class="c"># next two lines make the first column (row index) fit to with under osx (bug?)</span>
+		<span class="c">#self.tableView.verticalHeader().resizeSections(QtGui.QHeaderView.Stretch)</span>
+		<span class="c">#self.tableView.verticalHeader().resizeSections(QtGui.QHeaderView.ResizeToContents)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+		</div>
+	<span class="k">def</span> <span class="nf">_check_row_select</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="n">row_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">selected_row_index</span>
+		<span class="k">if</span> <span class="n">row_index</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+			<span class="k">return</span>
+		<span class="n">page</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row_index</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span><span class="p">)</span>
+		<span class="n">page_current</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spinner</span><span class="o">.</span><span class="n">value</span><span class="p">()</span><span class="o">-</span><span class="mi">1</span>
+		<span class="n">page_index</span> <span class="o">=</span> <span class="n">row_index</span> <span class="o">-</span> <span class="n">page</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">page_size</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;row_index=</span><span class="si">%d</span><span class="s"> page=</span><span class="si">%d</span><span class="s"> page_index=</span><span class="si">%d</span><span class="s"> page_current=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">row_index</span><span class="p">,</span> <span class="n">page</span><span class="p">,</span> <span class="n">page_index</span><span class="p">,</span> <span class="n">page_current</span><span class="p">))</span>
+		<span class="k">if</span> <span class="n">page</span> <span class="o">==</span> <span class="n">page_current</span><span class="p">:</span> <span class="c"># we are in the right page</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;select&quot;</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">selectRow</span><span class="p">(</span><span class="n">page_index</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;deselect&quot;</span><span class="p">)</span>
+			<span class="c">#self.tableView.selectRow(0) # deselect</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">tableView</span><span class="o">.</span><span class="n">selectionModel</span><span class="p">()</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+		
+<div class="viewcode-block" id="TableDialog.onSelectRow"><a class="viewcode-back" href="../../../api/vaex.ui.html#vaex.ui.table.TableDialog.onSelectRow">[docs]</a>	<span class="k">def</span> <span class="nf">onSelectRow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+		<span class="n">row_index</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">row</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">tableModel</span><span class="o">.</span><span class="n">get_row_offset</span><span class="p">()</span>
+		<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;row index selected </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">row_index</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">selectRow</span><span class="p">(</span><span class="n">row_index</span><span class="p">)</span>
+		
+		</div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2014, Maarten A. Breddels.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
