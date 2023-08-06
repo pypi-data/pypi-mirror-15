@@ -1,0 +1,50 @@
+---
+# The following template parameters need to be specified in the environment 
+# definition file:
+#
+# * associated_processors: a list of lambda-processor layers
+#
+meta:
+    description:
+        Creates an encrypted table in DynamoDB
+    dependencies:
+        # Add here all the layers that will need to access the vault
+        # This is just an example for testing purposes:
+        {% for l in associated_processors %} 
+        - {{l}}
+        {% endfor %}
+    parameters:
+        key_admin:
+            description:
+                The IAM user or group that will administering the key
+            value:
+                user/german
+
+        lambda_processors:
+            description:
+                Physical IDs (ARNs) of all Lambda functions with access to the
+                secrets vault
+            value:
+                {% for proclayer in associated_processors %}
+                - ref:
+                    parser: output
+                    parameters:
+                        layer_name: {{proclayer}}
+                        output_name: LambdaExecutionRoleArn
+                {% endfor %}
+
+        dynamodb_capacity:
+            description:
+                The read and write capacity of the secret vault dynamo table
+            value:
+                read: 5
+                write: 1
+
+        additional_resources:
+            description:
+                Physical IDs (ARNs) of additional AWS resources (e.g. users, 
+                groups, roles, etc) with access to the secrets vault.
+            # Add here your IAM user if you want to be able to add secrets to 
+            # the vault using the DynamoDB console. NOTE: This parameter is 
+            # currently being ignored. To be implemented.
+            value:
