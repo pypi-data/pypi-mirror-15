@@ -1,0 +1,331 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>tornado_websockets.tornadowrapper &mdash; Django-tornado-websockets 0.0.7 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="Django-tornado-websockets 0.0.7 documentation" href="../../index.html"/>
+        <link rel="up" title="Module code" href="../index.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> Django-tornado-websockets
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">1. Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../django_integration_configuration.html">2. Django integration and configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage.html">3. Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">4. API</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">Django-tornado-websockets</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+    <li>tornado_websockets.tornadowrapper</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for tornado_websockets.tornadowrapper</h1><div class="highlight"><pre>
+<span></span><span class="c1"># coding: utf-8</span>
+
+<span class="kn">import</span> <span class="nn">pprint</span>
+
+<span class="kn">import</span> <span class="nn">tornado</span>
+<span class="kn">import</span> <span class="nn">tornado.escape</span>
+<span class="kn">import</span> <span class="nn">tornado.httpserver</span>
+<span class="kn">import</span> <span class="nn">tornado.ioloop</span>
+<span class="kn">import</span> <span class="nn">tornado.web</span>
+<span class="kn">import</span> <span class="nn">tornado.websocket</span>
+
+<span class="kn">from</span> <span class="nn">six</span> <span class="kn">import</span> <span class="n">integer_types</span>
+
+<span class="n">pp</span> <span class="o">=</span> <span class="n">pprint</span><span class="o">.</span><span class="n">PrettyPrinter</span><span class="p">(</span><span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="TornadoWrapper"><a class="viewcode-back" href="../../api.html#tornado_websockets.tornadowrapper.TornadoWrapper">[docs]</a><span class="k">class</span> <span class="nc">TornadoWrapper</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Wrapper for Tornado application and server handling.</span>
+
+<span class="sd">        It let you access to Tornado app, handlers and settings everywhere in your code (it&#39;s really</span>
+<span class="sd">        useful when you run ``runtornado`` management command and WebSockets management).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">tornado_app</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">tornado_server</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="c1"># Default values for user configuration</span>
+    <span class="n">tornado_port</span> <span class="o">=</span> <span class="mi">8000</span>
+    <span class="n">handlers</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="TornadoWrapper.start_app"><a class="viewcode-back" href="../../api.html#tornado_websockets.tornadowrapper.TornadoWrapper.start_app">[docs]</a>    <span class="k">def</span> <span class="nf">start_app</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">tornado_handlers</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">tornado_settings</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Initialize the Tornado web application with given handlers and settings.</span>
+
+<span class="sd">            :param tornado_handlers: Handlers (routes) for Tornado</span>
+<span class="sd">            :param tornado_settings: Settings for Tornado</span>
+<span class="sd">            :type tornado_handlers: list</span>
+<span class="sd">            :type tornado_settings: dict</span>
+<span class="sd">            :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tornado_handlers</span><span class="p">:</span>
+            <span class="n">tornado_handlers</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tornado_settings</span><span class="p">:</span>
+            <span class="n">tornado_settings</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tornado_handlers</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;Expected a list for Tornado handlers.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tornado_settings</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;Expected a dictionary for Tornado settings.&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Not `tornado_handlers += cls.handlers` because wildcard handler should be the last value in handlers list</span>
+        <span class="c1"># http://www.tornadoweb.org/en/stable/_modules/tornado/web.html#Application.add_handlers</span>
+        <span class="n">tornado_handlers</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">handlers</span> <span class="o">+</span> <span class="n">tornado_handlers</span>
+
+        <span class="n">cls</span><span class="o">.</span><span class="n">tornado_app</span> <span class="o">=</span> <span class="n">tornado</span><span class="o">.</span><span class="n">web</span><span class="o">.</span><span class="n">Application</span><span class="p">(</span><span class="n">tornado_handlers</span><span class="p">,</span> <span class="o">**</span><span class="n">tornado_settings</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="TornadoWrapper.listen"><a class="viewcode-back" href="../../api.html#tornado_websockets.tornadowrapper.TornadoWrapper.listen">[docs]</a>    <span class="k">def</span> <span class="nf">listen</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">tornado_port</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Start the Tornado HTTP server on given port.</span>
+
+<span class="sd">            :param tornado_port: Port to listen</span>
+<span class="sd">            :type tornado_port: int</span>
+<span class="sd">            :return: None</span>
+
+<span class="sd">            .. todo:: Add support for HTTPS server.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tornado_port</span><span class="p">,</span> <span class="n">integer_types</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;Expected an integer for Tornado port.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cls</span><span class="o">.</span><span class="n">tornado_app</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;Tornado application was not instantiated, call TornadoWrapper.start_app method.&#39;</span><span class="p">)</span>
+
+        <span class="n">cls</span><span class="o">.</span><span class="n">tornado_port</span> <span class="o">=</span> <span class="n">tornado_port</span>
+        <span class="n">cls</span><span class="o">.</span><span class="n">tornado_server</span> <span class="o">=</span> <span class="n">tornado</span><span class="o">.</span><span class="n">httpserver</span><span class="o">.</span><span class="n">HTTPServer</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">tornado_app</span><span class="p">)</span>
+        <span class="n">cls</span><span class="o">.</span><span class="n">tornado_server</span><span class="o">.</span><span class="n">listen</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">tornado_port</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="TornadoWrapper.loop"><a class="viewcode-back" href="../../api.html#tornado_websockets.tornadowrapper.TornadoWrapper.loop">[docs]</a>    <span class="k">def</span> <span class="nf">loop</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Run Tornado main loop and display configuration about Tornado handlers and settings.</span>
+
+<span class="sd">            :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># print(&#39;== Using port %s&#39; % cls.tornado_port)</span>
+        <span class="c1"># print(&#39;== Using handlers:&#39;)</span>
+        <span class="c1"># pp.pprint(cls.tornado_app.handlers)</span>
+        <span class="c1"># print(&#39;== Using settings:&#39;)</span>
+        <span class="c1"># pp.pprint(cls.tornado_app.settings)</span>
+
+        <span class="n">tornado</span><span class="o">.</span><span class="n">ioloop</span><span class="o">.</span><span class="n">IOLoop</span><span class="o">.</span><span class="n">instance</span><span class="p">()</span><span class="o">.</span><span class="n">start</span><span class="p">()</span></div>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+        <span class="n">tornado</span><span class="o">.</span><span class="n">ioloop</span><span class="o">.</span><span class="n">IOLoop</span><span class="o">.</span><span class="n">instance</span><span class="p">()</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+        <span class="n">cls</span><span class="o">.</span><span class="n">tornado_app</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">cls</span><span class="o">.</span><span class="n">tornado_server</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">cls</span><span class="o">.</span><span class="n">handlers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">cls</span><span class="o">.</span><span class="n">tornado_port</span> <span class="o">=</span> <span class="mi">8000</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="TornadoWrapper.add_handlers"><a class="viewcode-back" href="../../api.html#tornado_websockets.tornadowrapper.TornadoWrapper.add_handlers">[docs]</a>    <span class="k">def</span> <span class="nf">add_handlers</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">handlers</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Add an handler to Tornado app if it&#39;s defined, otherwise it add this handler to the</span>
+<span class="sd">            TornadoWrapper.tornado_handlers list.</span>
+
+<span class="sd">            :param handlers: Handler(s) to add</span>
+<span class="sd">            :type handlers: list|tuple</span>
+<span class="sd">            :return: Tornado application handlers</span>
+<span class="sd">            :rtype: list</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">handlers</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="n">handlers</span> <span class="o">=</span> <span class="p">[</span><span class="n">handlers</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">handlers</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;Expected a list or a tuple for handlers.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">TornadoWrapper</span><span class="o">.</span><span class="n">tornado_app</span><span class="p">:</span>
+            <span class="c1"># print(&#39;== Prepare new handlers for Tornado application:&#39;)</span>
+            <span class="c1"># pp.pprint(handlers)</span>
+
+            <span class="c1"># ``cls.handlers = handlers + cls.handlers`` and not ``cls.handlers += handlers``,</span>
+            <span class="c1"># see `TornadoWrapper.start_app` source to know why.</span>
+            <span class="n">cls</span><span class="o">.</span><span class="n">handlers</span> <span class="o">=</span> <span class="n">handlers</span> <span class="o">+</span> <span class="n">cls</span><span class="o">.</span><span class="n">handlers</span>
+
+            <span class="k">return</span> <span class="n">cls</span><span class="o">.</span><span class="n">handlers</span>
+
+        <span class="c1"># print(&#39;== Adding handlers to already running Tornado application. New handlers are:&#39;)</span>
+        <span class="c1"># pp.pprint(cls.tornado_app.handlers)</span>
+        <span class="n">TornadoWrapper</span><span class="o">.</span><span class="n">tornado_app</span><span class="o">.</span><span class="n">add_handlers</span><span class="p">(</span><span class="s1">&#39;.*&#39;</span><span class="p">,</span> <span class="n">handlers</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">cls</span><span class="o">.</span><span class="n">tornado_app</span><span class="o">.</span><span class="n">handlers</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Hugo ALLIAUME.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.0.7',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
