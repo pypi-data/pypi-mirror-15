@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+'''
+Automatically create tarball and submit it to launchpad.
+'''
+import argparse
+import launchpadtools
+
+
+def _parse_cmd_arguments():
+    parser = argparse.ArgumentParser(description='Submit builds to launchpad.')
+    parser.add_argument(
+        '-r', '--orig',
+        help='Orig source'
+        )
+    parser.add_argument(
+        '-d', '--debian',
+        help='debian/ source',
+        default=None
+        )
+    parser.add_argument(
+        '-s', '--dsc',
+        help='DSC source'
+        )
+    parser.add_argument(
+        '-u', '--ubuntu-releases',
+        help='Ubuntu releases to build for',
+        required=True,
+        nargs='+'
+        )
+    parser.add_argument(
+        '-p', '--ppa',
+        help='PPA to submit to',
+        type=str,
+        required=True
+        )
+    parser.add_argument(
+        '-v', '--version-override',
+        help='Override package version',
+        type=str
+        )
+    parser.add_argument(
+        '-a', '--version-append-hash',
+        help='Append code hash to version (useful for deduplication)',
+        action='store_true',
+        default=False
+        )
+    parser.add_argument(
+        '--update-patches',
+        help='Automatically update patches',
+        action='store_true',
+        default=False
+        )
+    parser.add_argument(
+        '-f', '--force',
+        help='Force submission even if build is already uploaded',
+        action='store_true',
+        default=False
+        )
+    parser.add_argument(
+        '-y', '--dry',
+        help='Dry run (do everything but the upload)',
+        action='store_true',
+        default=False
+        )
+    parser.add_argument(
+        '-n', '--debfullname',
+        help='the submitter\'s full name',
+        type=str
+        )
+    parser.add_argument(
+        '-e', '--debemail',
+        help='the submitter\'s email address',
+        type=str
+        )
+    parser.add_argument(
+        '-b', '--debuild-params',
+        help='extra parameters passed to debuild',
+        type=str,
+        default=''
+        )
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = _parse_cmd_arguments()
+    if args.orig and args.dsc:
+        raise RuntimeError('Supply either one of --orig, --dsc, not both.')
+
+    if args.orig:
+        launchpadtools.submit.submit(
+            args.orig,
+            args.debian,
+            args.ubuntu_releases,
+            args.dry,
+            args.ppa,
+            args.debfullname,
+            args.debemail,
+            args.debuild_params,
+            args.version_override,
+            args.version_append_hash,
+            args.force,
+            args.update_patches
+            )
+    elif args.dsc:
+        launchpadtools.submit.submit_dsc(
+            args.dsc,
+            args.ubuntu_releases,
+            args.dry,
+            args.ppa,
+            args.debfullname,
+            args.debemail,
+            args.debuild_params,
+            args.force
+            )
+    else:
+        raise RuntimeError('Supply one of --orig, --dsc.')
