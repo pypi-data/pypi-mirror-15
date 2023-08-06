@@ -1,0 +1,74 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+      i18n:domain="covertile.cycle2">
+
+<body tal:define="is_empty view/is_empty">
+
+  <p tal:condition="python: is_empty and view.is_compose_mode()" i18n:translate="">
+    This carousel is empty; open the content chooser and drag-and-drop some items here.
+  </p>
+
+  <div
+      id=""
+      class="covertile-cycle2 tile-content"
+      data-cycle-caption-plugin="caption2"
+      data-cycle-timeout="4000"
+      data-cycle-center-horz="true"
+      data-cycle-center-vert="true"
+      data-cycle-paused="true"
+      data-cycle-pause-on-hover="false"
+      data-cycle-slides="> div.slide"
+      data-cycle-swipe="true"
+      data-cycle-swipe-fx="scrollHorz"
+      data-cycle-pager=".cycle-pager"
+      tal:condition="not:is_empty"
+      tal:attributes="id string:cycle-${view/id};
+                      data-cycle-paused view/paused|default;
+                      data-cycle-pager-template view/pagertemplate;
+                      data-cycle-overlay-template view/overlaytemplate;">
+    <div class="cycle-prev"></div>
+    <div class="cycle-next"></div>
+
+    <tal:items repeat="item view/results">
+      <div class="slide"
+           tal:define="slideimg python:view.thumbnail(item);
+                       thumbnail python: view.pagerthumbnail(item);
+                       customUrl python:view.get_url(item);
+                       customTitle python:view.get_title(item);
+                       customDescription python:view.get_description(item);
+                       uuid python:view.get_uuid(item);
+                       type item/portal_type;"
+           tal:attributes="data-content-type type;
+                           data-content-uuid uuid;
+                           data-thumbnail python: thumbnail and thumbnail.url or None;
+                           data-cycle-title customTitle;
+                           data-cycle-desc customDescription;
+                           data-date python:item.toLocalizedTime();">
+          <tal:image condition="python:slideimg">
+            <a href="#"
+               tal:attributes="href customUrl;">
+              <img tal:attributes="src slideimg/url|string:${item/absolute_url}/download;
+                                   width slideimg/width;
+                                   height slideimg/height;
+                                   alt customTitle;" />
+            </a>
+          </tal:image>
+      </div>
+    </tal:items>
+    <div class="cycle-caption"/>
+    <div class="cycle-overlay"
+         tal:condition="view/overlaytemplate"/>
+  </div>
+  <div class="cycle-pager-container"
+       tal:condition="view/pagertemplate"
+       tal:attributes="class string:cycle-pager-container ${view/pagerclass};">
+    <div class="cycle-pager"></div>
+  </div>
+  <script type="text/javascript"
+          tal:condition="not:is_empty">
+    $( '.covertile-cycle2' ).cycle();
+  </script>
+</body>
+</html>
