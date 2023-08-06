@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+"""Client tool for interacting with Kickstand server"""
+
+import configargparse
+import json
+import os
+import sys
+
+from kickstand import Communicator
+from kickstand import Configuration
+from kickstand import Constants
+from kickstand import Inspector
+
+META_PROPERTIES = {}
+
+def createComponentCategory(communicator, name, shortname):
+  return communicator.post('/inventory/componentcategories', data={'name': name, 'short_name':shortname}).json()
+
+def getComponentCategory(communicator, shortname):
+  result = communicator.get('/inventory/componentcategories').json()
+  for component in result:
+    if( component['short_name'] == shortname ):
+      return component
+  return None
+
+def createComponent(communicator, category_id, name, shortname):
+  return communicator.post('/inventory/componentcategories/%d/components' % category_id, data={'name':name, 'short_name':shortname}).json()
+
+def getComponent(communicator, category_id, shortname):
+  result = communicator.get('/inventory/componentcategories/%d/components' % category_id).json()
+  for category in result:
+    if( category['short_name'] == shortname ):
+      return category
+  return None
+
+def createProperty(communicator, category_id, component_id, name, shortname):
+  return communicator.post('/inventory/componentcategories/%d/components/%d/properties' % (category_id, component_id), data={'name':name, 'short_name':shortname}).json()
+
+def getProperty(communicator, category_id, component_id, shortname):
+  result = communicator.get('/inventory/componentcategories/%d/components/%d/properties' % (category_id, component_id)).json()
+  for property in result:
+    if( property['short_name'] == shortname ):
+      return property
+  return None
+
+def createMachine(communicator, fqdn):
+  return communicator.post('/inventory/machines', data={'fqdn':fqdn,'status':4,'group':1}).json()
+
+def getMachine(communicator, fqdn):
+  result = communicator.get('/inventory/machines?fqdn=%s' % fqdn).json()
+  if( len(result) == 1 ):
+    return result[0]
+  else:
+    return None
+
+def setMachineProperties(communicator, machine_id, property_list):
+  """Sets the properties for a machine
+  property_list: list
+    example: [ category_id: [
+                 component_id: [
+                   property_id: value,
+                    property_id: value
+                  ]]]
+  """
+  for category_id in property_list:
+    for component_id in property_list[category_id]:
+      list = []
+      for property_id in property_list[category_id][component_id]:
+        list.append({'property': property_id, 'value': property_list[category_id][component_id][property_id]})
+      communicator.post('/inventory/machines/%d/componentcategories/%d/components/%d/properties' % (machine_id, category_id, component_id), data=json.dumps(list))
+
+def ensureProperties(communicator, structure):
+  for cat_shortname in structure:
+    category = structure[cat_shortname]
+    cat = getComponentCategory(communicator, cat_shortname)
+    if( cat is None ):
+      cat = createComponentCategory(communicator, category['name'], cat_shortname)
+    META_PROPERTIES[cat_shortname] = {'id': cat['id'], 'components': {}}
+
+    for comp_shortname in category['components']:
+      component = category['components'][comp_shortname]
+      comp = getComponent(communicator, cat['id'], comp_shortname)
+      if( comp is None ):
+        comp = createComponent(communicator, cat['id'], component['name'], comp_shortname)
+      META_PROPERTIES[cat_shortname]['components'][comp_shortname] = {'id': comp['id'], 'properties':{}}
+      for prop_shortname in component['properties']:
+        property = component['properties'][prop_shortname]
+        prop = getProperty(communicator, cat['id'], comp['id'], prop_shortname)
+        if( prop is None ):
+          prop = createProperty(communicator, cat['id'], comp['id'], property['name'], prop_shortname)
+        META_PROPERTIES[cat_shortname]['components'][comp_shortname]['properties'][prop_shortname] = {'id': prop['id']}
+
+def mapProperties(inspector_results):
+  mapped = {}
+  for category in inspector_results:
+    cat_id = META_PROPERTIES[category]['id']
+    if( cat_id not in mapped ):
+      mapped[cat_id] = {}
+
+    for component in inspector_results[category]:
+      comp_id = META_PROPERTIES[category]['components'][component]['id']
+      if( comp_id not in mapped[cat_id] ):
+        mapped[cat_id][comp_id] = {}
+
+      for prop in inspector_results[category][component]:
+        prop_id = META_PROPERTIES[category]['components'][component]['properties'][prop]['id']
+        mapped[cat_id][comp_id][prop_id] = inspector_results[category][component][prop]
+
+  return mapped
+
+def main():
+  """Main function for client tool"""
+  args = Configuration()
+  communicator = None
+
+  inspections_dirs = args['INSPECTIONS_DIRECTORIES']
+  if( not args['INSPECTIONS_DONT_USE_DEFAULTS'] ):
+    inspections_dirs = inspections_dirs + Constants.INSPECTIONS_DEFAULT_DIRECTORIES
+
+  inspector = Inspector(inspections_dirs)
+
+  if( not args['QUIET'] ):
+    print 'Structure:'
+    print json.dumps(inspector.getStructure(), sort_keys=True, indent=4, separators=(',', ':'))
+
+  # Prep Machine object
+  if( not args['NO_SYNC'] ):
+    communicator = Communicator(args['SERVER'])
+    fqdn = os.uname()[1]
+    machine = getMachine(communicator, fqdn)
+    if( machine is None ):
+      createMachine(communicator, fqdn)
+      machine = getMachine(communicator, fqdn)
+
+    ensureProperties(communicator, inspector.getStructure())
+
+  inspector_results = inspector.inspect()
+  if( not args['QUIET'] ):
+    print 'Inspections Results:'
+    print json.dumps(inspector_results, sort_keys=True, indent=4, separators=(',', ': '))
+
+  if( not args['NO_SYNC'] ):
+    mapped_properties = mapProperties(inspector_results)
+    setMachineProperties(communicator, machine['id'], mapped_properties)
+
+if( __name__ == '__main__' ):
+  main()
