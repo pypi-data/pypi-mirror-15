@@ -1,0 +1,87 @@
+import sequana
+from sequana import snaketools as sm
+from sequana.snaketools import SequanaConfig, FileFactory
+sm.init("quality_variant.rules", globals())
+
+# This must be defined before the include 
+configfile: "config.yaml"
+
+cfg = SequanaConfig(config)
+
+
+
+
+# Connect the sub-pipelines together
+include: sm.modules['quality_taxon']
+
+
+
+final_output = list()
+
+# Generate data directory
+
+from sequana import SnpEff
+
+if config["snpeff"]["do"]:
+    tmp = SnpEff(config["snpeff"]["reference"])
+
+# Mapping
+exec(open(sequana.modules["bwa_mem_dynamic"], "r").read())
+include: bwa_mem_dynamic("ref", __cutadapt__output)
+__mark_duplicates__input = __bwa_mem_ref__output
+__indel_realigner__input = __bwa_mem_ref__output
+__freebayes__input = __bwa_mem_ref__output
+
+# Mapping report
+if config["report_mapping"]["do"]:
+    __bedtools_genomecov__input = __bwa_mem_ref__output
+    include: sm.modules["bedtools_genomecov"]
+    
+    __report_mapping__input = __bedtools_genomecov__output
+    include: sm.modules["report_mapping"]
+    final_output.append(__report_mapping__output)
+
+# Mark duplicates
+if config["mark_duplicates"]["do"]:
+    include: sm.modules["mark_duplicates"]
+    __indel_realigner__input = __mark_duplicates__output
+    __freebayes__input = __mark_duplicates__output
+    
+# Indel realigner
+if config["indel_realigner"]["do"]:
+    include: sm.modules["create_sequence_dictionary"]
+    include: sm.modules["indel_realigner"]
+    __freebayes__input = __indel_realigner__output
+
+# Variant calling
+include: sm.modules["freebayes"]
+
+# VCF filter
+__vcf_filter__input = __freebayes__output
+include: sm.modules["vcf_filter"]
+__report_vcf__input = __vcf_filter__output
+
+# snpEff
+if config["snpeff"]["do"]: 
+    __snpeff__input = __vcf_filter__output
+    include: sm.modules["snpeff"]
+    __report_vcf__input = __snpeff__output
+
+# report vcf
+include: sm.modules["report_vcf"]
+final_output.append(__report_vcf__output)
+
+# Snakemake --------------------------------------------------------------------
+
+rule alll:
+    input:
+        final_output,
+        expected_output
+
+
+
+
+
+
+
+
