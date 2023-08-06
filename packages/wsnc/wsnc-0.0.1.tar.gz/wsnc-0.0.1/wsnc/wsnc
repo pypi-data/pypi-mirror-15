@@ -1,0 +1,83 @@
+#!/usr/bin/python3
+import asyncio
+import sys
+import argparse
+from autobahn.asyncio.websocket import WebSocketClientProtocol, WebSocketClientFactory
+
+STDIN_FILENO = sys.stdin.fileno()
+
+read_task = None
+
+class SocketClientProtocol(WebSocketClientProtocol):
+    def onConnect(self, response):
+        pass
+
+    @asyncio.coroutine
+    def input_loop(self):
+        try:
+            while True:
+                data = yield from self.reader.read(512)
+                self.sendMessage(data, isBinary = True)
+        except asyncio.CancelledError:
+            pass
+
+    def onOpen(self):
+        global read_task
+        self.reader = asyncio.StreamReader()
+        proto = asyncio.StreamReaderProtocol(self.reader)
+        yield from asyncio.get_event_loop().connect_read_pipe(lambda: proto, sys.stdin)
+        read_task = asyncio.Task(self.input_loop())
+
+    def onMessage(self, payload, isBinary):
+        sys.stdout.buffer.write(payload)
+        sys.stdout.buffer.flush()
+
+    def onClose(self, wasClean, code, reason):
+        asyncio.get_event_loop().stop()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('URL', help='WebSocket URL to connect to')
+    args = parser.parse_args()
+    if not (args.URL.startswith('ws://') or args.URL.startswith('wss://')):
+        print('ERROR: URL scheme must be ws:// or wss://', file=sys.stderr)
+        sys.exit(1)
+    peer = args.URL.split('/')[2]
+    lst = peer.split(':')
+    host = lst[0]
+    if host == '':
+        print('ERROR: Host may not be empty', file=sys.stderr)
+        sys.exit(1)
+    if len(lst) != 1:
+        try:
+            port = int(lst[1])
+        except ValueError:
+            print('ERROR: Invalid port number', file=sys.stderr)
+            sys.exit(1)
+        if port < 1 or port > 65535:
+            print('ERROR: Invalid port number', file=sys.stderr)
+            sys.exit(1)
+    else:
+        if args.URL.startswith('ws://'):
+            port = 80
+        else:
+            port = 443
+    factory = WebSocketClientFactory(args.URL)
+    factory.protocol = SocketClientProtocol
+
+    loop = asyncio.get_event_loop()
+    cli = loop.create_connection(factory, host, port)
+    loop.run_until_complete(cli)
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if read_task is not None:
+            read_task.cancel()
+            loop.run_until_complete(read_task)
+        loop.stop()
+        loop.close()
+
+if __name__ == '__main__':
+    main()
