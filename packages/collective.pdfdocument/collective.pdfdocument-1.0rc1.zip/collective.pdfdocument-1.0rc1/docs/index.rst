@@ -1,0 +1,5 @@
+====================
+collective.pdfdocument
+====================
+
+User documentation
