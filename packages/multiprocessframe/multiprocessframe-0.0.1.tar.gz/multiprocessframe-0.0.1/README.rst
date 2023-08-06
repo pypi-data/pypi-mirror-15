@@ -1,0 +1,1 @@
+A multiprocess frame to deal with a series tasks easily
