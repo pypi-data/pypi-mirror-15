@@ -1,0 +1,22 @@
+A drop-in replacement for itertools including the recipes from the itertools
+document page(including tests) and some extras.
+
+The extras.py file adds a couple of useful function along with an alternate
+pairwise function to avoid over-loading with tee, an alternate partition
+function to return lists instead of generators as tee would have also generated
+the overhead and the predicate would have run twice for each element, and an
+alternate powerset function providing a reverse argument.
+
+* multi-map converts an itertable into a multi-map(dict of lists)
+* split splits an iterable into segments similar to string.split
+* chunk chunks data into segments of a limited size - similar to grouper
+* divide evenly divides elements into a fixed number of chunks
+* divide_sizes determine the sizes of chunks if a number of elements were evenly divided
+
+All of itertools and the functions in extra.py are pulled in on __init__.
+
+The recipes are included in the recipes.py file and are pulled in on __init__
+with the exception of the alternates provided by extra.py.
+
+
+
