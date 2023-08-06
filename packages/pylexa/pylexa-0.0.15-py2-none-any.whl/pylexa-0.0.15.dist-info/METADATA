@@ -1,0 +1,169 @@
+Metadata-Version: 2.0
+Name: pylexa
+Version: 0.0.15
+Summary: A library to ease creation of an Alexa Skills Kit
+Home-page: http://www.github.com/patricksmith/pylexa
+Author: Patrick Smith
+Author-email: pjs482@gmail.com
+License: UNKNOWN
+Keywords: amazon alexa ask
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Topic :: Utilities
+Requires-Dist: flask
+Requires-Dist: pycrypto
+Requires-Dist: pyopenssl
+Requires-Dist: python-dateutil
+Requires-Dist: pyyaml
+
+``pylexa``
+==========
+
+*NOTE: This library is NOT ready for production use yet!*
+
+``pylexa`` is a library that aims to ease development of an `Alexa
+Skills
+Kits <https://developer.amazon.com/public/solutions/alexa/alexa-skills-kit>`__.
+
+``pylexa`` allows one to define a simple Flask application that will be
+able to accept requests and return appropriate responses to the Alexa
+service.
+
+Example
+-------
+
+Let's say you want to define an Alexa Skill that echoes whatever the
+user says. So far, you've:
+
+-  created a skill in the `Amazon Developer
+   Console <https://developer.amazon.com/edw/home.html#/skills/list>`__
+-  Added a ``Echo`` intent with a single slot, ``message``:
+
+   .. code:: javascript
+
+       {
+         "intent": "Echo",
+         "slots": [
+           {
+             "name": "message",
+             "type": "AMAZON.LITERAL"
+           }
+         ]
+       }
+
+-  Added an utterance to allow users to interact with the skill:
+
+   ``Echo echo { something | message }``
+
+Now, you're ready to create a server that will accept the request and
+return a response echoing the input. Using ``pylexa``, we'd need only
+the following code to accomplish this:
+
+.. code:: python
+
+    from flask import Flask
+
+    from pylexa.app import alexa_blueprint
+    from pylexa.intent import handle_intent
+    from pylexa.response import AlexaResponseWrapper, PlainTextSpeech
+
+
+    app = Flask(__name__)
+    alexa_blueprint.app_id = 'my_app_id'
+    app.register_blueprint(alexa_blueprint)
+    app.response_class = AlexaResponseWrapper
+
+
+    @handle_intent('Echo')
+    def handle_echo_intent(request):
+        return PlainTextSpeech(request.slots.get('message', 'Nothing to echo'))
+
+And that's it! You can push the above code, configure the skill to point
+to the server running the ``flask`` app and use the service simulator to
+test your skill.
+
+Testing
+-------
+
+After installing requirements with ``pip install -r requirements.pip``,
+tests can be run with ``nosetests``.
+
+Alexa Configuration
+-------------------
+
+Configuration of an Alexa Skill is done in three parts in the developer
+console:
+
+-  the intent schema
+-  list of utterances
+-  custom slot definitions
+
+``pylexa`` comes with a command line tool that aims to simplify this
+configuration by allowing one to define a YAML file with the necessary
+information and generate the intent schema, utterances, and custom slots
+from that.
+
+For example, let's say you had the following YAML schema defined:
+
+.. code:: yaml
+
+    intents:
+        - TestIntent:
+            foo: AMAZON.NUMBER
+            bar: CUSTOM_SLOT
+        - OtherIntent
+        - AMAZON.YesIntent
+
+    utterances:
+        TestIntent:
+            - 'do something with {foo} and {bar}'
+            - '{foo} {bar}'
+        OtherIntent:
+            - 'do something else'
+
+    slots:
+        CUSTOM_SLOT:
+            - value 1
+            - value 2
+
+This defines a skill that handles three intents (``TestIntent``,
+``OtherIntent``, and ``AMAZON.YesIntent``), specifies utterances for
+``TestIntent`` and ``OtherIntent``, and contains a custom slot
+definition.
+
+If we have that YAML definition in ``conf/schema.yml``:
+
+.. code:: bash
+
+    $ tree conf
+    conf
+    └── schema.yml
+
+    0 directories, 1 file
+
+We can then run the command line tool ``generate-alexa-conf`` to create
+the requisite files:
+
+.. code:: bash
+
+    $ generate-alexa-conf conf/schema.yml
+
+We now have the intent schema, utterances, and slots defined in their
+own files:
+
+.. code:: bash
+
+    $ tree conf
+    conf
+    ├── intent_schema.json
+    ├── schema.yml
+    ├── slots
+    │   ├── CUSTOM_SLOT
+    └── utterances.txt
+
+    1 directory, 4 files
+
+The contents of each file can then be copied + pasted in to the
+appropriate sections of the Alexa Skill configuration.
+
+
