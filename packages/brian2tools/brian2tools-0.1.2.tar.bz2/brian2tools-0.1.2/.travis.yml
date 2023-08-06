@@ -1,0 +1,79 @@
+language: c  # We are not using the Python infrastructure
+sudo: false  # Make sure we are using the container-based infrastructure
+
+env:
+  global:
+    secure: "p6RNmu9rnj3a02AfJjGn1kWhzgFS1xz9VmdMcT+dnBufKCiBqbWxtdjK5+7JHkX7we74zLfZtfXEwt+aovIlzkosjG27nwjcSiE+QSvwzApsPN7+rcUx0GRxds4A1lcJo5IlvLfnABRoojg/i/lkSgNd8CcwKhAIg2Xgp9kSChqtZ4hv2uBYxiS9JMGVM9FjHXFmskU2b//n824NHvhklKsjCyggzgh2eebw6cNzdbqNTiOytZI+TWK+Hhd2yPtPcxhkjv7PCV3zROgSDHioZh+j0d39kU0kCWYMSIeYUc9JKVnjPw5ooXCBiMd2OyoA8hllXQaGeEydH8Upx2pgBhEg2lhn+HUESHi9wOxXG/Eae5axugpNisusEWGDMFjeJg3sv7yjbWauDUb+3o+nr3H5CT8xpbU2dgHL9AR3T2VfO+8Hi6QZDh7txEdcqHFddUldzJajtXBySxJon//ll7B5sc4xUQqehGaXgY8OUH3bs2vdxwr+qM5URTyP/eaQYrIWIPOrJun+VTkFZvALMQDrDuGQkZIVYejDMZssDoCJ0XIf16veIDIbuXlEZkpWWzzn90zu65Z3C5n2T/Jl7OSHztCs40HH6KajcAFzBNCR1eJwY02pLEtQn4v82v85At4Q0zcbzkNwjGs7aAGVu7dlG/kRYhDASLLqA0swJGc="
+
+matrix:
+  include:
+      # test that the documentation can be built from the tarball -- we
+      # automatically build it from github master all the time, but downstream
+      # packaging will use the tarball as the basis
+    - python: "2.7"
+      env: PYTHON="2.7" DOCS_ONLY=yes ARCHITECTURE="x86_64"
+      os: linux
+    # Tests with different Python versions
+    - python: "2.7"
+      env: PYTHON="2.7" CONDA_PY="27"
+      os: linux
+    - python: "3.4"
+      env: PYTHON="3.4" CONDA_PY="34"
+      os: linux
+    - python: "3.5"
+      env: PYTHON="3.5" CONDA_PY="35"
+      os: linux
+
+# Use miniconda to install binary versions of numpy etc. from continuum
+# analytic's repository. Follows an approach described by Dan Blanchard:
+# https://gist.github.com/dan-blanchard/7045057
+before_install:
+- if [ ${PYTHON:0:1} == "2" ]; then
+    if [ "$TRAVIS_OS_NAME" == "linux" ]; then
+    wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh;
+    else
+    wget http://repo.continuum.io/miniconda/Miniconda-latest-MacOSX-x86_64.sh -O miniconda.sh;
+    fi;
+    else
+    if [ "$TRAVIS_OS_NAME" == "linux" ]; then
+    wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    else
+    wget http://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh;
+    fi;
+  fi
+- chmod +x miniconda.sh
+- ./miniconda.sh -b -p ~/miniconda
+- export PATH=~/miniconda/bin:$PATH
+- if [[ $DOCS_ONLY == 'yes' ]]; then
+    conda install --quiet --yes sphinx setuptools_scm;
+    pip install -q sphinxcontrib-issuetracker;
+    if [ ${PYTHON:0:1} == "2" ]; then
+      conda install --quiet --yes mock;
+    fi;
+    python setup.py sdist;
+  fi
+
+# command to install dependencies
+install:
+  - conda update --yes conda
+  - conda install --yes --quiet anaconda-client conda-build
+
+# Build documentation or build conda package and run tests
+script:
+- if [[ $DOCS_ONLY == 'yes' ]]; then
+    cd dist;
+    tar xvzf *.tar.gz;
+    cd brian2tools*;
+    mkdir docs;
+    sphinx-build docs_sphinx docs;
+  else
+    export SRCDIR=$(pwd);
+    conda build --quiet -c brian-team -c brian-team/channel/dev dev/conda-recipe;
+  fi
+
+after_success:
+- cd $SRCDIR;
+  python dev/continuous-integration/conda-server-push.py;
+
+notifications:
+  email: false
