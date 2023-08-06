@@ -1,0 +1,95 @@
+Opinionated Python interface for the Kubernetes API
+===================================================
+
+This package provides a Pythonic interface to use the Kubernetes_ API
+from within Python code.  It is hand-crafted and opinionated in an
+attempt to hide the edge cases and cumbersome parts of the raw API
+which would be exposed by a client using the swagger_ definitions.
+
+.. _Kubernetes: http://kubernetes.io
+.. _swagger: http://kubernetes.io/thind_party/swagger-ui/
+
+This package is far from finished, the current major features are:
+
+- Major resources wrapped:
+  - Nodes
+  - Namespaces
+  - Pods
+  - ReplicaSets/ReplicationControllers
+  - Services
+  - Secrets
+- Good labelling support
+- Both blocking and non-blocking support for the WATCH API.
+- Low-level API to use Kubernetes API more directly.
+- Write tests without needing a real cluster
+
+
+Installation
+============
+
+::
+
+   pip install kube
+
+
+Usage
+=====
+
+To use the API one has to authenticate to the Kubernetes apiserver.
+Currently only the recommended approach_ of using kubectl in proxy
+mode is supported.  Simply run ``kubectl proxy`` on the localhost and
+the connection will work.  When running in a cluster itself this can
+be easily achieved by running the kubectl proxy in an other container_
+in the same pod.
+
+.. _approach: http://kubernetes.io/docs/user-guide/accessing-the-cluster/#directly-accessing-the-rest-api
+.. _container: http://kubernetes.io/docs/user-guide/accessing-the-cluster/#accessing-the-api-from-a-pod
+
+The central object to work with the Kubernetes cluster is the
+``Cluster`` object::
+
+   import kube
+
+   cluster = kube.Cluster()
+   rs = cluster.replicasets.fetch('proxy', namespace='default')
+   pods = cluster.pods.filter(labels=rs.meta.labels,
+                              filter={'metadata.namespace': 'default'})
+   for pod in pods:
+      assert pod.phase is pod.PodPhase.Running
+
+
+For more details on the API and concepts used please refer to the
+documentation included.
+
+
+Contributing
+============
+
+The project is still in it's early stages, feel free to submit
+suggestions, issues or pull requests to the project.
+https://bitbucket.org/cobeio/kube  All feedback is welcome.
+
+
+Deveopment Dependencies
+-----------------------
+
+When developing kube you will need some extra dependencies:
+
+- pytest
+- pytest-cov
+- pylint
+- invoke
+
+
+Testing Kube
+------------
+
+The tests can both be run with a stubbed-out API server as against a
+real Kubernetes cluster.  The former runs very fast and will not mess
+around with a real cluster.  The later is a bit slower but can be used
+to verify that the code behaves correctly against a real Kubernetes
+cluster.  By default the tests will use the stubbed-out apiserver, to
+run the tests against a real cluster ensure you have ``kubectl proxy``
+running and invoke the tests with ``py.test --verify``.  The tests
+will try to not break your cluster or leave any artefacts around after
+the test run, but use at your own risk obviously.
