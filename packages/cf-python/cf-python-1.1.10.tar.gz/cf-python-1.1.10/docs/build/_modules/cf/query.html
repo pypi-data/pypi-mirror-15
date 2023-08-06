@@ -1,0 +1,2355 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cf.query &mdash; Documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/copybutton.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cf.query</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">deepcopy</span>
+<span class="kn">from</span> <span class="nn">re</span>   <span class="kn">import</span> <span class="n">match</span> <span class="k">as</span> <span class="n">re_match</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">izip</span>
+<span class="kn">from</span> <span class="nn">operator</span> <span class="kn">import</span> <span class="n">__and__</span> <span class="k">as</span> <span class="n">operator_and</span>
+<span class="kn">from</span> <span class="nn">operator</span> <span class="kn">import</span> <span class="n">__or__</span>  <span class="k">as</span> <span class="n">operator_or</span>
+
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ndarray</span>   <span class="k">as</span> <span class="n">numpy_ndarray</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">vectorize</span> <span class="k">as</span> <span class="n">numpy_vectorize</span>
+
+<span class="kn">from</span> <span class="nn">.cfdatetime</span> <span class="kn">import</span> <span class="n">Datetime</span><span class="p">,</span> <span class="n">dt</span>
+<span class="kn">from</span> <span class="nn">.functions</span>  <span class="kn">import</span> <span class="n">inspect</span>    <span class="k">as</span> <span class="n">cf_inspect</span>
+<span class="kn">from</span> <span class="nn">.functions</span>  <span class="kn">import</span> <span class="n">equals</span>     <span class="k">as</span> <span class="n">cf_equals</span>
+<span class="kn">from</span> <span class="nn">.functions</span>  <span class="kn">import</span> <span class="n">equivalent</span> <span class="k">as</span> <span class="n">cf_equivalent</span>
+
+<span class="kn">from</span> <span class="nn">.data.data</span> <span class="kn">import</span> <span class="n">Data</span>
+
+<span class="c1"># ====================================================================</span>
+<span class="c1">#</span>
+<span class="c1"># Query object</span>
+<span class="c1">#</span>
+<span class="c1"># ====================================================================</span>
+
+<div class="viewcode-block" id="Query"><a class="viewcode-back" href="../../classes/cf.Query.html#cf.Query">[docs]</a><span class="k">class</span> <span class="nc">Query</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Store a query operation.</span>
+
+<span class="sd">The query operation is an operator with a right hand side operand. For</span>
+<span class="sd">example, an operator could be &quot;strictly less than&quot; and a right hand</span>
+<span class="sd">side operand could 3.</span>
+
+<span class="sd">Such a query (such as &quot;is strictly less than 3?&quot;) may be evaluated for</span>
+<span class="sd">an arbitrary left hand side operand, *x* (such as &quot;is *x* strictly</span>
+<span class="sd">less than 3?&quot;).</span>
+
+<span class="sd">The result of the query is dependent on the object type of left hand</span>
+<span class="sd">side operand, *x*. For example, if *x* is an integer then evaluating</span>
+<span class="sd">&quot;is *x* strictly less than 3?&quot; will result in a boolean; but if *x* is</span>
+<span class="sd">a `numpy` array then &quot;is *x* strictly less than 3?&quot; will likely</span>
+<span class="sd">produce a numpy array of booleans.</span>
+
+<span class="sd">The query is evaluated with its `evaluate` method or equivalently with</span>
+<span class="sd">the ``==`` operator:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;lt&#39;, 3)</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(2)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; 2 == q</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q == 2</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; 4 == q</span>
+<span class="sd">False</span>
+
+<span class="sd">The inverse of the query may be evaluated with the ``!=`` operator:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;wi&#39;, [3, 5])</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(4)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; 4 == q</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; 4 != q</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; q != 6</span>
+<span class="sd">True</span>
+
+<span class="sd">The following operators are supported:</span>
+
+<span class="sd">=============  =========================================================  ============</span>
+<span class="sd">operator       Description                                                Constructor</span>
+<span class="sd">=============  =========================================================  ============</span>
+<span class="sd">``&#39;lt&#39;``       Is *x* strictly less than a value?                         `cf.lt`</span>
+<span class="sd">               </span>
+<span class="sd">``&#39;le&#39;``       Is *x* less than or equal to a value?                      `cf.le`</span>
+<span class="sd">               </span>
+<span class="sd">``&#39;gt&#39;``       Is *x* strictly greater than a value?                      `cf.gt`</span>
+<span class="sd">               </span>
+<span class="sd">``&#39;ge&#39;``       Is *x* greater than or equal to a value?                   `cf.ge`</span>
+<span class="sd">               </span>
+<span class="sd">``&#39;eq&#39;``       Is *x* equal to a value?                                   `cf.eq`</span>
+<span class="sd">               </span>
+<span class="sd">``&#39;ne&#39;``       Is *x* not equal to a value?                               `cf.ne`</span>
+<span class="sd">               </span>
+<span class="sd">``&#39;wi&#39;``       Is *x* within a given range of values (range bounds        `cf.wi`</span>
+<span class="sd">               included)?</span>
+<span class="sd">               </span>
+<span class="sd">``&#39;wo&#39;``       Is *x* without a given range of values (range bounds       `cf.wo`</span>
+<span class="sd">               excluded)?       </span>
+<span class="sd">               </span>
+<span class="sd">``&#39;set&#39;``      Is *x* equal to any member of a collection?                `cf.set`</span>
+
+<span class="sd">``&#39;contain&#39;``  If cells are defined, is value contained in a cell of      `cf.contain`</span>
+<span class="sd">               *x*? otherwise is *x* equal to a value?</span>
+<span class="sd">=============  =========================================================  ============</span>
+
+<span class="sd">For the ``&#39;wi&#39;``, ``&#39;wo &#39;`` and ``&#39;set&#39;`` operators, if the left hand</span>
+<span class="sd">side operand supports broadcasting over its elements (such as a</span>
+<span class="sd">`numpy` array or a `cf.Field` object) then each element is tested</span>
+<span class="sd">independently. For example:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;wi&#39;, [3, 4])</span>
+<span class="sd">&gt;&gt;&gt; q == [2, 3, 4]</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; print q == numpy.array([2, 3, 4])</span>
+<span class="sd">[ False  True  True]</span>
+
+<span class="sd">As a convenience, for each operator there is an identically named</span>
+<span class="sd">constructor function which returns the appropriate `cf.Query`</span>
+<span class="sd">object. For example:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.lt(3)</span>
+<span class="sd">&lt;CF Query: lt 3&gt;</span>
+
+
+<span class="sd">**Compound queries**</span>
+
+<span class="sd">Multiple queries may be logically combined with the bitwise ``&amp;`` and</span>
+<span class="sd">``|`` operators to form a new `cf.Query` object. For example:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.ge(3)</span>
+<span class="sd">&gt;&gt;&gt; r = cf.lt(5)</span>
+<span class="sd">&gt;&gt;&gt; s = q &amp; r</span>
+<span class="sd">&gt;&gt;&gt; s </span>
+<span class="sd">&gt;&gt;&gt; &lt;CF Query: [(ge 3) &amp; (lt 5)]&gt;</span>
+<span class="sd">&gt;&gt;&gt; 4 == s</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; t = q | r</span>
+<span class="sd">&gt;&gt;&gt; t</span>
+<span class="sd">&lt;CF Query: [(ge 3) | (lt 5)]&gt;</span>
+<span class="sd">&gt;&gt;&gt; 2 == t</span>
+<span class="sd">True</span>
+
+<span class="sd">Compound queries may be combined further:</span>
+
+<span class="sd">&gt;&gt;&gt; u = s | cf.wi(1.5, 2.5)</span>
+<span class="sd">&gt;&gt;&gt; u</span>
+<span class="sd">&lt;CF Query: [[(ge 3) &amp; (lt 5)] | (wi (1.5, 2.5))]&gt;</span>
+<span class="sd">&gt;&gt;&gt; 2 == u</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; u &amp; t</span>
+<span class="sd">&lt;CF Query: [[[(ge 3) &amp; (lt 5)] | (wi (1.5, 2.5))] &amp; [(ge 3) | (lt 5)]]&gt;</span>
+
+<span class="sd">If any of the component queries are for left hand side operand</span>
+<span class="sd">attributes, then these are retained in a compound query. For example:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.ge(3)</span>
+<span class="sd">&gt;&gt;&gt; r = cf.lt(5, attr=&#39;bar&#39;)</span>
+<span class="sd">&gt;&gt;&gt; s = q &amp; r</span>
+<span class="sd">&gt;&gt;&gt; s = e.addattr(&#39;foo&#39;)</span>
+<span class="sd">&gt;&gt;&gt; s</span>
+<span class="sd">&lt;CF Query: foo[(ge 3) &amp; bar(lt 5)]&gt;</span>
+
+<span class="sd">In this example,</span>
+
+<span class="sd">&gt;&gt;&gt; x == s</span>
+
+<span class="sd">is equivalent to </span>
+
+<span class="sd">&gt;&gt;&gt; (x.foo == cf.ge(3)) &amp; (x.foo.bar == cf.lt(5))</span>
+
+
+<span class="sd">**Attributes**</span>
+
+<span class="sd">===============  ======================================================</span>
+<span class="sd">Attribute        Description</span>
+<span class="sd">===============  ======================================================</span>
+<span class="sd">`!attr`          An attribute name such that this attribute of the</span>
+<span class="sd">                 left hand side operand is compared, rather than the</span>
+<span class="sd">                 operand itself. If there is more than one attribute</span>
+<span class="sd">                 name then each is interpreted as an attribute of the</span>
+<span class="sd">                 previous attribute.</span>
+
+<span class="sd">`!operator`      The query operation (such as ``&#39;lt&#39;``, for</span>
+<span class="sd">                 example). Always `None` for compound queries.</span>
+
+<span class="sd">`exact`          If False then string values are treated as a regular</span>
+<span class="sd">                 expressions as understood by the :py:obj:`re` module</span>
+<span class="sd">                 and are evaluated using the :py:obj:`re.match`</span>
+<span class="sd">                 method. Ignored for all operators except ``&#39;eq&#39;``,</span>
+<span class="sd">                 ``&#39;ne&#39;`` and ``&#39;set&#39;``.</span>
+<span class="sd">===============  ======================================================</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+
+<div class="viewcode-block" id="Query.__init__"><a class="viewcode-back" href="../../classes/cf.Query.html#cf.Query.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operator</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;**Initialization**</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    operator : str</span>
+<span class="sd">        The query operator.</span>
+
+<span class="sd">    value :</span>
+<span class="sd">        The right hand side of the query operation.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of *value*. By default, the same units, if any, as</span>
+<span class="sd">        the left hand side of the query operation are assumed.</span>
+
+<span class="sd">    exact : bool, optional</span>
+<span class="sd">        If False then string values are treated as a regular</span>
+<span class="sd">        expressions as understood by the :py:obj:`re` module and are</span>
+<span class="sd">        evaluated using the :py:obj:`re.match` method. Ignored for</span>
+<span class="sd">        all operators except ``&#39;eq&#39;``, ``&#39;ne&#39;`` and ``&#39;set&#39;``.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Specify an attribute name such that this attribute of the left</span>
+<span class="sd">        hand side operand is compared, rather than the operand itself.</span>
+
+<span class="sd">          *Example:*</span>
+<span class="sd">            ``cf.Query(&#39;ge&#39;, 2, attr=&#39;ndim&#39;)`` with return True when</span>
+<span class="sd">            evaluated for an array with two or more dimensions.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;le&#39;, 5.6)</span>
+<span class="sd">&lt;CF Query: (le 5.6)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;gt&#39;, 5.6, &#39;metres&#39;)</span>
+<span class="sd">&lt;CF Query: (gt &lt;CF Data: 5.6 metres&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;gt&#39;, cf.Data(5.6, &#39;metres&#39;))</span>
+<span class="sd">&lt;CF Query: (gt &lt;CF Data: 5.6 metres&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;wi&#39;, [2, 56])</span>
+<span class="sd">&lt;CF Query: (wi [2, 56])&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;set&#39;, [2, 56], &#39;seconds&#39;)</span>
+<span class="sd">&lt;CF Query: (set &lt;CF Data: [2, 56] seconds&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;set&#39;, cf.Data([2, 56], &#39;seconds&#39;))</span>
+<span class="sd">&lt;CF Query: (set &lt;CF Data: [2, 56] seconds&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;eq&#39;, &#39;air_temperature&#39;)</span>
+<span class="sd">&lt;CF Query: (eq &#39;air_temperature&#39;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;eq&#39;, &#39;temperature&#39;, exact=False)</span>
+<span class="sd">&lt;CF Query: (eq &#39;temperature&#39;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.Query(&#39;gt&#39;, 1, attr=&#39;ndim&#39;)</span>
+<span class="sd">&lt;CF Query: ndim(gt 1)&gt;</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">units</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">value_units</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s1">&#39;Units&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">value_units</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">Data</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">value_units</span><span class="o">.</span><span class="n">equivalent</span><span class="p">(</span><span class="n">units</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;sdfsdfsd99885109^^^^&quot;</span><span class="p">)</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_operator</span> <span class="o">=</span> <span class="n">operator</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_value</span>    <span class="o">=</span> <span class="n">value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_exact</span>    <span class="o">=</span> <span class="n">exact</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr</span>     <span class="o">=</span> <span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">attr</span> <span class="k">else</span> <span class="p">(</span><span class="n">attr</span><span class="p">,)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bitwise_operator</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_NotImplemented_RHS_Data_op</span> <span class="o">=</span> <span class="bp">True</span></div>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__deepcopy__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">memo</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Used if copy.deepcopy is called on the variable.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__eq__(y) &lt;==&gt; x==y &lt;==&gt; x.evaluate(y)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_evaluate</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">())</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__ne__(y) &lt;==&gt; x!=y &lt;==&gt; (x==y)==False</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_evaluate</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">())</span> <span class="o">==</span> <span class="bp">False</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ge__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Unsupported operand type(s) for &gt;=: &#39;</span><span class="si">%s</span><span class="s2">&#39; and &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span>
+                        <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__gt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Unsupported operand type(s) for &gt;: &#39;</span><span class="si">%s</span><span class="s2">&#39; and &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span>
+                        <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__le__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Unsupported operand type(s) for &lt;=: &#39;</span><span class="si">%s</span><span class="s2">&#39; and &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span>
+                        <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Unsupported operand type(s) for &lt;: &#39;</span><span class="si">%s</span><span class="s2">&#39; and &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span>
+                        <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__and__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__and__(y) &lt;==&gt; x&amp;y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>        
+
+        <span class="n">Q</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">Q</span><span class="p">)</span>
+        
+        <span class="n">new</span><span class="o">.</span><span class="n">_operator</span>         <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_exact</span>            <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_compound</span>         <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_bitwise_operator</span> <span class="o">=</span> <span class="n">operator_and</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_attr</span>             <span class="o">=</span> <span class="p">()</span>
+
+        <span class="n">new</span><span class="o">.</span><span class="n">_NotImplemented_RHS_Data_op</span> <span class="o">=</span> <span class="bp">True</span>
+       
+        <span class="k">return</span> <span class="n">new</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__iand__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__iand__(y) &lt;==&gt; x&amp;=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>        
+        <span class="k">return</span> <span class="bp">self</span> <span class="o">&amp;</span> <span class="n">other</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__or__(y) &lt;==&gt; x|y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>                
+        <span class="n">Q</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">Q</span><span class="p">)</span>
+        
+        <span class="n">new</span><span class="o">.</span><span class="n">_operator</span>         <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_exact</span>            <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_compound</span>         <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_bitwise_operator</span> <span class="o">=</span> <span class="n">operator_or</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_attr</span>             <span class="o">=</span> <span class="p">()</span>
+
+        <span class="n">new</span><span class="o">.</span><span class="n">_NotImplemented_RHS_Data_op</span> <span class="o">=</span> <span class="bp">True</span>
+
+        <span class="k">return</span> <span class="n">new</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ior__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__ior__(y) &lt;==&gt; x|=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>    
+        <span class="k">return</span> <span class="bp">self</span> <span class="o">|</span> <span class="n">other</span>            
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__repr__() &lt;==&gt; repr(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="s1">&#39;&lt;CF </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&gt;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__str__() &lt;==&gt; str(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">attr</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_attr</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exact</span><span class="p">:</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">(</span><span class="si">%s</span><span class="s1"> match(</span><span class="si">%r</span><span class="s1">))&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">attr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_operator</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_value</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">(</span><span class="si">%s</span><span class="s1"> </span><span class="si">%r</span><span class="s1">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">attr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_operator</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_value</span><span class="p">)</span> 
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">bitwise_operator</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_bitwise_operator</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">&#39;__and__&#39;</span> <span class="ow">in</span> <span class="n">bitwise_operator</span><span class="p">:</span>
+                <span class="n">bitwise_operator</span> <span class="o">=</span> <span class="s1">&#39;&amp;&#39;</span>
+            <span class="k">elif</span> <span class="s1">&#39;__or__&#39;</span> <span class="ow">in</span> <span class="n">bitwise_operator</span><span class="p">:</span>
+                <span class="n">bitwise_operator</span> <span class="o">=</span> <span class="s1">&#39;|&#39;</span>
+
+            <span class="n">out</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">[</span><span class="si">%s</span><span class="s1"> </span><span class="si">%s</span><span class="s1"> </span><span class="si">%s</span><span class="s1">]&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">attr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">bitwise_operator</span><span class="p">,</span>
+                                    <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">return</span> <span class="n">out</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">attr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;ge&#39;, 4)</span>
+<span class="sd">&gt;&gt;&gt; print q.attr</span>
+<span class="sd">None</span>
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;le&#39;, 6, attr=&#39;year&#39;)</span>
+<span class="sd">&gt;&gt;&gt; q.attr</span>
+<span class="sd">&#39;year&#39;</span>
+<span class="sd">&gt;&gt;&gt; q.addattr(&#39;foo&#39;)</span>
+<span class="sd">&gt;&gt;&gt; q.attr</span>
+<span class="sd">&#39;year&#39;asdasdas</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attr</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;ge&#39;, 4)</span>
+<span class="sd">&gt;&gt;&gt; q.operator</span>
+<span class="sd">&#39;ge&#39;</span>
+<span class="sd">&gt;&gt;&gt; q |= cf.Query(&#39;le&#39;, 6)</span>
+<span class="sd">&gt;&gt;&gt; print q.operator</span>
+<span class="sd">None</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_operator</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">exact</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;eq&#39;, &#39;foo&#39;)</span>
+<span class="sd">&gt;&gt;&gt; q.exact</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;eq&#39;, &#39;.*foo&#39;, exact=False)</span>
+<span class="sd">&gt;&gt;&gt; q.exact</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; q |= cf.Query(&#39;eq&#39;, &#39;bar&#39;)</span>
+<span class="sd">&gt;&gt;&gt; print q.exact</span>
+<span class="sd">False</span>
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exact</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">value</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;ge&#39;, 4)</span>
+<span class="sd">&gt;&gt;&gt; q.value</span>
+<span class="sd">4</span>
+<span class="sd">&gt;&gt;&gt; q |= cf.Query(&#39;le&#39;, 6)</span>
+<span class="sd">&gt;&gt;&gt; q.value</span>
+<span class="sd">AttributeError: Compound query doesn&#39;t have attribute &#39;value&#39;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_value</span>
+
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Compound query doesn&#39;t have attribute &#39;value&#39;&quot;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Query.addattr"><a class="viewcode-back" href="../../generated/cf.Query.addattr.html#cf.Query.addattr">[docs]</a>    <span class="k">def</span> <span class="nf">addattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object with a new left hand side operand</span>
+<span class="sd">attribute to be used during evaluation.</span>
+
+<span class="sd">If another attribute has previously been specified, then the new</span>
+<span class="sd">attribute is considered to be an attribute of the existing attribute.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    attr : str</span>
+<span class="sd">        The attribute name.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The new query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.eq(2001)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: (eq 2001)&gt;</span>
+<span class="sd">&gt;&gt;&gt; q = q.addattr(&#39;year&#39;)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: year(eq 2001)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.lt(2)</span>
+<span class="sd">&gt;&gt;&gt; q = q.addattr(&#39;A&#39;)</span>
+<span class="sd">&gt;&gt;&gt; q = q.addattr(&#39;B&#39;)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: A.B(lt 2)&gt;</span>
+<span class="sd">&gt;&gt;&gt; q = q.addattr(&#39;C&#39;)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: A.B.C(lt 2)&gt;</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">Q</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">Q</span><span class="p">)</span>
+
+        <span class="n">new</span><span class="o">.</span><span class="n">__dict__</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_attr</span> <span class="o">+=</span> <span class="p">(</span><span class="n">attr</span><span class="p">,)</span>
+
+        <span class="n">new</span><span class="o">.</span><span class="n">_NotImplemented_RHS_Data_op</span> <span class="o">=</span> <span class="bp">True</span>
+
+        <span class="k">return</span> <span class="n">new</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Query.copy"><a class="viewcode-back" href="../../generated/cf.Query.copy.html#cf.Query.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a deep copy.</span>
+
+<span class="sd">``q.copy()`` is equivalent to ``copy.deepcopy(q)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out :</span>
+<span class="sd">        The deep copy.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; r = q.copy()</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Query.dump"><a class="viewcode-back" href="../../generated/cf.Query.dump.html#cf.Query.dump">[docs]</a>    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">display</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        </span>
+<span class="sd">Return a string containing a full description of the instance.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    display : bool, optional</span>
+<span class="sd">        If False then return the description as a string. By default</span>
+<span class="sd">        the description is printed, i.e. ``q.dump()`` is equivalent to</span>
+<span class="sd">        ``print q.dump(display=False)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : None or str</span>
+<span class="sd">        A string containing the description.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>      
+        <span class="n">string</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+       
+        <span class="k">if</span> <span class="n">display</span><span class="p">:</span>
+            <span class="k">print</span> <span class="n">string</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">string</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Query.equals"><a class="viewcode-back" href="../../classes/cf.Query.html#cf.Query.equals">[docs]</a>    <span class="k">def</span> <span class="nf">equals</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">other</span><span class="o">.</span><span class="n">_compound</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">False</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bitwise_operator</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">_bitwise_operator</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">False</span>
+                
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                    <span class="k">return</span> <span class="bp">False</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                    <span class="k">return</span> <span class="bp">False</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_compound</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="k">return</span> <span class="bp">False</span>        
+   
+        <span class="k">elif</span> <span class="n">other</span><span class="o">.</span><span class="n">_compound</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+                
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;_NotImplemented_RHS_Data_op&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;_attr&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;_value&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;_operator&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;_exact&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cf_equals</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+                             <span class="nb">getattr</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+                             <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Query.equivalent"><a class="viewcode-back" href="../../classes/cf.Query.html#cf.Query.equivalent">[docs]</a>    <span class="k">def</span> <span class="nf">equivalent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">attr</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cf_equivalent</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">attr</span><span class="p">),</span>
+                                 <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Query.evaluate"><a class="viewcode-back" href="../../generated/cf.Query.evaluate.html#cf.Query.evaluate">[docs]</a>    <span class="k">def</span> <span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Evaluate the query operation for a given left hand side operand.</span>
+
+<span class="sd">Note that for the query object ``q`` and any object, ``x``, ``x==q``</span>
+<span class="sd">is equivalent to ``q.evaluate(x)`` and ``x!=q`` is equivalent to</span>
+<span class="sd">``q.evaluate(x)==False``.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    x : </span>
+<span class="sd">        The object for the left hand side operand of the query.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : </span>
+<span class="sd">        The result of the query. The nature of the result is dependent</span>
+<span class="sd">        on the object type of *x*.</span>
+<span class="sd">    </span>
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;lt&#39;, 5.5)</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(6)</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.Query(&#39;wi&#39;, (1,2))</span>
+<span class="sd">&gt;&gt;&gt; array = numpy.arange(4)</span>
+<span class="sd">&gt;&gt;&gt; array</span>
+<span class="sd">array([0, 1, 2, 3])</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(array)</span>
+<span class="sd">array([False,  True,  True, False], dtype=bool)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_evaluate</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">())</span></div>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">_evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">parent_attr</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Evaluate the query operation for a given object.</span>
+
+<span class="sd">.. seealso:: `evaluate`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    x : object</span>
+<span class="sd">        See `evaluate`.</span>
+
+<span class="sd">    parent_attr : tuple</span>
+<span class="sd">       </span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : </span>
+<span class="sd">        See `evaluate`.</span>
+<span class="sd">    </span>
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>        
+        <span class="n">compound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span>
+        <span class="n">attr</span>     <span class="o">=</span> <span class="n">parent_attr</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attr</span>
+
+        <span class="k">if</span> <span class="n">compound</span><span class="p">:</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="n">compound</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">_evaluate</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="n">compound</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_evaluate</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bitwise_operator</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="c1"># Still here?</span>
+
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="c1">#</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">attr</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+            
+        <span class="n">operator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_operator</span>
+        <span class="n">value</span>    <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_value</span>
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;eq&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exact</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t re.match on non-string&quot;</span><span class="p">)</span>
+
+                <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">re_match</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">x</span> <span class="o">==</span> <span class="n">value</span>
+        <span class="c1">#--- End: if           </span>
+        
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;ne&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exact</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t re.match on non-string&quot;</span><span class="p">)</span>
+
+                <span class="k">return</span> <span class="ow">not</span> <span class="n">re_match</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">x</span> <span class="o">!=</span> <span class="n">value</span>
+        <span class="c1">#--- End: if</span>
+        
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;lt&#39;</span><span class="p">:</span>  
+            <span class="n">_lt</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;_query_lt&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_lt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_lt</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+            <span class="k">return</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">value</span>
+        <span class="c1">#--- End: if</span>
+        
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;le&#39;</span><span class="p">:</span>
+            <span class="n">_le</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;_query_le&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_le</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_le</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+            <span class="k">return</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="n">value</span>
+        <span class="c1">#--- End: if</span>
+        
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;gt&#39;</span><span class="p">:</span>            
+            <span class="n">_gt</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;_query_gt&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_gt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_gt</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+            <span class="k">return</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="n">value</span>
+        <span class="c1">#--- End: if</span>
+        
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;ge&#39;</span><span class="p">:</span>            
+            <span class="n">_ge</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;_query_ge&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_ge</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_ge</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+            <span class="k">return</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="n">value</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;wi&#39;</span><span class="p">:</span>
+            <span class="n">_wi</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;_query_wi&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_wi</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_wi</span><span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">value</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            
+            <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">&lt;=</span> <span class="n">value</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;wo&#39;</span><span class="p">:</span>
+            <span class="n">_wo</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;_query_wo&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_wo</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_wo</span><span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">value</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            
+            <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">|</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="n">value</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;contain&#39;</span><span class="p">:</span>
+            <span class="n">_contain</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;_query_contain&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_contain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_contain</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">x</span> <span class="o">==</span> <span class="n">value</span>
+        <span class="c1">#--- End: if           </span>
+
+        <span class="k">if</span> <span class="n">operator</span> <span class="o">==</span> <span class="s1">&#39;set&#39;</span><span class="p">:</span>
+            <span class="n">_set</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;_query_set&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_set</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_set</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exact</span><span class="p">)</span>
+
+            <span class="n">i</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">i</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exact</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t, as yet, regex on non string&quot;</span><span class="p">)</span>
+                
+                <span class="k">if</span> <span class="n">re_match</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="bp">True</span>
+                
+                <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">re_match</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+                        <span class="k">return</span> <span class="bp">True</span>
+                    
+                <span class="k">return</span> <span class="bp">False</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">==</span> <span class="n">v</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
+                    <span class="n">out</span> <span class="o">|=</span> <span class="p">(</span><span class="n">x</span> <span class="o">==</span> <span class="n">v</span><span class="p">)</span>
+
+                <span class="k">return</span> <span class="n">out</span>
+        <span class="c1">#--- End: if    </span>
+    <span class="c1">#--- End: def  </span>
+
+<div class="viewcode-block" id="Query.inspect"><a class="viewcode-back" href="../../classes/cf.Query.html#cf.Query.inspect">[docs]</a>    <span class="k">def</span> <span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Inspect the object for debugging.</span>
+
+<span class="sd">.. seealso:: `cf.inspect`</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    None</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">print</span> <span class="n">cf_inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div></div>
+    <span class="c1">#--- End: def</span>
+
+<span class="c1">#--- End: class</span>
+
+
+<div class="viewcode-block" id="lt"><a class="viewcode-back" href="../../generated/cf.lt.html#cf.lt">[docs]</a><span class="k">def</span> <span class="nf">lt</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable for being strictly less</span>
+<span class="sd">than a value.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.eq`, `cf.ge`, `cf.gt`, `cf.ne`,</span>
+<span class="sd">             `cf.le`, `cf.set`, `cf.wi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value : object</span>
+<span class="sd">        The value which a variable is to be compared with.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of *value*. By default, the same units as the</span>
+<span class="sd">        variable being tested are assumed, if applicable.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.lt(5)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: x lt 5&gt;</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(4)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(5)</span>
+<span class="sd">False</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;lt&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+    
+<div class="viewcode-block" id="le"><a class="viewcode-back" href="../../generated/cf.le.html#cf.le">[docs]</a><span class="k">def</span> <span class="nf">le</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable for being less than or equal</span>
+<span class="sd">to a value.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.eq`, `cf.ge`, `cf.gt`, `cf.ne`,</span>
+<span class="sd">             `cf.lt`, `cf.set`, `cf.wi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value : object</span>
+<span class="sd">        The value which a variable is to be compared with.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of *value*. By default, the same units as the</span>
+<span class="sd">        variable being tested are assumed, if applicable.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.le(5)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: x le 5&gt;</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(5)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(6)</span>
+<span class="sd">False</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;le&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+    
+<div class="viewcode-block" id="gt"><a class="viewcode-back" href="../../generated/cf.gt.html#cf.gt">[docs]</a><span class="k">def</span> <span class="nf">gt</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable for being strictly greater</span>
+<span class="sd">than a value.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.eq`, `cf.ge`, `cf.ne`, `cf.le`,</span>
+<span class="sd">             `cf.lt`, `cf.set`, `cf.wi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value : object</span>
+<span class="sd">        The value which a variable is to be compared with.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of *value*. By default, the same units as the</span>
+<span class="sd">        variable being tested are assumed, if applicable.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.gt(5)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: x gt 5&gt;</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(6)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(5)</span>
+<span class="sd">False</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;gt&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+    
+<div class="viewcode-block" id="ge"><a class="viewcode-back" href="../../generated/cf.ge.html#cf.ge">[docs]</a><span class="k">def</span> <span class="nf">ge</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable for being greater than or</span>
+<span class="sd">equal to a value.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.eq`, `cf.gt`, `cf.ne`, `cf.le`,</span>
+<span class="sd">             `cf.lt`, `cf.set`, `cf.wi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value :</span>
+<span class="sd">        The value which a variable is to be compared with.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of *value*. By default, the same units as the</span>
+<span class="sd">        variable being tested are assumed, if applicable.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.ge(5)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: x ge 5&gt;</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(5)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(4)</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; cf.ge(10, &#39;m&#39;)</span>
+<span class="sd">&lt;CF Query: (ge &lt;CF Data: 10 m&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.ge(100, cf.Units(&#39;kg&#39;))</span>
+<span class="sd">&lt;CF Query: (ge &lt;CF Data: 100 kg&gt;)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.ge(2, attr=&#39;month&#39;)</span>
+<span class="sd">&lt;CF Query: month(ge 2)&gt;</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;ge&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="eq"><a class="viewcode-back" href="../../generated/cf.eq.html#cf.eq">[docs]</a><span class="k">def</span> <span class="nf">eq</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable for being equal to a value.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.ge`, `cf.gt`, `cf.ne`, `cf.le`,</span>
+<span class="sd">             `cf.lt`, `cf.set`, `cf.wi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value </span>
+<span class="sd">        The value which a variable is to be compared with.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of *value*. By default, the same units as the</span>
+<span class="sd">        variable being tested are assumed, if applicable.</span>
+
+<span class="sd">    exact : bool, optional</span>
+<span class="sd">        If False then string values are to be treated as regular</span>
+<span class="sd">        expressions understood by the :py:obj:`re` module and are</span>
+<span class="sd">        evaluated using the :py:obj:`re.match` method.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+<span class="sd"> </span>
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.eq(5)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: x eq 5&gt;</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(5)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q == 4</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.eq(&#39;air&#39;, exact=False)</span>
+<span class="sd">&gt;&gt;&gt; q == &#39;air_temperature&#39;</span>
+<span class="sd">True</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.eq(&#39;.*temp&#39;, exact=False)</span>
+<span class="sd">&gt;&gt;&gt; q == &#39;air_temperature&#39;</span>
+<span class="sd">True</span>
+<span class="sd">   &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="n">exact</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+    
+<div class="viewcode-block" id="ne"><a class="viewcode-back" href="../../generated/cf.ne.html#cf.ne">[docs]</a><span class="k">def</span> <span class="nf">ne</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable for being equal to a value.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.eq`, `cf.ge`, `cf.gt`, `cf.le`,</span>
+<span class="sd">             `cf.lt`, `cf.set`, `cf.wi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value : object</span>
+<span class="sd">        The value which a variable is to be compared with.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of *value*. By default, the same units as the</span>
+<span class="sd">        variable being tested are assumed, if applicable.</span>
+
+<span class="sd">    exact : bool, optional</span>
+<span class="sd">        If False then string values are to be treated as regular</span>
+<span class="sd">        expressions understood by the :py:obj:`re` module and are</span>
+<span class="sd">        evaluated using the :py:obj:`re.match` method.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.ne(5)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: x ne 5&gt;</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(4)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(5)</span>
+<span class="sd">False</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;ne&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="n">exact</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+    
+<div class="viewcode-block" id="wi"><a class="viewcode-back" href="../../generated/cf.wi.html#cf.wi">[docs]</a><span class="k">def</span> <span class="nf">wi</span><span class="p">(</span><span class="n">value0</span><span class="p">,</span> <span class="n">value1</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable being within a range.</span>
+
+<span class="sd">``x == cf.wi(a, b)`` is equivalent to ``x == cf.ge(a) &amp; cf.le(b)``.</span>
+
+<span class="sd">``x == cf.wi(a, b, attr=&#39;foo&#39;)`` is equivalent to ``x.foo == cf.wi(a,</span>
+<span class="sd">b)``.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.eq`, `cf.ge`, `cf.gt`, `cf.ne`,</span>
+<span class="sd">             `cf.le`, `cf.lt`, `cf.set`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value0 : scalar object</span>
+<span class="sd">         The lower bound of the range which a variable is to be</span>
+<span class="sd">         compared with.</span>
+
+<span class="sd">    value1 : scalar object</span>
+<span class="sd">         The upper bound of the range which a variable is to be</span>
+<span class="sd">         compared with.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        If applicable, the units of *value0* and *value1*. By default,</span>
+<span class="sd">        the same units as the variable being tested are assumed.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.wi(5, 7)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: wi (5, 7)&gt;</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(6)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(4)</span>
+<span class="sd">False</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;wi&#39;</span><span class="p">,</span> <span class="p">[</span><span class="n">value0</span><span class="p">,</span> <span class="n">value1</span><span class="p">],</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="wo"><a class="viewcode-back" href="../../generated/cf.wo.html#cf.wo">[docs]</a><span class="k">def</span> <span class="nf">wo</span><span class="p">(</span><span class="n">value0</span><span class="p">,</span> <span class="n">value1</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable for being without a</span>
+<span class="sd">range.</span>
+
+<span class="sd">``x == cf.wo(a, b)`` is equivalent to ``x == cf.lt(a) | cf.gt(b)``.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.eq`, `cf.ge`, `cf.gt`, `cf.ne`,</span>
+<span class="sd">             `cf.le`, `cf.lt`, `cf.set`, `cf.wi`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value0 : object</span>
+<span class="sd">         The lower bound of the range which a variable is to be</span>
+<span class="sd">         compared with.</span>
+
+<span class="sd">    value1 : object</span>
+<span class="sd">         The upper bound of the range which a variable is to be</span>
+<span class="sd">         compared with.</span>
+
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        If applicable, the units of *value0* and *value1*. By default,</span>
+<span class="sd">        the same units as the variable being tested are assumed.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; q = cf.wo(5)</span>
+<span class="sd">&gt;&gt;&gt; q</span>
+<span class="sd">&lt;CF Query: x wo (5, 7)&gt;</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(4)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; q.evaluate(6)</span>
+<span class="sd">False</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;wo&#39;</span><span class="p">,</span> <span class="p">[</span><span class="n">value0</span><span class="p">,</span> <span class="n">value1</span><span class="p">],</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="set"><a class="viewcode-back" href="../../generated/cf.set.html#cf.set">[docs]</a><span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for a variable for being equal to any</span>
+<span class="sd">member of a collection.</span>
+
+<span class="sd">.. seealso:: `cf.contain`, `cf.eq`, `cf.ge`, `cf.gt`, `cf.ne`,</span>
+<span class="sd">             `cf.le`, `cf.lt`, `cf.wi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    values : sequence</span>
+<span class="sd">    </span>
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of each element of *values*. By default, the same</span>
+<span class="sd">        units as the variable being tested are assumed, if applicable.</span>
+
+<span class="sd">    exact : bool, optional</span>
+<span class="sd">        If False then string values are to be treated as regular</span>
+<span class="sd">        expressions understood by the :py:obj:`re` module and are</span>
+<span class="sd">        evaluated using the :py:obj:`re.match` method.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.set([3, 5])</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF Query: set [3, 5]&gt;</span>
+<span class="sd">&gt;&gt;&gt; c == 4</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; c == 5</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; print c == numpy.array([2, 3, 4, 5])</span>
+<span class="sd">[False  True False  True]</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;set&#39;</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="n">exact</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="contain"><a class="viewcode-back" href="../../generated/cf.contain.html#cf.contain">[docs]</a><span class="k">def</span> <span class="nf">contain</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for cells of a variable for containing a</span>
+<span class="sd">value.</span>
+
+<span class="sd">If cells are not defined then return a `cf.Query` object for a</span>
+<span class="sd">variable for being equal to a value, i.e. this case is equivalent to</span>
+<span class="sd">`cf.eq`.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.eq`, `cf.ge`, `cf.gt`, `cf.ne`, `cf.le`, `cf.lt`,</span>
+<span class="sd">             `cf.set`, `cf.wi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value : </span>
+<span class="sd">        The value which a variable is to be compared with.</span>
+<span class="sd">    </span>
+<span class="sd">    units : str or cf.Units, optional</span>
+<span class="sd">        The units of each element of *values*. By default, the same</span>
+<span class="sd">        units as the variable being tested are assumed, if applicable.</span>
+
+<span class="sd">    attr : str, optional</span>
+<span class="sd">        Return a query object for a variable&#39;s *attr* attribute.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt;  cf.contain(30, &#39;degrees_east&#39;)</span>
+<span class="sd">&lt;CF Query: (contain &lt;CF Data: 30 degrees_east&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt;  cf.contain(cf.Data(10, &#39;km&#39;))</span>
+<span class="sd">&lt;CF Query: (contain &lt;CF Data: 10 km&gt;)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF DimensionCoordinate: longitude(4) degrees_east&gt;</span>
+<span class="sd">&gt;&gt;&gt; print c.bounds.array</span>
+<span class="sd">[[  0   90]</span>
+<span class="sd"> [ 90  180]</span>
+<span class="sd"> [180  270]</span>
+<span class="sd"> [270  360]]</span>
+<span class="sd">&gt;&gt;&gt; print (cf.contain(100) == c).array</span>
+<span class="sd">[False True False False]</span>
+<span class="sd">&gt;&gt;&gt; print (cf.contain(9999) == c).array</span>
+<span class="sd">[False False False False]</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;contain&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">attr</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="year"><a class="viewcode-back" href="../../generated/cf.year.html#cf.year">[docs]</a><span class="k">def</span> <span class="nf">year</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for date-time years.</span>
+
+<span class="sd">In this context, any object which has a `!year` attribute is</span>
+<span class="sd">considered to be a date-time variable.</span>
+
+<span class="sd">If *value* is a `cf.Query` object then ``cf.year(value)`` is</span>
+<span class="sd">equivalent to ``value.addattr(&#39;year&#39;)``. Otherwise ``cf.year(value)``</span>
+<span class="sd">is equivalent to ``cf.eq(value, attr=&#39;year&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtne`,</span>
+<span class="sd">             `cf.dtle`, `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value :   </span>
+<span class="sd">       Either the value that the year is to be compared with, or a</span>
+<span class="sd">       `cf.Query` object for testing the year.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.year(2002)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.year(cf.le(2003))</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.year(2001)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.year(cf.wi(2003, 2006))</span>
+<span class="sd">False</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Query</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;year&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;year&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="month"><a class="viewcode-back" href="../../generated/cf.month.html#cf.month">[docs]</a><span class="k">def</span> <span class="nf">month</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for date-time months.</span>
+
+<span class="sd">In this context, any object which has a `!month` attribute is</span>
+<span class="sd">considered to be a date-time variable.</span>
+
+<span class="sd">If *value* is a `cf.Query` object then ``cf.month(value)`` is</span>
+<span class="sd">equivalent to ``value.addattr(&#39;month&#39;)``. Otherwise</span>
+<span class="sd">``cf.month(value)`` is equivalent to ``cf.eq(value, attr=&#39;month&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.day`, `cf.hour`, `cf.minute`, `cf.second`,</span>
+<span class="sd">             `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtne`, `cf.dtle`,</span>
+<span class="sd">             `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value :   </span>
+<span class="sd">       Either the value that the month is to be compared with, or a</span>
+<span class="sd">       `cf.Query` object for testing the month.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.month(6)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.month(cf.le(7))</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.month(7)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.month(cf.wi(1, 6))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Query</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;month&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;month&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="day"><a class="viewcode-back" href="../../generated/cf.day.html#cf.day">[docs]</a><span class="k">def</span> <span class="nf">day</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for date-time days.</span>
+
+<span class="sd">In this context, any object which has a `!day` attribute is considered</span>
+<span class="sd">to be a date-time variable.</span>
+
+<span class="sd">If *value* is a `cf.Query` object then ``cf.day(value)`` is</span>
+<span class="sd">equivalent to ``value.addattr(&#39;day&#39;)``. Otherwise ``cf.day(value)`` is</span>
+<span class="sd">equivalent to ``cf.eq(value, attr=&#39;day&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtne`,</span>
+<span class="sd">             `cf.dtle`, `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value :   </span>
+<span class="sd">       Either the value that the day is to be compared with, or a</span>
+<span class="sd">       `cf.Query` object for testing the day.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.day(16)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.day(cf.le(19))</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.day(7)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.day(cf.wi(1, 21))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Query</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;day&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;day&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="hour"><a class="viewcode-back" href="../../generated/cf.hour.html#cf.hour">[docs]</a><span class="k">def</span> <span class="nf">hour</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for date-time hours.</span>
+
+<span class="sd">In this context, any object which has a `!hour` attribute is</span>
+<span class="sd">considered to be a date-time variable.</span>
+
+<span class="sd">If *value* is a `cf.Query` object then ``cf.hour(value)`` is</span>
+<span class="sd">equivalent to ``value.addattr(&#39;hour&#39;)``. Otherwise ``cf.hour(value)``</span>
+<span class="sd">is equivalent to ``cf.eq(value, attr=&#39;hour&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtne`,</span>
+<span class="sd">             `cf.dtle`, `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value :   </span>
+<span class="sd">       Either the value that the hour is to be compared with, or a</span>
+<span class="sd">       `cf.Query` object for testing the hour.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16, 18)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.hour(18)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.hour(cf.le(19))</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.hour(7)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.hour(cf.wi(6, 23))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Query</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;hour&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;hour&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="minute"><a class="viewcode-back" href="../../generated/cf.minute.html#cf.minute">[docs]</a><span class="k">def</span> <span class="nf">minute</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a `cf.Query` object for date-time minutes.</span>
+
+<span class="sd">In this context, any object which has a `!minute` attribute is</span>
+<span class="sd">considered to be a date-time variable.</span>
+
+<span class="sd">If *value* is a `cf.Query` object then ``cf.minute(value)`` is</span>
+<span class="sd">equivalent to ``value.addattr(&#39;minute&#39;)``. Otherwise</span>
+<span class="sd">``cf.minute(value)`` is equivalent to ``cf.eq(value, attr=&#39;minute&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.second`,</span>
+<span class="sd">             `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtne`, `cf.dtle`,</span>
+<span class="sd">             `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value :   </span>
+<span class="sd">       Either the value that the minute is to be compared with, or a</span>
+<span class="sd">       `cf.Query` object for testing the minute.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16, 18, 30, 0)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.minute(30)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.minute(cf.le(45))</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.minute(7)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.minute(cf.wi(15, 45))</span>
+<span class="sd">True</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Query</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;minute&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;minute&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="second"><a class="viewcode-back" href="../../generated/cf.second.html#cf.second">[docs]</a><span class="k">def</span> <span class="nf">second</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a `cf.Query` object for date-time seconds.</span>
+<span class="sd">    </span>
+<span class="sd">In this context, any object which has a `!second` attribute is</span>
+<span class="sd">considered to be a date-time variable.</span>
+
+<span class="sd">If *value* is a `cf.Query` object then ``cf.second(value)`` is</span>
+<span class="sd">equivalent to ``value.addattr(&#39;second&#39;)``. Otherwise</span>
+<span class="sd">``cf.second(value)`` is equivalent to ``cf.eq(value, attr=&#39;second&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtne`, `cf.dtle`,</span>
+<span class="sd">             `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value :   </span>
+<span class="sd">       Either the value that the second is to be compared with, or a</span>
+<span class="sd">       `cf.Query` object for testing the second.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16, 18, 30, 0)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.second(0)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.second(cf.le(30))</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.second(30)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.second(cf.wi(0, 30))</span>
+<span class="sd">True</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Query</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;second&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;second&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="cellsize"><a class="viewcode-back" href="../../generated/cf.cellsize.html#cf.cellsize">[docs]</a><span class="k">def</span> <span class="nf">cellsize</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for the cell size of a coordinate object.</span>
+
+<span class="sd">In this context, a coordinate is any object which has a `!cellsize`</span>
+<span class="sd">attribute.</span>
+
+<span class="sd">If *value* is a `cf.Query` object then ``cf.cellsize(value)`` is</span>
+<span class="sd">equivalent to ``value.addattr(&#39;cellsize&#39;)`` (see</span>
+<span class="sd">`cf.Query.addattr`). Otherwise ``cf.cellsize(value)`` is equivalent to</span>
+<span class="sd">``cf.eq(value, attr=&#39;cellsize&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.cellge`, `cf.cellgt`, `cf.celllt`, `cf.cellle`,</span>
+<span class="sd">             `cf.cellwi`, `cf.cellwo`, `cf.eq`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    value :   </span>
+<span class="sd">       Either the value that the cell size is to be compared with, or a</span>
+<span class="sd">       `cf.Query` object for testing the cell size.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.cellsize(cf.lt(5, &#39;km&#39;))</span>
+<span class="sd">&lt;CF Query: cellsize(lt &lt;CF Data: 5 km&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.cellsize(5) </span>
+<span class="sd">&lt;CF Query: cellsize(eq 5)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.cellsize(cf.Data(5, &#39;km&#39;))</span>
+<span class="sd">&lt;CF Query: cellsize(eq &lt;CF Data: 5 km&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.cellsize(cf.Data(5, &#39;km&#39;))  </span>
+<span class="sd">&lt;CF Query: cellsize(eq &lt;CF Data: 5 km&gt;)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.cellsize(5, units=&#39;km&#39;)   </span>
+<span class="sd">&lt;CF Query: cellsize(eq &lt;CF Data: 5 km&gt;)&gt;</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Query</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;cellsize&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;cellsize&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="dtge"><a class="viewcode-back" href="../../generated/cf.dtge.html#cf.dtge">[docs]</a><span class="k">def</span> <span class="nf">dtge</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a `cf.Query` object for a variable being not earlier</span>
+<span class="sd">than a date-time.</span>
+
+<span class="sd">``cf.dtge(*args, **kwargs)`` is equivalent to ``cf.ge(cf.dt(*args,</span>
+<span class="sd">**kwargs))``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dteq`, `cf.dtgt`, `cf.dtne`, `cf.dtle`,</span>
+<span class="sd">             `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    args, kwargs :</span>
+<span class="sd">        Positional and keyword arguments for defining a date-time. See</span>
+<span class="sd">        `cf.dt` for details.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtge(1990, 1, 1)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtge(2002, 6, 16)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtge(&#39;2100-1-1&#39;)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtge(&#39;2001-1-1&#39;) &amp; cf.dtle(2010, 12, 31)</span>
+<span class="sd">True</span>
+
+<span class="sd">The last example is equivalent to:</span>
+
+<span class="sd">&gt;&gt;&gt; d == cf.wi(cf.dt(2001, 1, 1), cf.dt(&#39;2010-12-31&#39;))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;ge&#39;</span><span class="p">,</span> <span class="n">dt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="dtgt"><a class="viewcode-back" href="../../generated/cf.dtgt.html#cf.dtgt">[docs]</a><span class="k">def</span> <span class="nf">dtgt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a `cf.Query` object for a variable being later than a</span>
+<span class="sd">date-time.</span>
+
+<span class="sd">``cf.dtgt(*args, **kwargs)`` is equivalent to ``cf.gt(cf.dt(*args,</span>
+<span class="sd">**kwargs))``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dteq`, `cf.dtge`, `cf.dtne`, `cf.dtle`,</span>
+<span class="sd">             `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    args, kwargs :</span>
+<span class="sd">        Positional and keyword arguments for defining a date-time. See</span>
+<span class="sd">        `cf.dt` for details.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtgt(1990, 1, 1)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtgt(2002, 6, 16)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtgt(&#39;2100-1-1&#39;)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtgt(&#39;2001-1-1&#39;) &amp; cf.dtle(2010, 12, 31)</span>
+<span class="sd">True</span>
+
+<span class="sd">The last example is equivalent to:</span>
+
+<span class="sd">&gt;&gt;&gt; d == cf.wi(cf.dt(2001, 1, 1), cf.dt(&#39;2010-12-31&#39;))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;gt&#39;</span><span class="p">,</span> <span class="n">dt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="dtle"><a class="viewcode-back" href="../../generated/cf.dtle.html#cf.dtle">[docs]</a><span class="k">def</span> <span class="nf">dtle</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a `cf.Query` object for a variable being not later than a</span>
+<span class="sd">date-time.</span>
+
+<span class="sd">``cf.dtle(*args, **kwargs)`` is equivalent to ``cf.le(cf.dt(*args,</span>
+<span class="sd">**kwargs))``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtne`,</span>
+<span class="sd">             `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    args, kwargs :</span>
+<span class="sd">        Positional and keyword arguments for defining a date-time. See</span>
+<span class="sd">        `cf.dt` for details.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtle(1990, 1, 1)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtle(2002, 6, 16)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtle(&#39;2100-1-1&#39;)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtle(&#39;2001-1-1&#39;) &amp; cf.dtle(2010, 12, 31)</span>
+<span class="sd">True</span>
+
+<span class="sd">The last example is equivalent to:</span>
+
+<span class="sd">&gt;&gt;&gt; d == cf.wi(cf.dt(2001, 1, 1), cf.dt(&#39;2010-12-31&#39;))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;le&#39;</span><span class="p">,</span> <span class="n">dt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="dtlt"><a class="viewcode-back" href="../../generated/cf.dtlt.html#cf.dtlt">[docs]</a><span class="k">def</span> <span class="nf">dtlt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a `cf.Query` object for a variable being earlier than a</span>
+<span class="sd">date-time.</span>
+
+<span class="sd">``cf.dtlt(*args, **kwargs)`` is equivalent to ``cf.lt(cf.dt(*args,</span>
+<span class="sd">**kwargs))``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtne`,</span>
+<span class="sd">             `cf.dtle`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    args, kwargs :</span>
+<span class="sd">        Positional and keyword arguments for defining a date-time. See</span>
+<span class="sd">        `cf.dt` for details.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtlt(1990, 1, 1)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtlt(2002, 6, 16)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtlt(&#39;2100-1-1&#39;)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtlt(&#39;2001-1-1&#39;) &amp; cf.dtlt(2010, 12, 31)</span>
+<span class="sd">True</span>
+
+<span class="sd">The last example is equivalent to:</span>
+
+<span class="sd">&gt;&gt;&gt; d == cf.wi(cf.dt(2001, 1, 1), cf.dt(&#39;2010-12-31&#39;))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;lt&#39;</span><span class="p">,</span> <span class="n">dt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="dteq"><a class="viewcode-back" href="../../generated/cf.dteq.html#cf.dteq">[docs]</a><span class="k">def</span> <span class="nf">dteq</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a `cf.Query` object for a variable being equal to a</span>
+<span class="sd">date-time.</span>
+
+<span class="sd">``cf.dteq(*args, **kwargs)`` is equivalent to ``cf.eq(cf.dt(*args,</span>
+<span class="sd">**kwargs))``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dtge`, `cf.dtgt`, `cf.dtne`, `cf.dtle`,</span>
+<span class="sd">             `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    args, kwargs :</span>
+<span class="sd">        Positional and keyword arguments for defining a date-time. See</span>
+<span class="sd">        `cf.dt` for details.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dteq(1990, 1, 1)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dteq(2002, 6, 16)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dteq(&#39;2100-1-1&#39;)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dteq(&#39;2001-1-1&#39;) &amp; cf.dteq(2010, 12, 31)</span>
+<span class="sd">True</span>
+
+<span class="sd">The last example is equivalent to:</span>
+
+<span class="sd">&gt;&gt;&gt; d == cf.wi(cf.dt(2001, 1, 1), cf.dt(&#39;2010-12-31&#39;))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">dt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="dtne"><a class="viewcode-back" href="../../generated/cf.dtne.html#cf.dtne">[docs]</a><span class="k">def</span> <span class="nf">dtne</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a `cf.Query` object for a variable being not equal to a</span>
+<span class="sd">date-time.</span>
+
+<span class="sd">``cf.dtne(*args, **kwargs)`` is equivalent to ``cf.ne(cf.dt(*args,</span>
+<span class="sd">**kwargs))``.</span>
+
+<span class="sd">.. seealso:: `cf.year`, `cf.month`, `cf.day`, `cf.hour`, `cf.minute`,</span>
+<span class="sd">             `cf.second`, `cf.dteq`, `cf.dtge`, `cf.dtgt`, `cf.dtle`,</span>
+<span class="sd">             `cf.dtlt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    args, kwargs :</span>
+<span class="sd">        Positional and keyword arguments for defining a date-time. See</span>
+<span class="sd">        `cf.dt` for details.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2002, 6, 16)</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtne(1990, 1, 1)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtne(2002, 6, 16)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtne(&#39;2100-1-1&#39;)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dtne(&#39;2001-1-1&#39;) &amp; cf.dtne(2010, 12, 31)</span>
+<span class="sd">True</span>
+
+<span class="sd">The last example is equivalent to:</span>
+
+<span class="sd">&gt;&gt;&gt; d == cf.wi(cf.dt(2001, 1, 1), cf.dt(&#39;2010-12-31&#39;))</span>
+<span class="sd">True</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;ne&#39;</span><span class="p">,</span> <span class="n">dt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="cellwi"><a class="viewcode-back" href="../../generated/cf.cellwi.html#cf.cellwi">[docs]</a><span class="k">def</span> <span class="nf">cellwi</span><span class="p">(</span><span class="n">value0</span><span class="p">,</span> <span class="n">value1</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for coordinate cell bounds being within</span>
+<span class="sd">a range.</span>
+
+<span class="sd">In this context, a coordinate is any object which has `!lower_bounds`</span>
+<span class="sd">and `!upper_bounds` attributes.</span>
+
+<span class="sd">``cf.cellwi(value0, value1)`` is equivalent to ``cf.ge(value0,</span>
+<span class="sd">attr=&#39;lower_bounds&#39;) &amp; cf.le(value1, attr=&#39;upper_bounds&#39;)``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.cellge`, `cf.cellgt`, `cf.cellle`, `cf.celllt`,</span>
+<span class="sd">             `cf.cellsize`, `cf.cellwo`, `cf.wi`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="p">(</span><span class="n">Query</span><span class="p">(</span><span class="s1">&#39;ge&#39;</span><span class="p">,</span> <span class="n">value0</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;lower_bounds&#39;</span><span class="p">)</span> <span class="o">&amp;</span>
+            <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;le&#39;</span><span class="p">,</span> <span class="n">value1</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;upper_bounds&#39;</span><span class="p">))</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="cellwo"><a class="viewcode-back" href="../../generated/cf.cellwo.html#cf.cellwo">[docs]</a><span class="k">def</span> <span class="nf">cellwo</span><span class="p">(</span><span class="n">value0</span><span class="p">,</span> <span class="n">value1</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for coordinate cell bounds being</span>
+<span class="sd">outside a range.</span>
+
+<span class="sd">In this context, a coordinate is any object which has `!lower_bounds`</span>
+<span class="sd">and `!upper_bounds` attributes.</span>
+
+<span class="sd">``cf.cellwo(value0, value1)`` is equivalent to ``cf.lt(value0,</span>
+<span class="sd">attr=&#39;lower_bounds&#39;) &amp; cf.gt(value1, attr=&#39;upper_bounds&#39;)``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.cellge`, `cf.cellgt`, `cf.cellle`, `cf.celllt`,</span>
+<span class="sd">             `cf.cellsize`, `cf.cellwi`, `cf.wo`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="p">(</span><span class="n">Query</span><span class="p">(</span><span class="s1">&#39;lt&#39;</span><span class="p">,</span> <span class="n">value0</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;lower_bounds&#39;</span><span class="p">)</span> <span class="o">&amp;</span>
+            <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;gt&#39;</span><span class="p">,</span> <span class="n">value1</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;upper_bounds&#39;</span><span class="p">))</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="cellgt"><a class="viewcode-back" href="../../generated/cf.cellgt.html#cf.cellgt">[docs]</a><span class="k">def</span> <span class="nf">cellgt</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for coordinate cell bounds being</span>
+<span class="sd">strictly greater than a value.</span>
+
+<span class="sd">In this context, a coordinate is any object which has a</span>
+<span class="sd">`!lower_bounds` attribute.</span>
+
+<span class="sd">``cf.cellgt(value)`` is equivalent to ``cf.gt(value,</span>
+<span class="sd">attr=&#39;lower_bounds&#39;)``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.cellge`, `cf.cellle`, `cf.celllt`, `cf.cellsize`,</span>
+<span class="sd">             `cf.cellwi`,`cf.cellwo`, `cf.gt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;gt&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;lower_bounds&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="cellge"><a class="viewcode-back" href="../../generated/cf.cellge.html#cf.cellge">[docs]</a><span class="k">def</span> <span class="nf">cellge</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for coordinate cell bounds being</span>
+<span class="sd">greater than or equal to a value.</span>
+
+<span class="sd">In this context, a coordinate is any object which has a</span>
+<span class="sd">`!lower_bounds` attribute.</span>
+
+<span class="sd">``cf.cellge(value)`` is equivalent to ``cf.ge(value,</span>
+<span class="sd">attr=&#39;lower_bounds&#39;)``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.cellgt`, `cf.cellle`, `cf.celllt`, `cf.cellsize`,</span>
+<span class="sd">             `cf.cellwi`,`cf.cellwo`, `cf.gt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;ge&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;lower_bounds&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="celllt"><a class="viewcode-back" href="../../generated/cf.celllt.html#cf.celllt">[docs]</a><span class="k">def</span> <span class="nf">celllt</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for coordinate cell bounds being</span>
+<span class="sd">strictly less than a value.</span>
+
+<span class="sd">In this context, a coordinate is any object which has a</span>
+<span class="sd">`!upper_bounds` attribute.</span>
+
+<span class="sd">``cf.celllt(value)`` is equivalent to ``cf.lt(value,</span>
+<span class="sd">attr=&#39;upper_bounds&#39;)``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.cellge`, `cf.cellgt`, `cf.cellle`, `cf.cellsize`,</span>
+<span class="sd">             `cf.cellwi`,`cf.cellwo`, `cf.le`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;lt&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;upper_bounds&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="cellle"><a class="viewcode-back" href="../../generated/cf.cellle.html#cf.cellle">[docs]</a><span class="k">def</span> <span class="nf">cellle</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for coordinate cell bounds being</span>
+<span class="sd">less than or equal to a value.</span>
+
+<span class="sd">In this context, a coordinate is any object which has a</span>
+<span class="sd">`!upper_bounds` attribute.</span>
+
+<span class="sd">``cf.cellle(value)`` is equivalent to ``cf.le(value,</span>
+<span class="sd">attr=&#39;upper_bounds&#39;)``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.cellge`, `cf.cellgt`, `cf.celllt`, `cf.cellsize`,</span>
+<span class="sd">             `cf.cellwi`,`cf.cellwo`, `cf.lt`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">    &#39;&#39;&#39;</span> 
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;le&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;upper_bounds&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="jja"><a class="viewcode-back" href="../../generated/cf.jja.html#cf.jja">[docs]</a><span class="k">def</span> <span class="nf">jja</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for season June, July, August.</span>
+
+<span class="sd">``cf.jja()`` is equivalent to ``cf.month(cf.wi(6, 8))``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.djf`, `cf.mam`, `cf.son`, `cf.seasons`, `cf.month`,</span>
+<span class="sd">             `cf.wi`</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Field: air_temperature(time(365), latitude(64), longitude(128)) K&gt;</span>
+<span class="sd">&gt;&gt;&gt; f.subspace(time=cf.jja())</span>
+<span class="sd">&lt;CF Field: air_temperature(time(92), latitude(64), longitude(128)) K&gt;</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;wi&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;month&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="son"><a class="viewcode-back" href="../../generated/cf.son.html#cf.son">[docs]</a><span class="k">def</span> <span class="nf">son</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for season September, October,</span>
+<span class="sd">November.</span>
+
+<span class="sd">``cf.son()`` is equivalent to ``cf.month(cf.wi(9, 11))``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.djf`, `cf.mam`, `cf.jja`, `cf.seasons`, `cf.month`,</span>
+<span class="sd">             `cf.wi`</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Field: air_temperature(time(365), latitude(64), longitude(128)) K&gt;</span>
+<span class="sd">&gt;&gt;&gt; f.subspace(time=cf.son())</span>
+<span class="sd">&lt;CF Field: air_temperature(time(91), latitude(64), longitude(128)) K&gt;</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;wi&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">11</span><span class="p">),</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;month&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="djf"><a class="viewcode-back" href="../../generated/cf.djf.html#cf.djf">[docs]</a><span class="k">def</span> <span class="nf">djf</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for season December, January, February.</span>
+
+<span class="sd">``cf.djf()`` is equivalent to ``cf.month(cf.ge(12) | cf.le(2))``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.mam`, `cf.jja`, `cf.son`, `cf.seasons`, `cf.month`,</span>
+<span class="sd">             `cf.ge`, `cf.le`</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Field: air_temperature(time(365), latitude(64), longitude(128)) K&gt;</span>
+<span class="sd">&gt;&gt;&gt; f.subspace(time=cf.djf())</span>
+<span class="sd">&lt;CF Field: air_temperature(time(90), latitude(64), longitude(128)) K&gt;</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;ge&#39;</span><span class="p">,</span> <span class="mi">12</span><span class="p">)</span> <span class="o">|</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;le&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">q</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;month&#39;</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="mam"><a class="viewcode-back" href="../../generated/cf.mam.html#cf.mam">[docs]</a><span class="k">def</span> <span class="nf">mam</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39;Return a `cf.Query` object for the season March, April, May.</span>
+
+<span class="sd">``cf.mam()`` is equivalent to ``cf.month(cf.wi(3, 5))``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.djf`, `cf.jja`, `cf.son`, `cf.seasons`, `cf.month`,</span>
+<span class="sd">             `cf.wi`</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Query</span>
+<span class="sd">        The query object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Field: air_temperature(time(365), latitude(64), longitude(128)) K&gt;</span>
+<span class="sd">&gt;&gt;&gt; f.subspace(time=cf.mam())</span>
+<span class="sd">&lt;CF Field: air_temperature(time(92), latitude(64), longitude(128)) K&gt;</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;wi&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">attr</span><span class="o">=</span><span class="s1">&#39;month&#39;</span><span class="p">)</span></div>
+
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="seasons"><a class="viewcode-back" href="../../generated/cf.seasons.html#cf.seasons">[docs]</a><span class="k">def</span> <span class="nf">seasons</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">12</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a list `cf.Query` objects for all seasons in a year.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">.. seealso:: `cf.mam`, `cf.jja`, `cf.son`, `cf.djf`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    n : int, optional</span>
+<span class="sd">        The number of seasons in the year. By default there are four</span>
+<span class="sd">        seasons.</span>
+
+<span class="sd">    start : int, optional</span>
+<span class="sd">        The start month of the first season of the year. By default</span>
+<span class="sd">        this is 12 (December).</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : list of cf.Query</span>
+<span class="sd">        The query objects.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.seasons()</span>
+<span class="sd">[&lt;CF Query: month[(ge 12) | (le 2)]&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (3, 5))&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (6, 8))&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (9, 11))&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.seasons(4, 1)</span>
+<span class="sd">[&lt;CF Query: month(wi (1, 3))&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (4, 6))&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (7, 9))&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (10, 12))&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.seasons(3, 6)</span>
+<span class="sd">[&lt;CF Query: month(wi (6, 9))&gt;,</span>
+<span class="sd"> &lt;CF Query: month[(ge 10) | (le 1)]&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (2, 5))&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.seasons(3)</span>
+<span class="sd">[&lt;CF Query: month[(ge 12) | (le 3)]&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (4, 7))&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (8, 11))&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.seasons(3, 6)</span>
+<span class="sd">[&lt;CF Query: month(wi (6, 9))&gt;,</span>
+<span class="sd"> &lt;CF Query: month[(ge 10) | (le 1)]&gt;,</span>
+<span class="sd"> &lt;CF Query: month(wi (2, 5))&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.seasons(12)</span>
+<span class="sd">[&lt;CF Query: month(eq 12)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 1)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 2)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 3)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 4)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 5)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 6)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 7)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 8)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 9)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 10)&gt;,</span>
+<span class="sd"> &lt;CF Query: month(eq 11)&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.seasons(1, 4)</span>
+<span class="sd">[&lt;CF Query: month[(ge 4) | (le 3)]&gt;]</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="mi">12</span> <span class="o">%</span> <span class="n">n</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Number of seasons must divide into 12. Got </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">n</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">start</span> <span class="o">&lt;=</span> <span class="mi">12</span> <span class="ow">or</span> <span class="nb">int</span><span class="p">(</span><span class="n">start</span><span class="p">)</span> <span class="o">!=</span> <span class="n">start</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Start month must be integer between 1 and 12. Got </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">start</span><span class="p">)</span>
+
+    <span class="n">out</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">inc</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mi">12</span> <span class="o">/</span> <span class="n">n</span><span class="p">)</span>
+
+    <span class="n">start</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+
+    <span class="n">m0</span> <span class="o">=</span> <span class="n">start</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="p">)):</span>
+        <span class="n">m1</span> <span class="o">=</span> <span class="p">((</span><span class="n">m0</span> <span class="o">+</span> <span class="n">inc</span><span class="p">)</span> <span class="o">%</span> <span class="mi">12</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">m1</span><span class="p">:</span>
+            <span class="n">m1</span> <span class="o">=</span> <span class="mi">12</span>
+        <span class="k">elif</span> <span class="n">m1</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">m1</span> <span class="o">=</span> <span class="mi">11</span>
+
+        <span class="k">if</span> <span class="n">m0</span> <span class="o">&lt;</span> <span class="n">m1</span><span class="p">:</span> 
+            <span class="n">q</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;wi&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">m0</span><span class="p">,</span> <span class="n">m1</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">m0</span> <span class="o">&gt;</span> <span class="n">m1</span><span class="p">:</span> 
+            <span class="n">q</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;ge&#39;</span><span class="p">,</span> <span class="n">m0</span><span class="p">)</span> <span class="o">|</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;le&#39;</span><span class="p">,</span> <span class="n">m1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">q</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">m0</span><span class="p">)</span>
+
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">addattr</span><span class="p">(</span><span class="s1">&#39;month&#39;</span><span class="p">))</span>
+    
+        <span class="n">m0</span> <span class="o">=</span> <span class="n">m1</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">m0</span> <span class="o">&gt;</span> <span class="mi">12</span><span class="p">:</span>
+            <span class="n">m0</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="c1">#--- End: for</span>
+
+    <span class="k">return</span> <span class="n">out</span></div>
+<span class="c1">#--- End: def</span>
+
+<span class="c1"># --------------------------------------------------------------------</span>
+<span class="c1"># Vectorized </span>
+<span class="c1"># --------------------------------------------------------------------</span>
+<span class="k">def</span> <span class="nf">_match</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">re_match</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+
+<span class="n">_array_match</span> <span class="o">=</span> <span class="n">numpy_vectorize</span><span class="p">(</span><span class="n">_match</span><span class="p">,</span> <span class="n">otypes</span><span class="o">=</span><span class="p">[</span><span class="nb">bool</span><span class="p">])</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Hassell.
+      Last updated on Feb 21, 2016.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,600 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cf.flags &mdash; Documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/copybutton.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cf.flags</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">argsort</span>    <span class="k">as</span> <span class="n">numpy_argsort</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">atleast_1d</span> <span class="k">as</span> <span class="n">numpy_atleast_1d</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ndarray</span>    <span class="k">as</span> <span class="n">numpy_ndarray</span>
+
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">deepcopy</span>
+
+<span class="kn">from</span> <span class="nn">.functions</span> <span class="kn">import</span> <span class="n">RTOL</span><span class="p">,</span> <span class="n">ATOL</span><span class="p">,</span> <span class="n">equals</span>
+<span class="kn">from</span> <span class="nn">.functions</span> <span class="kn">import</span> <span class="n">inspect</span> <span class="k">as</span> <span class="n">cf_inspect</span>
+
+
+<span class="c1"># ====================================================================</span>
+<span class="c1">#</span>
+<span class="c1"># Flags object</span>
+<span class="c1">#</span>
+<span class="c1"># ====================================================================</span>
+<div class="viewcode-block" id="Flags"><a class="viewcode-back" href="../../classes/cf.Flags.html#cf.Flags">[docs]</a><span class="k">class</span> <span class="nc">Flags</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Self-describing CF flag values.</span>
+
+<span class="sd">Stores the flag_values, flag_meanings and flag_masks CF attributes in</span>
+<span class="sd">an internally consistent manner.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">**Initialization**</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    flag_values : optional</span>
+<span class="sd">        The flag_values CF property. Sets the `flag_values` attribute.</span>
+
+<span class="sd">    flag_meanings : optional</span>
+<span class="sd">        The flag_meanings CF property. Sets the `flag_meanings`</span>
+<span class="sd">        attribute.</span>
+
+<span class="sd">    flag_masks : optional</span>
+<span class="sd">        The flag_masks CF property. Sets the `flag_masks` attribute.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">attr</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">x.__eq__(y) &lt;==&gt; x==y &lt;==&gt; x.equals(y)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">x.__ne__(y) &lt;==&gt; x!=y &lt;==&gt; not x.equals(y)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Return the hash value of the flags.</span>
+
+<span class="sd">Note that the flags will be sorted in place.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : int</span>
+<span class="sd">        The hash value.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; hash(f)</span>
+<span class="sd">-956218661958673979</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="p">()))</span> 
+             <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;_flag_meanings&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_values&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_masks&#39;</span><span class="p">)]</span>
+
+        <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__nonzero__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">x.__nonzero__() &lt;==&gt; x!=0</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;_flag_meanings&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_values&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_masks&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">True</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="bp">False</span>
+    <span class="c1">#-- End: def</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Property attribute: flag_values</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">flag_values</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The flag_values CF attribute.</span>
+
+<span class="sd">Stored as a 1-d numpy array but may be set as any array-like object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f.flag_values = [&#39;a&#39;, &#39;b&#39;, &#39;c&#39;]</span>
+<span class="sd">&gt;&gt;&gt; f.flag_values</span>
+<span class="sd">array([&#39;a&#39;, &#39;b&#39;, &#39;c&#39;], dtype=&#39;|S1&#39;)</span>
+<span class="sd">&gt;&gt;&gt; f.flag_values = numpy.arange(4, dtype=&#39;int8&#39;)</span>
+<span class="sd">&gt;&gt;&gt; f.flag_values</span>
+<span class="sd">array([1, 2, 3, 4], dtype=int8)</span>
+<span class="sd">&gt;&gt;&gt; f.flag_values = 1</span>
+<span class="sd">&gt;&gt;&gt; f.flag_values</span>
+<span class="sd">array([1])</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flag_values</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39; has no attribute &#39;flag_values&#39;&quot;</span> <span class="o">%</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+    <span class="nd">@flag_values.setter</span>
+    <span class="k">def</span> <span class="nf">flag_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">numpy_ndarray</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">numpy_atleast_1d</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_flag_values</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1">#--- End: def</span>
+    <span class="nd">@flag_values.deleter</span>
+    <span class="k">def</span> <span class="nf">flag_values</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flag_values</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t delete &#39;</span><span class="si">%s</span><span class="s2">&#39; attribute &#39;flag_values&#39;&quot;</span> <span class="o">%</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Property attribute: flag_masks</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">flag_masks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The flag_masks CF attribute.</span>
+
+<span class="sd">Stored as a 1-d numpy array but may be set as array-like object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f.flag_masks = numpy.array([1, 2, 4], dtype=&#39;int8&#39;)</span>
+<span class="sd">&gt;&gt;&gt; f.flag_masks</span>
+<span class="sd">array([1, 2, 4], dtype=int8)</span>
+<span class="sd">&gt;&gt;&gt; f.flag_masks = 1</span>
+<span class="sd">&gt;&gt;&gt; f.flag_masks</span>
+<span class="sd">array([1])</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flag_masks</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39; object has no attribute &#39;flag_masks&#39;&quot;</span> <span class="o">%</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+    <span class="nd">@flag_masks.setter</span>
+    <span class="k">def</span> <span class="nf">flag_masks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">numpy_ndarray</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">numpy_atleast_1d</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_flag_masks</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1">#--- End: def</span>
+    <span class="nd">@flag_masks.deleter</span>
+    <span class="k">def</span> <span class="nf">flag_masks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flag_masks</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t delete &#39;</span><span class="si">%s</span><span class="s2">&#39; attribute &#39;flag_masks&#39;&quot;</span> <span class="o">%</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Property attribute: flag_meanings</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">flag_meanings</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The flag_meanings CF attribute.</span>
+
+<span class="sd">Stored as a 1-d numpy string array but may be set as a space delimited</span>
+<span class="sd">string or any array-like object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f.flag_meanings = &#39;low medium      high&#39;</span>
+<span class="sd">&gt;&gt;&gt; f.flag_meanings</span>
+<span class="sd">array([&#39;low&#39;, &#39;medium&#39;, &#39;high&#39;],</span>
+<span class="sd">      dtype=&#39;|S6&#39;)</span>
+<span class="sd">&gt;&gt;&gt; f.flag_meanings = [&#39;left&#39;, &#39;right&#39;]</span>
+<span class="sd">&gt;&gt;&gt; f.flag_meanings</span>
+<span class="sd">array([&#39;left&#39;, &#39;right&#39;],</span>
+<span class="sd">      dtype=&#39;|S5&#39;)</span>
+<span class="sd">&gt;&gt;&gt; f.flag_meanings = &#39;ok&#39;</span>
+<span class="sd">&gt;&gt;&gt; f.flag_meanings</span>
+<span class="sd">array([&#39;ok&#39;],</span>
+<span class="sd">      dtype=&#39;|S2&#39;)</span>
+<span class="sd">&gt;&gt;&gt; f.flag_meanings = numpy.array([&#39;a&#39;, &#39;b&#39;])</span>
+<span class="sd">&gt;&gt;&gt; f.flag_meanings</span>
+<span class="sd">array([&#39;a&#39;, &#39;b&#39;],</span>
+<span class="sd">      dtype=&#39;|S1&#39;)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flag_meanings</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;&#39;</span><span class="si">%s</span><span class="s2">&#39; object has no attribute &#39;flag_meanings&#39;&quot;</span> <span class="o">%</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+    <span class="nd">@flag_meanings.setter</span>
+    <span class="k">def</span> <span class="nf">flag_meanings</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">numpy_atleast_1d</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">numpy_ndarray</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">numpy_atleast_1d</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_flag_meanings</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1">#--- End: def</span>
+    <span class="nd">@flag_meanings.deleter</span>
+    <span class="k">def</span> <span class="nf">flag_meanings</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flag_meanings</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t delete &#39;</span><span class="si">%s</span><span class="s2">&#39; attribute &#39;flag_meanings&#39;&quot;</span> <span class="o">%</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">x.__repr__() &lt;==&gt; repr(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">string</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;flag_values&#39;</span><span class="p">):</span>
+            <span class="n">string</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;flag_values=</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flag_values</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;flag_masks&#39;</span><span class="p">):</span>
+            <span class="n">string</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;flag_masks=</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flag_masks</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;flag_meanings&#39;</span><span class="p">):</span>
+            <span class="n">string</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;flag_meanings=</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flag_meanings</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="s1">&#39;&lt;CF </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&gt;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                                <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">string</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Flags.copy"><a class="viewcode-back" href="../../generated/cf.Flags.copy.html#cf.Flags.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a deep copy.</span>
+
+<span class="sd">Equivalent to ``copy.deepcopy(f)``</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out :</span>
+<span class="sd">        The deep copy.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f.copy()</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Flags.dump"><a class="viewcode-back" href="../../generated/cf.Flags.dump.html#cf.Flags.dump">[docs]</a>    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">display</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">_level</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a string containing a full description of the instance.</span>
+
+<span class="sd">:Parameters:</span>
+<span class="sd"> </span>
+<span class="sd">    display : bool, optional</span>
+<span class="sd">        If False then return the description as a string. By default</span>
+<span class="sd">        the description is printed, i.e. ``f.dump()`` is equivalent to</span>
+<span class="sd">        ``print f.dump(display=False)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : None or str</span>
+<span class="sd">        A string containing the description.</span>
+
+<span class="sd">:Examples:</span>
+
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">indent0</span> <span class="o">=</span> <span class="s1">&#39;    &#39;</span> <span class="o">*</span> <span class="n">_level</span>
+        <span class="n">indent1</span> <span class="o">=</span> <span class="s1">&#39;    &#39;</span> <span class="o">*</span> <span class="p">(</span><span class="n">_level</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">string</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">Flags:&#39;</span> <span class="o">%</span> <span class="n">indent0</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;_flag_values&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_meanings&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_masks&#39;</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">string</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s%s</span><span class="s1"> = </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">indent1</span><span class="p">,</span> <span class="n">attr</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="nb">list</span><span class="p">(</span><span class="n">value</span><span class="p">)))</span>
+        <span class="c1">#--- End: for</span>
+                
+        <span class="n">string</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">display</span><span class="p">:</span>
+            <span class="k">print</span> <span class="n">string</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">string</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Flags.equals"><a class="viewcode-back" href="../../generated/cf.Flags.equals.html#cf.Flags.equals">[docs]</a>    <span class="k">def</span> <span class="nf">equals</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+               <span class="n">ignore_fill_value</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if two groups of flags are logically equal, False otherwise.</span>
+
+<span class="sd">Note that both instances are sorted in place prior to the comparison.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    other : </span>
+<span class="sd">        The object to compare for equality.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">    ignore_fill_value : bool, optional</span>
+<span class="sd">        If True then data arrays with different fill values are</span>
+<span class="sd">        considered equal. By default they are considered unequal.</span>
+
+<span class="sd">    traceback : bool, optional</span>
+<span class="sd">        If True then print a traceback highlighting where the two</span>
+<span class="sd">        instances differ.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two instances are equal.</span>
+<span class="sd"> </span>
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Flags: flag_values=[1 0 2], flag_masks=[2 0 2], flag_meanings=[&#39;medium&#39; &#39;low&#39; &#39;high&#39;]&gt;</span>
+<span class="sd">&gt;&gt;&gt; g</span>
+<span class="sd">&lt;CF Flags: flag_values=[2 0 1], flag_masks=[2 0 2], flag_meanings=[&#39;high&#39; &#39;low&#39; &#39;medium&#39;]&gt;</span>
+<span class="sd">&gt;&gt;&gt; f.equals(g) </span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Flags: flag_values=[0 1 2], flag_masks=[0 2 2], flag_meanings=[&#39;low&#39; &#39;medium&#39; &#39;high&#39;]&gt;</span>
+<span class="sd">&gt;&gt;&gt; g</span>
+<span class="sd">&lt;CF Flags: flag_values=[0 1 2], flag_masks=[0 2 2], flag_meanings=[&#39;low&#39; &#39;medium&#39; &#39;high&#39;]&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="c1"># Check that each instance is the same type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different type: </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+        <span class="n">other</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+
+        <span class="c1"># Set default tolerances</span>
+        <span class="k">if</span> <span class="n">rtol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">rtol</span> <span class="o">=</span> <span class="n">RTOL</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">atol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">atol</span> <span class="o">=</span> <span class="n">ATOL</span><span class="p">()</span>        
+
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;_flag_meanings&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_values&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_masks&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                        <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different attributes: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                              <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">attr</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span>
+                    <span class="k">return</span> <span class="bp">False</span>
+
+                <span class="n">x</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+                <span class="n">y</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span> <span class="ow">or</span> 
+                    <span class="ow">not</span> <span class="n">equals</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                               <span class="n">ignore_fill_value</span><span class="o">=</span><span class="n">ignore_fill_value</span><span class="p">,</span>
+                               <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">)):</span>
+                    <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                        <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                              <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">attr</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+                    <span class="k">return</span> <span class="bp">False</span>
+
+            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span> 
+                <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different attributes: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                          <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">attr</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Inspect the object for debugging.</span>
+
+<span class="sd">.. seealso:: `cf.inspect`</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    None</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">print</span> <span class="n">cf_inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Flags.sort"><a class="viewcode-back" href="../../generated/cf.Flags.sort.html#cf.Flags.sort">[docs]</a>    <span class="k">def</span> <span class="nf">sort</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Sort the flags in place.</span>
+
+<span class="sd">By default sort by flag values. If flag values are not present then</span>
+<span class="sd">sort by flag meanings. If flag meanings are not present then sort by</span>
+<span class="sd">flag_masks.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    None</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Flags: flag_values=[2 0 1], flag_masks=[2 0 2], flag_meanings=[&#39;high&#39; &#39;low&#39; &#39;medium&#39;]&gt;</span>
+<span class="sd">&gt;&gt;&gt; f.sort()</span>
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Flags: flag_values=[0 1 2], flag_masks=[0 2 2], flag_meanings=[&#39;low&#39; &#39;medium&#39; &#39;high&#39;]&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="c1"># Sort all three attributes</span>
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;flag_values&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_meanings&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_masks&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+                <span class="n">indices</span> <span class="o">=</span> <span class="n">numpy_argsort</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">))</span>
+                <span class="k">break</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;_flag_values&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_meanings&#39;</span><span class="p">,</span> <span class="s1">&#39;_flag_masks&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+                <span class="n">array</span>      <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">()</span>
+                <span class="n">array</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">array</span><span class="p">[</span><span class="n">indices</span><span class="p">]</span></div></div>
+        <span class="c1">#--- End: for</span>
+    <span class="c1">#--- End: def</span>
+
+<span class="c1">#--- End: class</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Hassell.
+      Last updated on Feb 21, 2016.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

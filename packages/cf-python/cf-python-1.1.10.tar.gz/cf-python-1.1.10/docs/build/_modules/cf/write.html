@@ -1,0 +1,319 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cf.write &mdash; Documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/copybutton.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cf.write</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">.netcdf.write</span> <span class="kn">import</span> <span class="n">write</span> <span class="k">as</span> <span class="n">netcdf_write</span>
+
+<div class="viewcode-block" id="write"><a class="viewcode-back" href="../../generated/cf.write.html#cf.write">[docs]</a><span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="n">fields</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;NETCDF3_CLASSIC&#39;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+          <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">cfa_options</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span>
+          <span class="n">least_significant_digit</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">endian</span><span class="o">=</span><span class="s1">&#39;native&#39;</span><span class="p">,</span> 
+          <span class="n">compress</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">complevel</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">fletcher32</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">no_shuffle</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Write fields to a CF-netCDF or CFA-netCDF file.</span>
+<span class="sd">    </span>
+<span class="sd">NetCDF dimension and variable names will be taken from variables&#39;</span>
+<span class="sd">`~Variable.ncvar` attributes and the domain attribute</span>
+<span class="sd">`~Domain.nc_dimensions` if present, otherwise they are inferred from</span>
+<span class="sd">standard names or set to defaults. NetCDF names may be automatically</span>
+<span class="sd">given a numerical suffix to avoid duplication.</span>
+
+<span class="sd">Output netCDF file global properties are those which occur in the set</span>
+<span class="sd">of CF global properties and non-standard data variable properties and</span>
+<span class="sd">which have equal values across all input fields.</span>
+
+<span class="sd">Logically identical field components are only written to the file</span>
+<span class="sd">once, apart from when they need to fulfil both dimension coordinate</span>
+<span class="sd">and auxiliary coordinate roles for different data variables.</span>
+
+<span class="sd">.. seealso:: `cf.read`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    fields : (arbitrarily nested sequence of) Field or FieldList</span>
+<span class="sd">        The field or fields to write to the file.</span>
+
+<span class="sd">    filename : str</span>
+<span class="sd">        The output netCDF file. Various type of expansion are applied</span>
+<span class="sd">        to the file names:</span>
+<span class="sd">        </span>
+<span class="sd">          ====================  ======================================</span>
+<span class="sd">          Expansion             Description</span>
+<span class="sd">          ====================  ======================================</span>
+<span class="sd">          Tilde                 An initial component of ``~`` or</span>
+<span class="sd">                                ``~user`` is replaced by that *user*&#39;s</span>
+<span class="sd">                                home directory.</span>
+<span class="sd">           </span>
+<span class="sd">          Environment variable  Substrings of the form ``$name`` or</span>
+<span class="sd">                                ``${name}`` are replaced by the value</span>
+<span class="sd">                                of environment variable *name*.</span>
+<span class="sd">          ====================  ======================================</span>
+<span class="sd">    </span>
+<span class="sd">        Where more than one type of expansion is used in the same</span>
+<span class="sd">        string, they are applied in the order given in the above</span>
+<span class="sd">        table.</span>
+
+<span class="sd">          Example: If the environment variable *MYSELF* has been set</span>
+<span class="sd">          to the &quot;david&quot;, then ``&#39;~$MYSELF/out.nc&#39;`` is equivalent to</span>
+<span class="sd">          ``&#39;~david/out.nc&#39;``.</span>
+<span class="sd">  </span>
+<span class="sd">    fmt : str, optional</span>
+<span class="sd">        The format of the output file. One of:</span>
+
+<span class="sd">           =====================  ================================================</span>
+<span class="sd">           fmt                    Description</span>
+<span class="sd">           =====================  ================================================</span>
+<span class="sd">           ``&#39;NETCDF3_CLASSIC&#39;``  Output to a CF-netCDF3 classic format file     </span>
+<span class="sd">           ``&#39;NETCDF3_64BIT&#39;``    Output to a CF-netCDF3 64-bit offset format file </span>
+<span class="sd">           ``&#39;NETCDF4_CLASSIC&#39;``  Output to a CF-netCDF4 classic format file      </span>
+<span class="sd">           ``&#39;NETCDF4&#39;``          Output to a CF-netCDF4 format file              </span>
+<span class="sd">           ``&#39;CFA3&#39;``             Output to a CFA-netCDF3 classic format file </span>
+<span class="sd">           ``&#39;CFA4&#39;``             Output to a CFA-netCDF4 format file </span>
+<span class="sd">           =====================  ================================================</span>
+
+<span class="sd">        By default the *fmt* is ``&#39;NETCDF3_CLASSIC&#39;``. Note that the</span>
+<span class="sd">        netCDF3 formats may be slower than any of the other options.</span>
+
+<span class="sd">    overwrite: bool, optional</span>
+<span class="sd">        If False then raise an exception if the output file</span>
+<span class="sd">        pre-exists. By default a pre-existing output file is over</span>
+<span class="sd">        written.</span>
+
+<span class="sd">    verbose : bool, optional</span>
+<span class="sd">        If True then print one-line summaries of each field written.</span>
+
+<span class="sd">    cfa_options : dict, optional</span>
+<span class="sd">        A dictionary giving parameters for configuring the output</span>
+<span class="sd">        CFA-netCDF file:</span>
+
+<span class="sd">           ==========  ===============================================</span>
+<span class="sd">           Key         Value</span>
+<span class="sd">           ==========  ===============================================</span>
+<span class="sd">           ``&#39;base&#39;``  * If ``None`` (the default) then file names</span>
+<span class="sd">                         within CFA-netCDF files are stored with</span>
+<span class="sd">                         absolute paths.</span>
+
+<span class="sd">                       * If set to an empty string then file names</span>
+<span class="sd">                         within CFA-netCDF files are given relative to</span>
+<span class="sd">                         the directory or URL base containing the</span>
+<span class="sd">                         output CFA-netCDF file.</span>
+
+<span class="sd">                       * If set to a string then file names within</span>
+<span class="sd">                         CFA-netCDF files are given relative to the</span>
+<span class="sd">                         directory or URL base described by the</span>
+<span class="sd">                         value. For example: ``&#39;../archive&#39;``.</span>
+<span class="sd">           ==========  ===============================================        </span>
+
+<span class="sd">        By default no parameters are specified.</span>
+<span class="sd">    </span>
+<span class="sd">    mode : str, optional</span>
+<span class="sd">        Specify the mode of write access for the output file. One of:</span>
+
+<span class="sd">           =======  =====================================================</span>
+<span class="sd">           mode     Description</span>
+<span class="sd">           =======  =====================================================</span>
+<span class="sd">           ``&#39;w&#39;``  Open a new file for writing to. If it exists and</span>
+<span class="sd">                    *overwrite* is True then the file is deleted prior to</span>
+<span class="sd">                    being recreated.</span>
+<span class="sd">           =======  =====================================================</span>
+<span class="sd">       </span>
+<span class="sd">        By default the file is opened with write access mode ``&#39;w&#39;``.</span>
+
+<span class="sd">    endian : str, optional</span>
+<span class="sd">        The endian-ness of the output file. Valid values are</span>
+<span class="sd">        ``&#39;little&#39;``, ``&#39;big&#39;`` or ``&#39;native&#39;``. By default the output</span>
+<span class="sd">        is native endian.</span>
+
+<span class="sd">    least_significant_digit : int, optional</span>
+<span class="sd">        Truncate the input field data arrays. In conjunction with</span>
+<span class="sd">        compression this produces &#39;lossy&#39;, but significantly more</span>
+<span class="sd">        efficient compression. An integer value defines the power of</span>
+<span class="sd">        ten of the smallest decimal place in unpacked data that is a</span>
+<span class="sd">        reliable value.</span>
+<span class="sd">        </span>
+<span class="sd">    compress : bool, optional</span>
+<span class="sd">        If True then the data will be compressed in the output netCDF</span>
+<span class="sd">        file using standard netCDF compression. By default there is no</span>
+<span class="sd">        compression. An exception is raised if compression is</span>
+<span class="sd">        requested for an netCDF3 output file format.</span>
+
+<span class="sd">    complevel : int, optional</span>
+<span class="sd">        Regulate the speed and efficiency of the compression. Must be</span>
+<span class="sd">        an integer between ``0`` and ``9``. ``1`` is the fastest, but</span>
+<span class="sd">        has the lowest compression ratio; ``9`` is the slowest but</span>
+<span class="sd">        best compression ratio; ``0`` means no compression. The</span>
+<span class="sd">        default value is ``4``. Ignored if *compress* is False.</span>
+<span class="sd">    </span>
+<span class="sd">    fletcher32 : bool, optional</span>
+<span class="sd">        If True then the Fletcher32 HDF5 checksum algorithm is</span>
+<span class="sd">        activated to detect compressions errors. Ignored if *compress*</span>
+<span class="sd">        is False.</span>
+
+<span class="sd">    no_shuffle : bool, optional</span>
+<span class="sd">        If True then the HDF5 shuffle filter (which de-interlaces a</span>
+<span class="sd">        block of data before compression by reordering the bytes by</span>
+<span class="sd">        storing the first byte of all of a variable&#39;s values in the</span>
+<span class="sd">        chunk contiguously, followed by all the second bytes, and so</span>
+<span class="sd">        on) is turned off. By default the filter is be applied because</span>
+<span class="sd">        if the data array values are not all wildly different, using</span>
+<span class="sd">        the filter can make the data more easily compressible.</span>
+<span class="sd">        Ignored if *compress* is False.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    None</span>
+
+<span class="sd">:Raises:</span>
+
+<span class="sd">    IOError :</span>
+<span class="sd">        If *overwrite* is False and the output file pre-exists.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">[&lt;CF Field: air_pressure(30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: u_compnt_of_wind(19, 29, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: v_compnt_of_wind(19, 29, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: potential_temperature(19, 30, 24)&gt;]</span>
+<span class="sd">&gt;&gt;&gt; write(f, &#39;file&#39;)</span>
+
+<span class="sd">&gt;&gt;&gt; type(f)</span>
+<span class="sd">&lt;class &#39;cf.field.FieldList&#39;&gt;</span>
+<span class="sd">&gt;&gt;&gt; type(g)</span>
+<span class="sd">&lt;class &#39;cf.field.Field&#39;&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.write([f, g], &#39;file.nc&#39;, verbose=True)</span>
+<span class="sd">[&lt;CF Field: air_pressure(30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: u_compnt_of_wind(19, 29, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: v_compnt_of_wind(19, 29, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: potential_temperature(19, 30, 24)&gt;]</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>      
+    <span class="k">if</span> <span class="n">fields</span><span class="p">:</span>
+        <span class="n">netcdf_write</span><span class="p">(</span><span class="n">fields</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="n">overwrite</span><span class="p">,</span>
+                     <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">cfa_options</span><span class="o">=</span><span class="n">cfa_options</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span>
+                     <span class="n">least_significant_digit</span><span class="o">=</span><span class="n">least_significant_digit</span><span class="p">,</span>
+                     <span class="n">endian</span><span class="o">=</span><span class="n">endian</span><span class="p">,</span>
+                     <span class="n">compress</span><span class="o">=</span><span class="n">compress</span><span class="p">,</span> <span class="n">no_shuffle</span><span class="o">=</span><span class="n">no_shuffle</span><span class="p">,</span>
+                     <span class="n">complevel</span><span class="o">=</span><span class="n">complevel</span><span class="p">,</span> <span class="n">fletcher32</span><span class="o">=</span><span class="n">fletcher32</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Hassell.
+      Last updated on Feb 21, 2016.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

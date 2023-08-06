@@ -1,0 +1,179 @@
+* Mention default for weighting at the outset.
+
+* The std dev "a" business is hard to understand, as you know. To explain it,
+examples are needed. This would be too much to include at this point in the
+text. I suggest you stop at "an approximate value is calculated." and put the
+rest in the documentation for the a parameter. You could also consider moving
+all of that into a separate page, where you can give lots of space to it.
+
+> * What happens to cell_methods with methods that CF doesn't support?
+
+A nonsense one like "fred" will raise an exception. Currently, a
+sensible one like "sample_size" will not make a new cell method, which
+is not really satisfactory. Suggestions welcome.
+
+> * axes should give error if cell_methods string supplied, I
+>   suggest. See below re documentation for axes.
+
+OK . It does in the code but should say so in the docs, too.
+
+> * coordinate. Should we avoid 'centre' because it will trip up
+>   Americans? One could argue that in IT the spelling is 'center',
+>   but we may not like that. What about calling it 'mid_range'
+>   instead, which is a cell method.
+
+I like 'mid_range'.
+
+> * group. This is good. For cf.Data, perhaps you could say "defining
+>   the group size in terms of ranges of coordinate values" and maybe
+>   you could mention the use of subspace (I presume) if you first
+>   want to adjust the start and end of the groups. For
+>   cf.TimeDuration, "defining the group size in terms of calendar
+>   months and years, or other time intervals" - you only give
+>   calendar examples - and for cf.Comparison "defining the groups -
+>   how in general?"  The example are just for climatological seasons
+>   but it's more general.
+
+> * I don't like the keywords classification and
+>   return_classification. (I expect that doesn't surprise you.) Could
+>   classification be absorbed into group? It seems that an ordered
+>   sequence of int is not currently a possible group. Then
+>   return_classification could be renamed to classification, or
+>   perhaps something which mentions "group" to be self-consistent
+>   e.g. outgroup, regroup.
+
+Maybe
+
+* classification. The sentence "Each group comprises the axis elements
+corresponding to the positions of a particular non-negative value, which need
+not be in consecutive runs" is hard. I suggest saying it the other way first.
+"The sequence gives the group number to which the corresponding element of the
+axis should be assigned. The group numbers may be any non-negative integers.
+Elements assigned a negative group number are ignored. The groups do not have
+to be in runs of consective elements; they can be scattered throughout the
+axis."
+
+> What order is the output axis in? Is it "Upon output, the collapsed
+> axis is arranged in order of increasing group number"?
+
+OK.
+
+> within_days: Each group contains a consecutive run of elements whose
+> coordinates *all* (?) satisfy the same condition. Can you give an
+> example of using a sequence, to show what it's for?
+
+> "For CF compliance, a "within days" collapse should be followed by
+> an "over days" collapse." - or "over years" if there is also "within
+> years"?  It should be an error if this isn't done.
+ 
+This is a bit tricky. To do this, you would have to force
+climatological time collapses to be specified via a cell_methods-like
+string and it would make it rather awkward to inspect the first,
+"within days" part of the collapse.
+
+> * Typo in f.weights(weights, componenets=True). See below re
+>   cf.Field.weights.
+
+> within_years: Febraury. 
+
+Indeed.
+
+> "For CF compliance, a "within days" collapse should be followed by
+> an "over days" collapse." This should be "years" and it should be an
+> error if it's not satisfied.
+
+Ditto above.
+
+> over_days: "If weights have been given by the weights parameter then
+>            they are applied to each group. A coordinate parameter
+>            value of 'min' is assumed, regardless of its given
+>            value." Is that right? I thought it should be in the
+>            middle of the first interval.
+
+> As above, is it correct that "A coordinate parameter value of 'min'
+> is assumed, regardless of its given value." 
+
+I think these are ok. The "within days" collapse has (by default) a
+mid_range coordinate for each of its groups and then "over days"
+operation is takes the minium of these mid_ranges.
+
+> cf.TimeDuration - should you have to specify 0600? The groups only
+>                   have to pick up the correct days.
+
+> cf.TimeDuration - should it mention over_days here (yes!)? Do we have to
+>                   specify 0600 and 1 Dec to pick up the correct
+>                   years?
+
+You don't have to, and often won't need to, but there are cases where
+this is useful. Imagine a time series of 30 daily maxima spanning
+1997-4-1 06:00 to 1997-5-1 06:00 where a "day" runs from 06:00 to
+06:00. Then:
+
+  over_days=cf.M() will return two elements with bounds: (1997-4-01
+  06:00, 1997-4-30 06:00) and (1997-4-30 06:00, 1997-5-01 06:00)
+
+  over_days=cf.M(hour=6) will return one element with bounds:
+  (1997-4-1 06:00, 1997-5-1 06:00)
+
+> "For CF compliance ..."  - give an error if not.
+
+> "For CF compliance ..." - if not, give an error.
+
+OK.
+
+> over_years: It may not be helpful to say "(YYYY)" because it's the
+>             same both times and it implies that years can only be
+>             0-9999. I know that CF says it like this, but we can do
+>             better here.
+
+OK.
+
+> Examples: Maybe a few more of group collapse would be good to
+> include.
+
+area weighted mean: Seeing the examples suggests again that weights='area'
+should be the default. It must usually be what is wanted. We talked about an
+"intelligent" default, didn't we? area for area, linear for other continuous,
+unweighted for discrete.
+
+The documentation of cf.Field.axes is very hard to understand.
+
+* Can you give a link to something saying what a domain axis identifier is,
+for the first sentence.
+
+* You define explicit and implicit selection. How is this classification
+related to the following text for axes? The classification should either be
+used or not mentioned.
+
+* At least one example is needed for each of the kinds of selection described.
+The examples should start by being simple. The example f.axes() is OK, but
+dict([(axis, f.domain.axis_name(axis)) for axis in f.axes()]) and
+f.axes().difference(f.data_axes()) are not simple, and a bit frightening.  It
+is fine to give them, but they should come after simple ones. Similarly the
+code fragment starting x = f.axes(['dim2', 'time', {'units': 'degree_north'}]),
+in the midst of the axes test, is a very hard example. Putting it there seems
+to suggest it's a basic point, but actually it is rather esoteric, I think, and
+should not be in the axes section but late in the Examples section.
+
+* The commonest kind of selection is by item, I suppose, but this refers to a
+different page and there are no examples in this page. The sentence "Used in
+conjunction with the kwargs arguments to implicitly select the axes which span
+the items that would be identified by this call of the field's items method" is
+very difficult to understand. The cf.Field.items page is not just about axes,
+so it's hard to reinterpret it to explain what is needed here. I feel that you
+need to recast a subset of the cf.Field.items page for axes specifically and
+include examples in this (cf.Field.axes) page. Although it's strictly
+redundant, it will make it much easier to understand. Can you use include-files
+somehow to avoid repetition of actual text?
+
+The cf.Field.weights page presents similar challenges to cf.Field.axes, but is
+not as hard. I think a common kind of selection is by item for a particular
+axis, but there are no examples in this page of what this looks like, or of the
+common types of item selection. The sentence "Weights from the cell sizes of
+the dimension coordinate object that would be selected by this call of the
+field's dim method" is hard to digest, and it would be better to include some
+examples in this page. The example given in the weights text "To create to
+2-dimensional weights ..." is not a basic one, so as the first example the user
+reads it's a bit daunting. This should appear later, in the Examples section.
+~
+~

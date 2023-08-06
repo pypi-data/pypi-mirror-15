@@ -1,0 +1,1730 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cf.cellmethods &mdash; Documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/copybutton.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cf.cellmethods</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">collections</span>
+
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">deepcopy</span>
+<span class="kn">from</span> <span class="nn">re</span> <span class="kn">import</span> <span class="n">sub</span>    <span class="k">as</span> <span class="n">re_sub</span>
+<span class="kn">from</span> <span class="nn">re</span> <span class="kn">import</span> <span class="n">search</span> <span class="k">as</span> <span class="n">re_search</span>
+<span class="kn">from</span> <span class="nn">ast</span> <span class="kn">import</span> <span class="n">literal_eval</span> <span class="k">as</span> <span class="n">ast_literal_eval</span>
+
+<span class="kn">from</span> <span class="nn">.functions</span> <span class="kn">import</span> <span class="n">equals</span>
+<span class="kn">from</span> <span class="nn">.functions</span> <span class="kn">import</span> <span class="n">inspect</span> <span class="k">as</span> <span class="n">cf_inspect</span>
+
+<span class="kn">from</span> <span class="nn">.data.data</span> <span class="kn">import</span> <span class="n">Data</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">_found_ESMF</span>
+
+<span class="n">_collapse_cell_methods</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;max&#39;</span>            <span class="p">:</span> <span class="s1">&#39;maximum&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;mean&#39;</span>           <span class="p">:</span> <span class="s1">&#39;mean&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;mid_range&#39;</span>      <span class="p">:</span> <span class="s1">&#39;mid_range&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;min&#39;</span>            <span class="p">:</span> <span class="s1">&#39;minimum&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;range&#39;</span>          <span class="p">:</span> <span class="s1">&#39;range&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;sd&#39;</span>             <span class="p">:</span> <span class="s1">&#39;standard_deviation&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;sum&#39;</span>            <span class="p">:</span> <span class="s1">&#39;sum&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;var&#39;</span>            <span class="p">:</span> <span class="s1">&#39;variance&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;sample_size&#39;</span>    <span class="p">:</span> <span class="bp">None</span><span class="p">,</span> 
+    <span class="s1">&#39;sum_of_weights&#39;</span> <span class="p">:</span> <span class="bp">None</span><span class="p">,</span>
+    <span class="s1">&#39;sum_of_weights2&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<span class="c1"># ====================================================================</span>
+<span class="c1">#</span>
+<span class="c1"># _CellMethod object</span>
+<span class="c1">#</span>
+<span class="c1"># ====================================================================</span>
+
+<span class="k">class</span> <span class="nc">_CellMethod</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;**Attributes**</span>
+
+<span class="sd">============  ========================================================</span>
+<span class="sd">Attribute     Description</span>
+<span class="sd">============  ========================================================</span>
+<span class="sd">`!names`      </span>
+<span class="sd">`!intervals`  </span>
+<span class="sd">`!method`     </span>
+<span class="sd">`!over`       </span>
+<span class="sd">`!where`      </span>
+<span class="sd">`!within`     </span>
+<span class="sd">`!comment`    </span>
+<span class="sd">`!axes`       </span>
+<span class="sd">============  ========================================================</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">axes</span>      <span class="o">=</span> <span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">names</span>     <span class="o">=</span> <span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span> <span class="o">=</span> <span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">method</span>    <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">comment</span>   <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">where</span>     <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">within</span>    <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">over</span>      <span class="o">=</span> <span class="bp">None</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__deepcopy__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">memo</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Used if copy.deepcopy is called on the variable.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__hash__() &lt;==&gt; hash(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__repr__() &lt;==&gt; repr(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="s1">&#39;&lt;CF _CellMethod: </span><span class="si">%s</span><span class="s1">&gt;&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__str__() &lt;==&gt; str(x)</span>
+
+<span class="sd">Return a CF-netCDF-like string of the cell method.</span>
+
+<span class="sd">Note that if the intention use this string in a CF-netCDF cell_methods</span>
+<span class="sd">attribute then the cell method&#39;s `!name` attribute may need to be</span>
+<span class="sd">modified, where appropriate, to reflect netCDF variable names.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">string</span> <span class="o">=</span> <span class="p">[]</span>
+        
+        <span class="n">x</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">axis</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="n">name</span> <span class="o">=</span> <span class="n">axis</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;?&#39;</span>
+
+            <span class="n">x</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">:&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+        <span class="c1">#--- End: for</span>
+        <span class="n">string</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="n">method</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">method</span>
+        <span class="k">if</span> <span class="n">method</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">method</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+
+        <span class="n">string</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">method</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">portion</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;within&#39;</span><span class="p">,</span> <span class="s1">&#39;where&#39;</span><span class="p">,</span> <span class="s1">&#39;over&#39;</span><span class="p">):</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">portion</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">string</span><span class="o">.</span><span class="n">extend</span><span class="p">((</span><span class="n">portion</span><span class="p">,</span> <span class="n">p</span><span class="p">))</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="n">intervals</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span>
+        <span class="k">if</span> <span class="n">intervals</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;(&#39;</span><span class="p">]</span>
+
+            <span class="n">y</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;interval: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">data</span> <span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">intervals</span><span class="p">]</span>
+            <span class="n">x</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">comment</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">x</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39; comment: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">comment</span><span class="p">)</span>
+
+            <span class="n">x</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;)&#39;</span><span class="p">)</span>
+
+            <span class="n">string</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">comment</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">string</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;(</span><span class="si">%s</span><span class="s1">)&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">comment</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__eq__(y) &lt;==&gt; x==y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__ne__(y) &lt;==&gt; x!=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">__eq__</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a deep copy.</span>
+
+<span class="sd">``c.copy()`` is equivalent to ``copy.deepcopy(c)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : </span>
+<span class="sd">        The deep copy.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = c.copy()</span>
+
+<span class="sd">&#39;&#39;&#39;</span>       
+        <span class="n">new</span> <span class="o">=</span> <span class="n">_CellMethod</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">_CellMethod</span><span class="p">)</span>
+
+        <span class="n">new</span><span class="o">.</span><span class="n">axes</span>    <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span>     
+        <span class="n">new</span><span class="o">.</span><span class="n">names</span>   <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span>    
+        <span class="n">new</span><span class="o">.</span><span class="n">method</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">method</span>   
+        <span class="n">new</span><span class="o">.</span><span class="n">comment</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">comment</span>  
+        <span class="n">new</span><span class="o">.</span><span class="n">where</span>   <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">where</span>    
+        <span class="n">new</span><span class="o">.</span><span class="n">within</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">within</span>   
+        <span class="n">new</span><span class="o">.</span><span class="n">over</span>    <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">over</span>     
+
+        <span class="n">new</span><span class="o">.</span><span class="n">intervals</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">new</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">equals</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+               <span class="n">ignore_fill_value</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if two cell methods are equal, False otherwise.</span>
+
+<span class="sd">The `!axes` attribute is ignored in the comparison.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    other : </span>
+<span class="sd">        The object to compare for equality.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">    ignore_fill_value : bool, optional</span>
+<span class="sd">        If True then data arrays with different fill values are</span>
+<span class="sd">        considered equal. By default they are considered unequal.</span>
+
+<span class="sd">    traceback : bool, optional</span>
+<span class="sd">        If True then print a traceback highlighting where the two</span>
+<span class="sd">        instances differ.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two instances are equal.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="c1"># Check that each instance is the same type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different types: </span><span class="si">%s</span><span class="s2"> != </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="n">names0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span>
+        <span class="n">names1</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">names</span>        
+<span class="c1">#        indices0 = sorted(range(len(names0)), key=names0.__getitem__)</span>
+<span class="c1">#        indices1 = sorted(range(len(names1)), key=names1.__getitem__)</span>
+<span class="c1">#        names0 = sorted(names0)</span>
+ <span class="c1">#       names1 = sorted(names1)</span>
+
+        <span class="k">if</span> <span class="n">names0</span> <span class="o">!=</span> <span class="n">names1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different names: </span><span class="si">%s</span><span class="s2"> != </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">names0</span><span class="p">,</span> <span class="n">names1</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">if</span> <span class="bp">None</span> <span class="ow">in</span> <span class="n">names0</span> <span class="ow">or</span> <span class="bp">None</span> <span class="ow">in</span> <span class="n">names0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Missing names: </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">names0</span><span class="p">,</span> <span class="n">names1</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+            <span class="c1">#--- End: if</span>
+
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;method&#39;</span><span class="p">,</span> <span class="s1">&#39;within&#39;</span><span class="p">,</span> <span class="s1">&#39;over&#39;</span><span class="p">,</span> <span class="s1">&#39;where&#39;</span><span class="p">,</span> <span class="s1">&#39;comment&#39;</span><span class="p">):</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">x</span> <span class="o">!=</span> <span class="n">y</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different </span><span class="si">%s</span><span class="s2">: </span><span class="si">%r</span><span class="s2"> != </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                          <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="n">intervals0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span>
+        <span class="n">intervals1</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">intervals</span>
+        <span class="k">if</span> <span class="n">intervals0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">intervals1</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different intervals: </span><span class="si">%r</span><span class="s2"> != </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                          <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">intervals0</span><span class="p">,</span> <span class="n">intervals1</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+            <span class="c1">#--- End: if</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">intervals0</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">intervals1</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different intervals: </span><span class="si">%r</span><span class="s2"> != </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                          <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">intervals0</span><span class="p">,</span> <span class="n">intervals1</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+            <span class="c1">#--- End: if</span>
+
+            <span class="k">for</span> <span class="n">data0</span><span class="p">,</span> <span class="n">data1</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">intervals0</span><span class="p">,</span> <span class="n">intervals1</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">data0</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">data1</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                                    <span class="n">ignore_fill_value</span><span class="o">=</span><span class="n">ignore_fill_value</span><span class="p">,</span>
+                                    <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                        <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different intervals: </span><span class="si">%r</span><span class="s2"> != </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                              <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">data0</span><span class="p">,</span> <span class="n">data1</span><span class="p">))</span>
+                    <span class="k">return</span> <span class="bp">False</span>
+     
+        <span class="k">elif</span> <span class="n">intervals1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different intervals: </span><span class="si">%r</span><span class="s2"> != </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">intervals0</span><span class="p">,</span> <span class="n">intervals1</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">return</span> <span class="bp">True</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">equivalent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if two cell methods are equivalent, False otherwise.</span>
+
+<span class="sd">The `axes` attribute is ignored in the comparison.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    other : </span>
+<span class="sd">        The object to compare for equality.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two instances are equivalent.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="c1"># Check that each instance is the same type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different types: </span><span class="si">%s</span><span class="s2"> != </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="n">names0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span>
+        <span class="n">names1</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">names</span>        
+        <span class="n">indices0</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">names0</span><span class="p">)),</span> <span class="n">key</span><span class="o">=</span><span class="n">names0</span><span class="o">.</span><span class="n">__getitem__</span><span class="p">)</span>
+        <span class="n">indices1</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">names1</span><span class="p">)),</span> <span class="n">key</span><span class="o">=</span><span class="n">names1</span><span class="o">.</span><span class="n">__getitem__</span><span class="p">)</span>
+        <span class="n">names0</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">names0</span><span class="p">)</span>
+        <span class="n">names1</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">names1</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">None</span> <span class="ow">in</span> <span class="n">names0</span> <span class="ow">or</span> <span class="bp">None</span> <span class="ow">in</span> <span class="n">names1</span> <span class="ow">or</span> <span class="n">names0</span> <span class="o">!=</span> <span class="n">names1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Nonequivalent names: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">names0</span><span class="p">,</span> <span class="n">names1</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;method&#39;</span><span class="p">,</span> <span class="s1">&#39;within&#39;</span><span class="p">,</span> <span class="s1">&#39;over&#39;</span><span class="p">,</span> <span class="s1">&#39;where&#39;</span><span class="p">,</span> <span class="s1">&#39;comment&#39;</span><span class="p">):</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">x</span> <span class="o">!=</span> <span class="n">y</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Nonequivalent </span><span class="si">%s</span><span class="s2">: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                          <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="n">intervals0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span>
+        <span class="n">intervals1</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">intervals</span>
+        <span class="k">if</span> <span class="n">intervals0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">intervals1</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Nonequivalent intervals: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                          <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">intervals0</span><span class="p">,</span> <span class="n">intervals1</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+            <span class="c1">#--- End: if</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">intervals0</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">intervals0</span> <span class="o">=</span> <span class="n">intervals0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">names0</span><span class="p">)</span>
+                
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">intervals1</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">intervals1</span> <span class="o">=</span> <span class="n">intervals1</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">names1</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">intervals0</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">intervals1</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Nonequivalent intervals: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                          <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">intervals0</span><span class="p">,</span> <span class="n">intervals1</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+            <span class="c1">#--- End: if</span>
+
+            <span class="c1"># Sort the intervals</span>
+            <span class="n">intervals0</span> <span class="o">=</span> <span class="p">[</span><span class="n">intervals0</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">indices0</span><span class="p">]</span>
+            <span class="n">intervals1</span> <span class="o">=</span> <span class="p">[</span><span class="n">intervals1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">indices1</span><span class="p">]</span>
+
+            <span class="k">for</span> <span class="n">data0</span><span class="p">,</span> <span class="n">data1</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">intervals0</span><span class="p">,</span> <span class="n">intervals1</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">data0</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">data1</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>                    
+                        <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Nonequivalent intervals: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                              <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">data0</span><span class="p">,</span> <span class="n">data1</span><span class="p">))</span>
+                    <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">elif</span> <span class="n">intervals1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Nonequivalent intervals: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="n">CellMethods</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">intervals0</span><span class="p">,</span> <span class="n">intervals1</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">return</span> <span class="bp">True</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Inspect the attributes.</span>
+
+<span class="sd">.. seealso:: `cf.inspect`</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    None</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">print</span> <span class="n">cf_inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+<span class="c1">#--- End: def</span>
+
+<span class="c1"># ====================================================================</span>
+<span class="c1">#</span>
+<span class="c1"># CellMethods object</span>
+<span class="c1">#</span>
+<span class="c1"># ====================================================================</span>
+
+<div class="viewcode-block" id="CellMethods"><a class="viewcode-back" href="../../classes/cf.CellMethods.html#cf.CellMethods">[docs]</a><span class="k">class</span> <span class="nc">CellMethods</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">MutableSequence</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">A CF cell methods object to describe the characteristic of a field</span>
+<span class="sd">that is represented by cell values.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell_methods</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">**Initialization**</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    string : str, optional</span>
+<span class="sd">        Initialize new instance from a CF-netCDF-like cell methods</span>
+<span class="sd">        string. See the `parse` method for details. By default an</span>
+<span class="sd">        empty cell methods is created.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods()</span>
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;time: max: height: mean&#39;)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>               
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cell_methods</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cell_methods</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_list</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_parse</span><span class="p">(</span><span class="n">cell_methods</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cell_methods</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__delitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__delitem__(index) &lt;==&gt; del x[index]</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__deepcopy__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">memo</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Used if copy.deepcopy is called on the variable.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__getitem__(index) &lt;==&gt; x[index]</span>
+<span class="sd">s</span>
+<span class="sd">&#39;&#39;&#39;</span>     
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">long</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)((</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="n">index</span><span class="p">],))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__hash__() &lt;==&gt; hash(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__len__() &lt;==&gt; len(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">x.__repr__() &lt;==&gt; repr(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="s1">&#39;&lt;CF </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&gt;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>        
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__setitem__(index, value) &lt;==&gt; x[index]=value</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Can&#39;t assign </span><span class="si">%s</span><span class="s2"> to </span><span class="si">%s</span><span class="s2">[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span>
+                <span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">index</span><span class="p">))</span>
+        
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">long</span><span class="p">)):</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">index</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">_list</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__str__() &lt;==&gt; str(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>        
+        <span class="k">return</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">cm</span><span class="p">)</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__eq__(y) &lt;==&gt; x==y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__ne__(y) &lt;==&gt; x!=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">__eq__</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__add__(y) &lt;==&gt; x+y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__mul__(n) &lt;==&gt; x*n</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span> <span class="o">*</span> <span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__rmul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__rmul__(n) &lt;==&gt; n*x</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span> <span class="o">*</span> <span class="n">other</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__iadd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__iadd__(y) &lt;==&gt; x+=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__imul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__imul__(n) &lt;==&gt; x*=n</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span> <span class="o">*</span> <span class="n">other</span>
+        <span class="k">return</span> <span class="bp">self</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">_parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">string</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Parse a CF cell_methods string into this `cf.CellMethods` instance in</span>
+<span class="sd">place.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    string : str, optional</span>
+<span class="sd">        The CF cell_methods string to be parsed into the</span>
+<span class="sd">        `cf.CellMethods` object. By default the cell methods will be</span>
+<span class="sd">        empty.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    None</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods()</span>
+<span class="sd">&gt;&gt;&gt; c = c._parse(&#39;time: minimum within years time: mean over years (ENSO years)&#39;)    </span>
+<span class="sd">&gt;&gt;&gt; print c</span>
+<span class="sd">Cell methods    : time: minimum within years</span>
+<span class="sd">                  time: mean over years (ENSO years)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">string</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">return</span>
+
+        <span class="c1"># Split the cell_methods string into a list of strings ready</span>
+        <span class="c1"># for parsing into the result list. E.g.</span>
+        <span class="c1">#   &#39;lat: mean (interval: 1 hour)&#39;</span>
+        <span class="c1"># maps to </span>
+        <span class="c1">#   [&#39;lat:&#39;, &#39;mean&#39;, &#39;(&#39;, &#39;interval:&#39;, &#39;1&#39;, &#39;hour&#39;, &#39;)&#39;]</span>
+        <span class="n">cell_methods</span> <span class="o">=</span> <span class="n">re_sub</span><span class="p">(</span><span class="s1">&#39;\((?=[^\s])&#39;</span> <span class="p">,</span> <span class="s1">&#39;( &#39;</span><span class="p">,</span> <span class="n">string</span><span class="p">)</span>
+        <span class="n">cell_methods</span> <span class="o">=</span> <span class="n">re_sub</span><span class="p">(</span><span class="s1">&#39;(?&lt;=[^\s])\)&#39;</span><span class="p">,</span> <span class="s1">&#39; )&#39;</span><span class="p">,</span> <span class="n">cell_methods</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+
+        <span class="k">while</span> <span class="n">cell_methods</span><span class="p">:</span>
+            <span class="n">cm</span> <span class="o">=</span> <span class="n">_CellMethod</span><span class="p">()</span>
+
+            <span class="n">axes</span>  <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">while</span> <span class="n">cell_methods</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">):</span>
+                    <span class="k">break</span>
+
+                <span class="c1"># Check that &quot;name&quot; ebds with colon? How? (&#39;lat: mean (area-weighted) or lat: mean (interval: 1 degree_north comment: area-weighted)&#39;)</span>
+
+                <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>            
+                <span class="n">axes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+            <span class="c1">#--- End: while</span>
+            <span class="n">cm</span><span class="o">.</span><span class="n">axes</span>  <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">axes</span><span class="p">)</span>
+            <span class="n">cm</span><span class="o">.</span><span class="n">names</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">names</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cell_methods</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cm</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="c1"># Method</span>
+            <span class="n">cm</span><span class="o">.</span><span class="n">method</span> <span class="o">=</span> <span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cell_methods</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cm</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="c1"># Climatological statistics and statistics which apply to</span>
+            <span class="c1"># portions of cells</span>
+            <span class="k">while</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;within&#39;</span><span class="p">,</span> <span class="s1">&#39;where&#39;</span><span class="p">,</span> <span class="s1">&#39;over&#39;</span><span class="p">):</span>
+                <span class="n">attr</span> <span class="o">=</span> <span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">cm</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">cell_methods</span><span class="p">:</span>
+                    <span class="k">break</span>
+            <span class="c1">#--- End: while</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cell_methods</span><span class="p">:</span> 
+                <span class="bp">self</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cm</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="c1"># interval and comment</span>
+            <span class="n">intervals</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;(&#39;</span><span class="p">):</span>
+                <span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">re_search</span><span class="p">(</span><span class="s1">&#39;^(interval|comment):$&#39;</span><span class="p">,</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+                    <span class="n">cell_methods</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;comment:&#39;</span><span class="p">)</span>
+                           
+                <span class="k">while</span> <span class="ow">not</span> <span class="n">re_search</span><span class="p">(</span><span class="s1">&#39;^\)$&#39;</span><span class="p">,</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                    <span class="n">term</span> <span class="o">=</span> <span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+                    <span class="k">if</span> <span class="n">term</span> <span class="o">==</span> <span class="s1">&#39;interval&#39;</span><span class="p">:</span>
+                        <span class="n">interval</span> <span class="o">=</span> <span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;)&#39;</span><span class="p">:</span>
+                            <span class="n">units</span> <span class="o">=</span> <span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">units</span> <span class="o">=</span> <span class="bp">None</span>
+
+                        <span class="k">try</span><span class="p">:</span>
+<span class="c1">#                            parsed_interval = float(ast_literal_eval(interval))</span>
+                            <span class="n">parsed_interval</span> <span class="o">=</span> <span class="n">ast_literal_eval</span><span class="p">(</span><span class="n">interval</span><span class="p">)</span>
+                        <span class="k">except</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<span class="s2">&quot;Unparseable cell methods interval: {0!r}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+    <span class="n">interval</span><span class="o">+</span><span class="s1">&#39; &#39;</span><span class="o">+</span><span class="n">units</span> <span class="k">if</span> <span class="n">units</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">interval</span><span class="p">))</span>
+                            
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">intervals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Data</span><span class="p">(</span><span class="n">parsed_interval</span><span class="p">,</span> <span class="n">units</span><span class="p">))</span>
+                        <span class="k">except</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<span class="s2">&quot;Unparseable cell methods interval: {0!r}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+    <span class="n">interval</span><span class="o">+</span><span class="s1">&#39; &#39;</span><span class="o">+</span><span class="n">units</span> <span class="k">if</span> <span class="n">units</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">interval</span><span class="p">))</span>
+                            
+                        <span class="k">continue</span>
+                    <span class="c1">#--- End: if</span>
+
+                    <span class="k">if</span> <span class="n">term</span> <span class="o">==</span> <span class="s1">&#39;comment&#39;</span><span class="p">:</span>
+                        <span class="n">comment</span> <span class="o">=</span> <span class="p">[]</span>
+                        <span class="k">while</span> <span class="n">cell_methods</span><span class="p">:</span>
+                            <span class="k">if</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;)&#39;</span><span class="p">):</span>
+                                <span class="k">break</span>
+                            <span class="k">if</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">):</span>
+                                <span class="k">break</span>
+                            <span class="n">comment</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+                        <span class="c1">#--- End: while</span>
+                        <span class="n">cm</span><span class="o">.</span><span class="n">comment</span> <span class="o">=</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">comment</span><span class="p">)</span>
+                    <span class="c1">#--- End: if</span>
+
+                <span class="c1">#--- End: while </span>
+
+                <span class="k">if</span> <span class="n">cell_methods</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;)&#39;</span><span class="p">):</span>
+                    <span class="n">cell_methods</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="c1">#--- End: if</span>
+            <span class="n">n_intervals</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">intervals</span><span class="p">)</span>          
+            <span class="k">if</span> <span class="n">n_intervals</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">n_intervals</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">names</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;0798798  &quot;</span><span class="p">)</span>
+
+            <span class="n">cm</span><span class="o">.</span><span class="n">intervals</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">intervals</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cm</span><span class="p">)</span>
+        <span class="c1">#--- End: while</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">axes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">cm</span><span class="o">.</span><span class="n">axes</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+ 
+    <span class="nd">@axes.setter</span>
+    <span class="k">def</span> <span class="nf">axes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider c[i].axes=value&quot;</span> <span class="o">%</span> 
+                <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> axes attribute must be a tuple or list&quot;</span> <span class="o">%</span>
+                             <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@axes.deleter</span>
+    <span class="k">def</span> <span class="nf">axes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider del c[i].axes&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">comment</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">         </span>
+<span class="sd">Each cell method&#39;s comment keyword.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">cm</span><span class="o">.</span><span class="n">comment</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+
+    <span class="nd">@comment.deleter</span>
+    <span class="k">def</span> <span class="nf">comment</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider del c[i].comment&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">comment</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">method</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Each cell method&#39;s method keyword.</span>
+
+<span class="sd">These describe how the cell values of field have been determined or</span>
+<span class="sd">derived.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;time: minimum area: mean&#39;)       </span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum area: mean&gt;</span>
+<span class="sd">&gt;&gt;&gt; c.method</span>
+<span class="sd">[&#39;minimum&#39;, &#39;mean&#39;]</span>
+<span class="sd">&gt;&gt;&gt; c[1].method = &#39;variance&#39;</span>
+<span class="sd">&gt;&gt;&gt; c.method</span>
+<span class="sd">[&#39;minimum&#39;, &#39;variance&#39;]</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum area: variance&gt;</span>
+<span class="sd">&gt;&gt;&gt; d = c[1]</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: area: variance&gt;</span>
+<span class="sd">&gt;&gt;&gt; d.method</span>
+<span class="sd">[&#39;variance&#39;]</span>
+<span class="sd">&gt;&gt;&gt; d.method = &#39;maximum&#39;</span>
+<span class="sd">&gt;&gt;&gt; d.method</span>
+<span class="sd">[&#39;maximum&#39;]</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum area: maximum&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">cm</span><span class="o">.</span><span class="n">method</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@method.setter</span>
+    <span class="k">def</span> <span class="nf">method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider c[i].method=value&quot;</span> <span class="o">%</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">method</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@method.deleter</span>
+    <span class="k">def</span> <span class="nf">method</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider del c[i].method&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">method</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">names</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">         </span>
+<span class="sd">Each cell method&#39;s name keyword(s).</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;time: minimum area: mean&#39;)       </span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum area: mean&gt;</span>
+<span class="sd">&gt;&gt;&gt; c.names</span>
+<span class="sd">((&#39;time&#39;,), (&#39;area&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; c[1].names = [&#39;lat&#39;, &#39;lon&#39;]</span>
+<span class="sd">&gt;&gt;&gt; c.names </span>
+<span class="sd">((&#39;time&#39;,), (&#39;lat&#39;, &#39;lon&#39;))</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum lat: lon: mean&gt;</span>
+<span class="sd">&gt;&gt;&gt; d = c[1]</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: lat: lon: mean&gt;</span>
+<span class="sd">&gt;&gt;&gt; d.names</span>
+<span class="sd">((&#39;lat&#39;, &#39;lon&#39;),)</span>
+<span class="sd">&gt;&gt;&gt; d.names = (&#39;area&#39;,)</span>
+<span class="sd">&gt;&gt;&gt; d.names</span>
+<span class="sd">((&#39;area&#39;,),)</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum area: mean&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>        
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">cm</span><span class="o">.</span><span class="n">names</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+
+    <span class="nd">@names.setter</span>
+    <span class="k">def</span> <span class="nf">names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider c[i].names=value&quot;</span> <span class="o">%</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> names attribute must be a tuple or list&quot;</span> <span class="o">%</span> 
+                             <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">names</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+        <span class="c1"># Make sure that axes has the same number of elements as names</span>
+        <span class="n">len_value</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">len_value</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="p">(</span><span class="bp">None</span><span class="p">,)</span> <span class="o">*</span> <span class="n">len_value</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@names.deleter</span>
+    <span class="k">def</span> <span class="nf">names</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider del c[i].names&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">names</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">intervals</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Each cell method&#39;s interval keyword(s).</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;time: minimum (interval: 1 hr) lat: lon: mean (interval: 0.1 degree_N interval: 0.2 degree_E)&#39;)</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum (interval: 1 hr) lat: lon: mean (interval: 0.1 degree_N interval: 0.2 degree_E)&gt;</span>
+<span class="sd">&gt;&gt;&gt; c.intervals</span>
+<span class="sd">[[&lt;CF Data: 1 hr&gt;], [&lt;CF Data: 0.1 degree_N&gt;, &lt;CF Data: 0.2 degree_E&gt;]]</span>
+<span class="sd">&gt;&gt;&gt; c[0].intervals = [&#39;3600 seconds&#39;]</span>
+<span class="sd">&gt;&gt;&gt; c.intervals</span>
+<span class="sd">&gt;&gt;&gt; c[0].intervals</span>
+<span class="sd">[[&lt;CF Data: 3600 seconds&gt;]]</span>
+<span class="sd">&gt;&gt;&gt; c[0].intervals = [cf.Data(60, &#39;minutes&#39;)]</span>
+<span class="sd">&gt;&gt;&gt; c[0].intervals</span>
+<span class="sd">[[&lt;CF Data: 60 minutes&gt;]]</span>
+<span class="sd">&gt;&gt;&gt; c[0].intervals = [1]</span>
+<span class="sd">&gt;&gt;&gt; c[0].intervals</span>
+<span class="sd">[[&lt;CF Data: 1 &gt;]]</span>
+<span class="sd">&gt;&gt;&gt; del c[0].intervals</span>
+<span class="sd">&gt;&gt;&gt; c.intervals</span>
+<span class="sd">&gt;&gt;&gt; [[], [&lt;CF Data: 0.1 degree_N&gt;, &lt;CF Data: 0.2 degree_E&gt;]]</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum lat: lon: mean (interval: 0.1 degree_N interval: 0.2 degree_E)&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">cm</span><span class="o">.</span><span class="n">intervals</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+
+    <span class="nd">@intervals.setter</span>
+    <span class="k">def</span> <span class="nf">intervals</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider c[i].intervals=value&quot;</span> <span class="o">%</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> intervals attribute must be a tuple or list, not a </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">value</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+        
+        <span class="c1"># Parse the intervals</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="n">interval</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">x</span> <span class="o">=</span> <span class="n">ast_literal_eval</span><span class="p">(</span><span class="n">i</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="s2">&quot;Unparseable cell methods interval: </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">interval</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">interval</span><span class="p">:</span>
+                    <span class="n">units</span> <span class="o">=</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">units</span> <span class="o">=</span> <span class="bp">None</span>
+                    
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">d</span> <span class="o">=</span> <span class="n">Data</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="s2">&quot;Unparseable cell methods interval: </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">interval</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">d</span> <span class="o">=</span> <span class="n">Data</span><span class="o">.</span><span class="n">asdata</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="s2">&quot;Unparseable cell methods interval: </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">interval</span><span class="p">)</span>
+
+            <span class="c1">#--- End: if</span>
+            
+            <span class="k">if</span> <span class="n">d</span><span class="o">.</span><span class="n">size</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Unparseable cell methods interval: </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">interval</span><span class="p">)</span>
+                
+            <span class="k">if</span> <span class="n">d</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">d</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+            <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">intervals</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@intervals.deleter</span>
+    <span class="k">def</span> <span class="nf">intervals</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider del c[i].intervals&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">intervals</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">over</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">         </span>
+<span class="sd">Each cell method&#39;s over keyword.</span>
+
+<span class="sd">These describe how climatological statistics have been derived.</span>
+
+<span class="sd">.. seealso:: `within`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;time: minimum area: mean&#39;)       </span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum time: mean&gt;</span>
+<span class="sd">&gt;&gt;&gt; c.over</span>
+<span class="sd">[None, None]</span>
+<span class="sd">&gt;&gt;&gt; c[0].within = &#39;years&#39;</span>
+<span class="sd">&gt;&gt;&gt; c[1].over = &#39;years&#39;</span>
+<span class="sd">&gt;&gt;&gt; c.over</span>
+<span class="sd">&gt;&gt;&gt; [None, &#39;years&#39;]</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum within years time: mean over years&gt;</span>
+<span class="sd">&gt;&gt;&gt; d = c[1]</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: time: mean over years&gt;</span>
+<span class="sd">&gt;&gt;&gt; del d.over</span>
+<span class="sd">&gt;&gt;&gt; d.over</span>
+<span class="sd">[None]</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: time: mean&gt;</span>
+<span class="sd">&gt;&gt;&gt; del c[0].within</span>
+<span class="sd">&gt;&gt;&gt; c.within</span>
+<span class="sd">()        </span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum time: mean&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">cm</span><span class="o">.</span><span class="n">over</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@over.setter</span>
+    <span class="k">def</span> <span class="nf">over</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider c[i].over=value&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">over</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@over.deleter</span>
+    <span class="k">def</span> <span class="nf">over</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider del c[i].over&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">over</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">where</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">         </span>
+<span class="sd">Each cell method&#39;s where keyword.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">cm</span><span class="o">.</span><span class="n">where</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@where.setter</span>
+    <span class="k">def</span> <span class="nf">where</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider c[i].where=value&quot;</span> <span class="o">%</span>
+                             <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">where</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@where.deleter</span>
+    <span class="k">def</span> <span class="nf">where</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider del c[i].where&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">where</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">within</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">         </span>
+<span class="sd">Each cell method&#39;s within keyword.</span>
+
+<span class="sd">These describe how climatological statistics have been derived.</span>
+
+<span class="sd">.. seealso:: `over`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;time: minimum area: mean&#39;)       </span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum time: mean&gt;</span>
+<span class="sd">&gt;&gt;&gt; c.within</span>
+<span class="sd">(None, None)</span>
+<span class="sd">&gt;&gt;&gt; c[0].within = &#39;years&#39;</span>
+<span class="sd">&gt;&gt;&gt; c[1].over = &#39;years&#39;</span>
+<span class="sd">&gt;&gt;&gt; c.within</span>
+<span class="sd">&gt;&gt;&gt; (&#39;years&#39;, None)</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum within years time: mean over years&gt;</span>
+<span class="sd">&gt;&gt;&gt; d = c[0]</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: time: minimum within years&gt;</span>
+<span class="sd">&gt;&gt;&gt; del d.within</span>
+<span class="sd">&gt;&gt;&gt; d.within</span>
+<span class="sd">(None,)</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: time: minimum&gt;</span>
+<span class="sd">&gt;&gt;&gt; del c[1].over</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF CellMethods: time: minimum time: mean&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">cm</span><span class="o">.</span><span class="n">within</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">])</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@within.setter</span>
+    <span class="k">def</span> <span class="nf">within</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider c[i].within=value&quot;</span> <span class="o">%</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">within</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1">#--- End: def</span>
+ 
+    <span class="nd">@within.deleter</span>
+    <span class="k">def</span> <span class="nf">within</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s2">&quot;Must select a </span><span class="si">%s</span><span class="s2"> element to update. Consider del c[i].within&quot;</span> <span class="o">%</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">within</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="c1">#--- End: def</span>
+ 
+<div class="viewcode-block" id="CellMethods.copy"><a class="viewcode-back" href="../../generated/cf.CellMethods.copy.html#cf.CellMethods.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a deep copy.</span>
+
+<span class="sd">``c.copy()`` is equivalent to ``copy.deepcopy(c)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : </span>
+<span class="sd">        The deep copy.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = c.copy()</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="n">new</span> <span class="o">=</span> <span class="n">CellMethods</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">CellMethods</span><span class="p">)</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">cm</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">new</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CellMethods.dump"><a class="viewcode-back" href="../../generated/cf.CellMethods.dump.html#cf.CellMethods.dump">[docs]</a>    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">display</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+         <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a string containing a full description of the instance.</span>
+
+<span class="sd">If a cell methods &#39;name&#39; is followed by a &#39;*&#39; then that cell method is</span>
+<span class="sd">relevant to the data in a way which may not be precisely defined its</span>
+<span class="sd">corresponding dimension or dimensions.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    display : bool, optional</span>
+<span class="sd">        If False then return the description as a string. By default</span>
+<span class="sd">        the description is printed, i.e. ``c.dump()`` is equivalent to</span>
+<span class="sd">        ``print c.dump(display=False)``.</span>
+
+<span class="sd">    prefix : str, optional</span>
+<span class="sd">       Set the common prefix of component names. By default the</span>
+<span class="sd">       instance&#39;s class name is used.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : None or str</span>
+<span class="sd">        A string containing the description.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+         <span class="k">if</span> <span class="n">prefix</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+             <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+                              
+         <span class="n">string</span> <span class="o">=</span> <span class="p">[]</span>
+         
+         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">cm</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">):</span>
+             <span class="n">string</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">[</span><span class="si">%d</span><span class="s1">] -&gt; </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">cm</span><span class="p">))</span>
+             
+         <span class="n">string</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+         
+         <span class="k">if</span> <span class="n">display</span><span class="p">:</span>
+             <span class="k">print</span> <span class="n">string</span>
+         <span class="k">else</span><span class="p">:</span>
+             <span class="k">return</span> <span class="n">string</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CellMethods.equals"><a class="viewcode-back" href="../../generated/cf.CellMethods.equals.html#cf.CellMethods.equals">[docs]</a>    <span class="k">def</span> <span class="nf">equals</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+               <span class="n">ignore_fill_value</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if two cell methods are equal, False otherwise.</span>
+
+<span class="sd">The `axes` attribute is ignored in the comparison.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    other : </span>
+<span class="sd">        The object to compare for equality.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">    ignore_fill_value : bool, optional</span>
+<span class="sd">        If True then data arrays with different fill values are</span>
+<span class="sd">        considered equal. By default they are considered unequal.</span>
+
+<span class="sd">    traceback : bool, optional</span>
+<span class="sd">        If True then print a traceback highlighting where the two</span>
+<span class="sd">        instances differ.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two instances are equal.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="c1"># Check that each instance is the same type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different types: </span><span class="si">%s</span><span class="s2"> != </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_list</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different numbers of methods: </span><span class="si">%d</span><span class="s2"> != </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_list</span><span class="p">)))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+    
+        <span class="k">for</span> <span class="n">cm0</span><span class="p">,</span> <span class="n">cm1</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">_list</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cm0</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">cm1</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                              <span class="n">ignore_fill_value</span><span class="o">=</span><span class="n">ignore_fill_value</span><span class="p">,</span>
+                              <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">False</span> 
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CellMethods.equivalent"><a class="viewcode-back" href="../../generated/cf.CellMethods.equivalent.html#cf.CellMethods.equivalent">[docs]</a>    <span class="k">def</span> <span class="nf">equivalent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if two cell methods are equivalent, False otherwise.</span>
+
+<span class="sd">The `axes` attributes are ignored in the comparison.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    other : </span>
+<span class="sd">        The object to compare for equality.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two instances are equivalent.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="c1"># Check that each instance is the same type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different types: </span><span class="si">%s</span><span class="s2"> != </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_list</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different numbers of methods: </span><span class="si">%d</span><span class="s2"> != </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                       <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_list</span><span class="p">)))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+    
+        <span class="k">for</span> <span class="n">cm0</span><span class="p">,</span> <span class="n">cm1</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">_list</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cm0</span><span class="o">.</span><span class="n">equivalent</span><span class="p">(</span><span class="n">cm1</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                                  <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">False</span> 
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CellMethods.has_cellmethod"><a class="viewcode-back" href="../../generated/cf.CellMethods.has_cellmethod.html#cf.CellMethods.has_cellmethod">[docs]</a>    <span class="k">def</span> <span class="nf">has_cellmethod</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return True if and only if this cell methods is a super set of another.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    other : cf.CellMethods</span>
+<span class="sd">        The other cell methods for comparison.</span>
+
+<span class="sd">:Returns:</span>
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not this cell methods is a super set of the other.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="n">found_match</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="n">cm1</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">cm</span><span class="o">.</span><span class="n">equivalent</span><span class="p">(</span><span class="n">cm1</span><span class="p">):</span>
+                <span class="n">found_match</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">break</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="n">found_match</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CellMethods.extend"><a class="viewcode-back" href="../../generated/cf.CellMethods.extend.html#cf.CellMethods.extend">[docs]</a>    <span class="k">def</span> <span class="nf">extend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">_list</span><span class="p">)</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CellMethods.insert"><a class="viewcode-back" href="../../generated/cf.CellMethods.insert.html#cf.CellMethods.insert">[docs]</a>    <span class="k">def</span> <span class="nf">insert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_list</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CellMethods.inspect"><a class="viewcode-back" href="../../generated/cf.CellMethods.inspect.html#cf.CellMethods.inspect">[docs]</a>    <span class="k">def</span> <span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Inspect the attributes.</span>
+
+<span class="sd">.. seealso:: `cf.inspect`</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    None</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">print</span> <span class="n">cf_inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CellMethods.netcdf_translation"><a class="viewcode-back" href="../../generated/cf.CellMethods.netcdf_translation.html#cf.CellMethods.netcdf_translation">[docs]</a>    <span class="k">def</span> <span class="nf">netcdf_translation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Translate netCDF variable names stored in the `!names` attribute into </span>
+<span class="sd">`axes` and `names` attributes.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    f : cf.Field</span>
+<span class="sd">        The field which provides the translation.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.CellMethods</span>
+<span class="sd">        A new cell methods instance with translated names.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;t: mean lon: mean&#39;)</span>
+<span class="sd">&gt;&gt;&gt; c.names = ((&#39;t&#39;,), (&#39;lon&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; c.axes = ((None,), (None,))</span>
+<span class="sd">&gt;&gt;&gt; d = c.netcdf_translation(f)</span>
+<span class="sd">&gt;&gt;&gt; d.names = ((&#39;time&#39;,), (&#39;longitude&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; d.axes = ((&#39;dim0&#39;,), (&#39;dim2&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: &#39;time: mean longitude: mean&#39;)</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">cell_methods</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">domain</span>
+
+        <span class="c1"># Change each names value to a standard_name (or domain</span>
+        <span class="c1"># coordinate identifier) and create the axes attribute.</span>
+            
+        <span class="c1"># From the CF conventions (1.5): In the specification of this</span>
+        <span class="c1"># attribute, name can be a dimension of the variable, a scalar</span>
+        <span class="c1"># coordinate variable, a valid standard name, or the word</span>
+        <span class="c1"># &#39;area&#39;.</span>
+        <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="n">cell_methods</span><span class="o">.</span><span class="n">_list</span><span class="p">:</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="n">cm</span><span class="o">.</span><span class="n">names</span>
+
+            <span class="k">if</span> <span class="n">names</span> <span class="o">==</span> <span class="p">(</span><span class="s1">&#39;area&#39;</span><span class="p">,):</span>
+                <span class="n">cm</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="p">(</span><span class="bp">None</span><span class="p">,)</span>
+                <span class="k">continue</span>
+            <span class="c1">#--- End: if</span>
+
+            <span class="n">names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">names</span><span class="p">)</span>
+            <span class="n">axes</span>  <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="n">dim_coords</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">dims</span><span class="p">()</span>
+
+            <span class="c1"># Still here?</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">names</span><span class="p">):</span>
+                <span class="n">axis</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">ncdim</span> <span class="ow">in</span> <span class="n">domain</span><span class="o">.</span><span class="n">nc_dimensions</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="n">ncdim</span><span class="p">:</span>
+                        <span class="k">break</span>
+                    
+                    <span class="n">axis</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="c1">#--- End: for                    </span>
+
+                <span class="k">if</span> <span class="n">axis</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="c1"># name is a netCDF dimension name (including</span>
+                    <span class="c1"># scalar coordinates).</span>
+                    <span class="n">axes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axis</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">dim_coords</span><span class="p">:</span>
+                        <span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">dim_coords</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="s1">&#39;domain:</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">axis</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="k">else</span><span class="p">:</span>                    
+                    <span class="c1"># name must be a standard name</span>
+                    <span class="n">axes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">axis</span><span class="p">({</span><span class="s1">&#39;standard_name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">},</span> 
+                                            <span class="n">role</span><span class="o">=</span><span class="s1">&#39;d&#39;</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+            <span class="c1">#--- End: for</span>
+
+            <span class="n">cm</span><span class="o">.</span><span class="n">names</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">names</span><span class="p">)</span>
+            <span class="n">cm</span><span class="o">.</span><span class="n">axes</span>  <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">axes</span><span class="p">)</span>
+        <span class="c1">#--- End: for</span>
+    
+        <span class="k">return</span> <span class="n">cell_methods</span></div>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">netcdf_names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis_to_ncdim</span><span class="p">,</span> <span class="n">axis_to_ncscalar</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Translate `names` to CF-netCDF names.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    axis_to_ncdim: dict</span>
+<span class="sd">        The first dictionary which provides the translation.</span>
+
+<span class="sd">    axis_to_ncscalar: dict</span>
+<span class="sd">        The alternative dictionary which provides the translation.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.CellMethods</span>
+<span class="sd">        A new cell methods instance with translated names.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;t: mean lon: mean&#39;)</span>
+<span class="sd">&gt;&gt;&gt; c.names = ((&#39;t&#39;,), (&#39;lon&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; c.axes = ((None,), (None,))</span>
+<span class="sd">&gt;&gt;&gt; d = c.netcdf_translation(f)</span>
+<span class="sd">&gt;&gt;&gt; d.names = ((&#39;time&#39;,), (&#39;longitude&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; d.axes = ((&#39;dim0&#39;,), (&#39;dim2&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: &#39;time: mean longitude: mean&#39;)</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="n">new</span><span class="o">.</span><span class="n">_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">cm</span><span class="o">.</span><span class="n">names</span> <span class="o">==</span> <span class="p">(</span><span class="s1">&#39;area&#39;</span><span class="p">,):</span>
+                <span class="k">continue</span>
+
+            <span class="n">names</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cm</span><span class="o">.</span><span class="n">axes</span><span class="p">,</span> <span class="n">cm</span><span class="o">.</span><span class="n">names</span><span class="p">):</span>
+                <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">axis_to_ncdim</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span>
+                                      <span class="n">axis_to_ncscalar</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span>
+                                                           <span class="n">name</span><span class="p">)))</span>
+            <span class="c1">#--- End: for</span>
+            <span class="n">cm</span><span class="o">.</span><span class="n">names</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">names</span><span class="p">)</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="n">new</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">set_axes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Create new cell methods with `axes` inferred from `names`.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    f : cf.Field</span>
+<span class="sd">        The field providing the translation.</span>
+<span class="sd">        </span>
+<span class="sd">    override : bool, optional</span>
+<span class="sd">        If True then change existing `axes` elements. By default</span>
+<span class="sd">        exisiting `axes` elements are not changed.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.CellMethods</span>
+<span class="sd">        A new cell methods instance</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; c = cf.CellMethods(&#39;t: mean lon: mean&#39;)</span>
+<span class="sd">&gt;&gt;&gt; c.names = ((&#39;t&#39;,), (&#39;lon&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; c.axes = ((None,), (None,))</span>
+<span class="sd">&gt;&gt;&gt; d = c.netcdf_translation(f)</span>
+<span class="sd">&gt;&gt;&gt; d.names = ((&#39;time&#39;,), (&#39;longitude&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; d.axes = ((&#39;dim0&#39;,), (&#39;dim2&#39;,))</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF CellMethods: &#39;time: mean longitude: mean&#39;)</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">cm</span> <span class="ow">in</span> <span class="n">new</span><span class="o">.</span><span class="n">_list</span><span class="p">:</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="n">cm</span><span class="o">.</span><span class="n">names</span>
+
+            <span class="k">if</span> <span class="n">names</span> <span class="o">==</span> <span class="p">(</span><span class="s1">&#39;area&#39;</span><span class="p">,):</span>
+                <span class="n">cm</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="p">(</span><span class="bp">None</span><span class="p">,)</span>
+                <span class="k">continue</span>
+                
+            <span class="n">cm</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([(</span><span class="n">f</span><span class="o">.</span><span class="n">domain</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                              <span class="k">if</span> <span class="n">axis</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">override</span> <span class="k">else</span>
+                              <span class="n">axis</span><span class="p">)</span>
+                             <span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cm</span><span class="o">.</span><span class="n">axes</span><span class="p">,</span> <span class="n">names</span><span class="p">)])</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">return</span> <span class="n">new</span></div>
+    <span class="c1">#--- End: def</span>
+
+<span class="c1">#--- End: class</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Hassell.
+      Last updated on Feb 21, 2016.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

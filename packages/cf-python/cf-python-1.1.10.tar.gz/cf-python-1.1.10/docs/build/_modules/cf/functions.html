@@ -1,0 +1,2327 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cf.functions &mdash; Documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/copybutton.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cf.functions</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">resource</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="nb">all</span>               <span class="k">as</span> <span class="n">numpy_all</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">allclose</span>          <span class="k">as</span> <span class="n">numpy_allclose</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">array</span>             <span class="k">as</span> <span class="n">numpy_array</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ascontiguousarray</span> <span class="k">as</span> <span class="n">numpy_ascontiguousarray</span> 
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">dtype</span>             <span class="k">as</span> <span class="n">numpy_dtype</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ndarray</span>           <span class="k">as</span> <span class="n">numpy_ndarray</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ndim</span>              <span class="k">as</span> <span class="n">numpy_ndim</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">take</span>              <span class="k">as</span> <span class="n">numpy_take</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">tile</span>              <span class="k">as</span> <span class="n">numpy_tile</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">shape</span>             <span class="k">as</span> <span class="n">numpy_shape</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">where</span>             <span class="k">as</span> <span class="n">numpy_where</span>
+
+<span class="kn">from</span> <span class="nn">numpy.ma</span> <span class="kn">import</span> <span class="nb">all</span>       <span class="k">as</span> <span class="n">numpy_ma_all</span>
+<span class="kn">from</span> <span class="nn">numpy.ma</span> <span class="kn">import</span> <span class="n">allclose</span>  <span class="k">as</span> <span class="n">numpy_ma_allclose</span>
+<span class="kn">from</span> <span class="nn">numpy.ma</span> <span class="kn">import</span> <span class="n">is_masked</span> <span class="k">as</span> <span class="n">numpy_ma_is_masked</span>
+<span class="kn">from</span> <span class="nn">numpy.ma</span> <span class="kn">import</span> <span class="n">isMA</span>      <span class="k">as</span> <span class="n">numpy_ma_isMA</span>
+<span class="kn">from</span> <span class="nn">numpy.ma</span> <span class="kn">import</span> <span class="n">masked</span>    <span class="k">as</span> <span class="n">numpy_ma_masked</span>
+
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">Iterable</span>
+<span class="kn">from</span> <span class="nn">hashlib</span>     <span class="kn">import</span> <span class="n">md5</span> <span class="k">as</span> <span class="n">hashlib_md5</span>
+<span class="kn">from</span> <span class="nn">marshal</span>     <span class="kn">import</span> <span class="n">dumps</span> <span class="k">as</span> <span class="n">marshal_dumps</span>
+<span class="kn">from</span> <span class="nn">urlparse</span>    <span class="kn">import</span> <span class="n">urlparse</span> <span class="k">as</span> <span class="n">urlparse_urlparse</span>
+<span class="kn">from</span> <span class="nn">urlparse</span>    <span class="kn">import</span> <span class="n">urljoin</span>  <span class="k">as</span> <span class="n">urlparse_urljoin</span>
+<span class="kn">from</span> <span class="nn">os</span>          <span class="kn">import</span> <span class="n">getpid</span><span class="p">,</span> <span class="n">listdir</span><span class="p">,</span> <span class="n">mkdir</span><span class="p">,</span> <span class="n">curdir</span>
+<span class="kn">from</span> <span class="nn">os.path</span>     <span class="kn">import</span> <span class="n">isfile</span>       <span class="k">as</span> <span class="n">os_path_isfile</span>
+<span class="kn">from</span> <span class="nn">os.path</span>     <span class="kn">import</span> <span class="n">abspath</span>      <span class="k">as</span> <span class="n">os_path_abspath</span>
+<span class="kn">from</span> <span class="nn">os.path</span>     <span class="kn">import</span> <span class="n">commonprefix</span> <span class="k">as</span> <span class="n">os_path_commonprefix</span>
+<span class="kn">from</span> <span class="nn">os.path</span>     <span class="kn">import</span> <span class="n">expanduser</span>   <span class="k">as</span> <span class="n">os_path_expanduser</span>
+<span class="kn">from</span> <span class="nn">os.path</span>     <span class="kn">import</span> <span class="n">expandvars</span>   <span class="k">as</span> <span class="n">os_path_expandvars</span>
+<span class="kn">from</span> <span class="nn">os.path</span>     <span class="kn">import</span> <span class="n">dirname</span>      <span class="k">as</span> <span class="n">os_path_dirname</span>
+<span class="kn">from</span> <span class="nn">os.path</span>     <span class="kn">import</span> <span class="n">join</span>         <span class="k">as</span> <span class="n">os_path_join</span>
+<span class="kn">from</span> <span class="nn">os.path</span>     <span class="kn">import</span> <span class="n">relpath</span>      <span class="k">as</span> <span class="n">os_path_relpath</span> 
+<span class="kn">from</span> <span class="nn">inspect</span>     <span class="kn">import</span> <span class="n">getargspec</span>
+<span class="kn">from</span> <span class="nn">itertools</span>   <span class="kn">import</span> <span class="n">product</span> <span class="k">as</span> <span class="n">itertools_product</span>
+<span class="kn">from</span> <span class="nn">itertools</span>   <span class="kn">import</span> <span class="n">izip</span><span class="p">,</span> <span class="n">izip_longest</span>
+<span class="kn">from</span> <span class="nn">platform</span>    <span class="kn">import</span> <span class="n">system</span>
+<span class="kn">from</span> <span class="nn">psutil</span>      <span class="kn">import</span> <span class="n">virtual_memory</span><span class="p">,</span> <span class="n">Process</span>
+
+<span class="kn">from</span> <span class="nn">.constants</span> <span class="kn">import</span> <span class="n">CONSTANTS</span><span class="p">,</span> <span class="n">_file_to_fh</span>
+
+<span class="c1"># Are we running on GNU/Linux?</span>
+<span class="n">_linux</span> <span class="o">=</span> <span class="n">system</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;Linux&#39;</span>
+
+<span class="k">if</span> <span class="n">_linux</span><span class="p">:</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># GNU/LINUX</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="n">_meminfo_fields</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span><span class="s1">&#39;SReclaimable:&#39;</span><span class="p">,</span> <span class="s1">&#39;Cached:&#39;</span><span class="p">,</span> <span class="s1">&#39;Buffers:&#39;</span><span class="p">,</span> <span class="s1">&#39;MemFree:&#39;</span><span class="p">))</span>
+    <span class="n">_meminfo_file</span>   <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;/proc/meminfo&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_free_memory</span><span class="p">():</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The amount of available physical memory on GNU/Linux.</span>
+
+<span class="sd">This amount includes any memory which is still allocated but is no</span>
+<span class="sd">longer required.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : float</span>
+<span class="sd">        The amount of available physical memory in bytes.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; _free_memory()</span>
+<span class="sd">96496240.0</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="c1"># https://github.com/giampaolo/psutil/blob/master/psutil/_pslinux.py</span>
+
+        <span class="c1"># ----------------------------------------------------------------</span>
+        <span class="c1"># The available physical memory is the sum of the values of</span>
+        <span class="c1"># the &#39;SReclaimable&#39;, &#39;Cached&#39;, &#39;Buffers&#39; and &#39;MemFree&#39;</span>
+        <span class="c1"># entries in the /proc/meminfo file</span>
+        <span class="c1"># (http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/proc.txt).</span>
+        <span class="c1"># ----------------------------------------------------------------</span>
+        <span class="n">free_KiB</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">n</span><span class="o">=</span><span class="mi">0</span>
+    
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">_meminfo_file</span><span class="p">:</span>
+            <span class="n">field_size</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">field_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">_meminfo_fields</span><span class="p">:</span>
+                <span class="n">free_KiB</span> <span class="o">+=</span> <span class="nb">float</span><span class="p">(</span><span class="n">field_size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                <span class="n">n</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">n</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="k">break</span>
+        <span class="c1">#--- End: for</span>
+        <span class="n">_meminfo_file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    
+        <span class="k">return</span> <span class="n">free_KiB</span> <span class="o">*</span> <span class="mi">1024</span>
+    <span class="c1">#--- End: def</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># NOT GNU/LINUX</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">def</span> <span class="nf">_free_memory</span><span class="p">():</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The amount of available physical memory.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : float</span>
+<span class="sd">        The amount of available physical memory in bytes.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; _free_memory()</span>
+<span class="sd">96496240.0</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">virtual_memory</span><span class="p">()</span><span class="o">.</span><span class="n">available</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+<span class="c1">#--- End: if</span>
+
+<span class="k">def</span> <span class="nf">FREE_MEMORY</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The available physical memory.</span>
+
+<span class="sd">If the FREE_MEMORY constant is not None then its value is returned,</span>
+<span class="sd">otherwise the actual amount of free memory is calculated and</span>
+<span class="sd">returned. In either case, the FREE_MEMORY constant is not updated. The</span>
+<span class="sd">FREE_MEMORY constant is set with the ``cf.SET_FREE_MEMORY`` function.</span>
+
+<span class="sd">Note that in the former case, the returned value is likely to differ</span>
+<span class="sd">from the actual amount of free memory. However, calculating the actual</span>
+<span class="sd">amount of free memory is expensive, so it may be desireable to set it</span>
+<span class="sd">once at the start of a process, ideally resetting it to None after the</span>
+<span class="sd">process has completed.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : float</span>
+<span class="sd">        The amount of free memory in bytes.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; import numpy</span>
+<span class="sd">&gt;&gt;&gt; print &#39;Free memory =&#39;, cf.FREE_MEMORY()/2**30, &#39;GiB&#39;</span>
+<span class="sd">Free memory = 88.2728042603 GiB</span>
+<span class="sd">&gt;&gt;&gt; a = numpy.arange(10**9)</span>
+<span class="sd">&gt;&gt;&gt; print &#39;Free memory =&#39;, cf.FREE_MEMORY()/2**30, &#39;GiB&#39;</span>
+<span class="sd">Free memory = 80.8082618713 GiB</span>
+<span class="sd">&gt;&gt;&gt; del a</span>
+<span class="sd">&gt;&gt;&gt; print &#39;Free memory =&#39;, cf.FREE_MEMORY()/2**30, &#39;GiB&#39;</span>
+<span class="sd">Free memory = 88.2727928162 GiB</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">free_memory</span> <span class="o">=</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;FREE_MEMORY&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">free_memory</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_free_memory</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">free_memory</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">SET_FREE_MEMORY</span><span class="p">(</span><span class="o">*</span><span class="n">arg</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    arg : None, optional</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    None</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.SET_FREE_MEMORY()</span>
+<span class="sd">&gt;&gt;&gt; cf.SET_FREE_MEMORY(None)</span>
+
+<span class="sd">&#39;&#39;&#39;</span> 
+    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;FREE_MEMORY&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;FREE_MEMORY&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_free_memory</span><span class="p">()</span>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="FM_THRESHOLD"><a class="viewcode-back" href="../../generated/cf.FM_THRESHOLD.html#cf.FM_THRESHOLD">[docs]</a><span class="k">def</span> <span class="nf">FM_THRESHOLD</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The amount of memory which is kept free as a temporary work space.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : float</span>
+<span class="sd">        The amount of memory in bytes.</span>
+
+<span class="sd">.. seealso:: `cf.CHUNKSIZE`, `cf.MINNCFM`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.FM_THRESHOLD()</span>
+<span class="sd">10000000000.0</span>
+<span class="sd">&gt;&gt;&gt; old = cf.MINNCFM(2*cf.MINNCFM())</span>
+<span class="sd">&gt;&gt;&gt; cf.FM_THRESHOLD()</span>
+<span class="sd">20000000000.0</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;FM_THRESHOLD&#39;</span><span class="p">]</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="CHUNKSIZE"><a class="viewcode-back" href="../../generated/cf.CHUNKSIZE.html#cf.CHUNKSIZE">[docs]</a><span class="k">def</span> <span class="nf">CHUNKSIZE</span><span class="p">(</span><span class="o">*</span><span class="n">size</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The memory chunk size in bytes for data storage and processing.</span>
+
+<span class="sd">When setting the chunk size, the amount of minimum amount of memory to</span>
+<span class="sd">be kept free as a temporary work space is also updated.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    size : int, optional</span>
+<span class="sd">        The new chunk size in bytes. The default is to not change the</span>
+<span class="sd">        current value.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : float</span>
+<span class="sd">        The value prior to the change, or the current value if no new</span>
+<span class="sd">        value was specified.</span>
+
+<span class="sd">.. seealso:: `cf.MINNCFM`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.CHUNKSIZE()</span>
+<span class="sd">57095864.32</span>
+<span class="sd">&gt;&gt;&gt; old = cf.CHUNKSIZE(2**30)</span>
+<span class="sd">&gt;&gt;&gt; cf.CHUNKSIZE(old)</span>
+<span class="sd">1073741824</span>
+<span class="sd">&gt;&gt;&gt; cf.CHUNKSIZE()</span>
+<span class="sd">57095864.32</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">old</span> <span class="o">=</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;CHUNKSIZE&#39;</span><span class="p">]</span>
+ 
+    <span class="k">if</span> <span class="n">size</span><span class="p">:</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;CHUNKSIZE&#39;</span><span class="p">]</span>    <span class="o">=</span> <span class="n">size</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;FM_THRESHOLD&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">MINNCFM</span><span class="p">()</span> <span class="o">*</span> <span class="n">size</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">return</span> <span class="n">old</span></div>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">TOTAL_MEMORY</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;TOTAL_MEMORY&#39;</span><span class="p">]</span>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="MINNCFM"><a class="viewcode-back" href="../../generated/cf.MINNCFM.html#cf.MINNCFM">[docs]</a><span class="k">def</span> <span class="nf">MINNCFM</span><span class="p">(</span><span class="o">*</span><span class="n">arg</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The number of chunks of memory to be kept free as a temporary work</span>
+<span class="sd">space.</span>
+
+<span class="sd">A chunk of memory is the amount of memory set by `cf.CHUNKSIZE`.</span>
+<span class="sd"> </span>
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    arg : int, optional</span>
+<span class="sd">        The number of chunks to be kept free as a temporary work</span>
+<span class="sd">        space. The default is to not change the current value.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : int</span>
+<span class="sd">        The value prior to the change, or the current value if no new</span>
+<span class="sd">        value was specified.</span>
+
+<span class="sd">.. seealso:: `cf.CHUNKSIZE`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.MINNCFM()</span>
+<span class="sd">10</span>
+<span class="sd">&gt;&gt;&gt; old = cf.MINNCFM(20)</span>
+<span class="sd">&gt;&gt;&gt; cf.MINNCFM(old)</span>
+<span class="sd">20</span>
+<span class="sd">&gt;&gt;&gt; f.MINNCFM()</span>
+<span class="sd">10</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">old</span> <span class="o">=</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;MINNCFM&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+        <span class="n">minncfm</span> <span class="o">=</span> <span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;MINNCFM&#39;</span><span class="p">]</span>      <span class="o">=</span> <span class="n">minncfm</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;FM_THRESHOLD&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">minncfm</span> <span class="o">*</span> <span class="n">CHUNKSIZE</span><span class="p">()</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">return</span> <span class="n">old</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="TEMPDIR"><a class="viewcode-back" href="../../generated/cf.TEMPDIR.html#cf.TEMPDIR">[docs]</a><span class="k">def</span> <span class="nf">TEMPDIR</span><span class="p">(</span><span class="o">*</span><span class="n">arg</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The directory for internally generated temporary files.</span>
+
+<span class="sd">When setting the directory, it is created if the specified path does</span>
+<span class="sd">not exist.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    arg : str, optional</span>
+<span class="sd">        The new directory for temporary files. Tilde expansion (an</span>
+<span class="sd">        initial component of ``~`` or ``~user`` is replaced by that</span>
+<span class="sd">        *user*&#39;s home directory) and environment variable expansion</span>
+<span class="sd">        (substrings of the form ``$name`` or ``${name}`` are replaced</span>
+<span class="sd">        by the value of environment variable *name*) are applied to</span>
+<span class="sd">        the new directory name.</span>
+
+<span class="sd">        The default is to not change the directory.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : str</span>
+<span class="sd">        The directory prior to the change, or the current directory if</span>
+<span class="sd">        no new value was specified.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TEMPDIR()</span>
+<span class="sd">&#39;/tmp&#39;</span>
+<span class="sd">&gt;&gt;&gt; old = cf.TEMPDIR(&#39;/home/me/tmp&#39;)</span>
+<span class="sd">&gt;&gt;&gt; cf.TEMPDIR(old)</span>
+<span class="sd">&#39;/home/me/tmp&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.TEMPDIR()</span>
+<span class="sd">&#39;/tmp&#39;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">old</span> <span class="o">=</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;TEMPDIR&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+        <span class="n">tempdir</span> <span class="o">=</span> <span class="n">os_path_expanduser</span><span class="p">(</span><span class="n">os_path_expandvars</span><span class="p">(</span><span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+
+        <span class="c1"># Create the directory if it does not exist.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">mkdir</span><span class="p">(</span><span class="n">tempdir</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;TEMPDIR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tempdir</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">return</span> <span class="n">old</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="OF_FRACTION"><a class="viewcode-back" href="../../generated/cf.OF_FRACTION.html#cf.OF_FRACTION">[docs]</a><span class="k">def</span> <span class="nf">OF_FRACTION</span><span class="p">(</span><span class="o">*</span><span class="n">arg</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The amount of concurrently open files above which files containing</span>
+<span class="sd">data arrays may be automatically closed.</span>
+
+<span class="sd">The amount is expressed as a fraction of the maximum possible number</span>
+<span class="sd">of concurrently open files.</span>
+
+<span class="sd">Note that closed files will be automatically reopened if subsequently</span>
+<span class="sd">needed by a variable to access its data array.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    arg : float, optional</span>
+<span class="sd">        The new fraction (between 0.0 and 1.0). The default is to not</span>
+<span class="sd">        change the current behaviour.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : float</span>
+<span class="sd">        The value prior to the change, or the current value if no new</span>
+<span class="sd">        value was specified.</span>
+
+<span class="sd">.. seealso:: `cf.close_files`, `cf.close_one_file`, `cf.open_files`,</span>
+<span class="sd">             `cf.open_files_threshold_exceeded`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.OF_FRACTION()</span>
+<span class="sd">0.5</span>
+<span class="sd">&gt;&gt;&gt; old = cf.OF_FRACTION(0.33)</span>
+<span class="sd">&gt;&gt;&gt; cf.OF_FRACTION(old)</span>
+<span class="sd">0.33</span>
+<span class="sd">&gt;&gt;&gt; cf.OF_FRACTION()</span>
+<span class="sd">0.5</span>
+
+<span class="sd">The fraction may be translated to an actual number of files as</span>
+<span class="sd">follows:</span>
+
+<span class="sd">&gt;&gt;&gt; old = cf.OF_FRACTION(0.75)</span>
+<span class="sd">&gt;&gt;&gt; import resource</span>
+<span class="sd">&gt;&gt;&gt; max_open_files = resource.getrlimit(resource.RLIMIT_NOFILE)[0]</span>
+<span class="sd">&gt;&gt;&gt; threshold = int(max_open_files * cf.OF_FRACTION())</span>
+<span class="sd">&gt;&gt;&gt; max_open_files, threshold</span>
+<span class="sd">(1024, 768)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">old</span> <span class="o">=</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;OF_FRACTION&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;OF_FRACTION&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">old</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="REGRID_LOGGING"><a class="viewcode-back" href="../../generated/cf.REGRID_LOGGING.html#cf.REGRID_LOGGING">[docs]</a><span class="k">def</span> <span class="nf">REGRID_LOGGING</span><span class="p">(</span><span class="o">*</span><span class="n">arg</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">Whether or not to enable ESMPy logging.</span>
+
+<span class="sd">If it is logging is performed after every call to ESMPy.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    arg : bool, optional</span>
+<span class="sd">        The new value (either True to enable logging or False to disable it).</span>
+<span class="sd">        The default is to not change the current behaviour.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        The value prior to the change, or the current value if no new</span>
+<span class="sd">        value was specified.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.REGRID_LOGGING()</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; cf.REGRID_LOGGING(True)</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; cf.REGRID_LOGGING()</span>
+<span class="sd">True</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">old</span> <span class="o">=</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;REGRID_LOGGING&#39;</span><span class="p">]</span>
+    
+    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;REGRID_LOGGING&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    
+    <span class="k">return</span> <span class="n">old</span></div>
+<span class="c1">#--- End:def</span>
+
+<div class="viewcode-block" id="dump"><a class="viewcode-back" href="../../generated/cf.dump.html#cf.dump">[docs]</a><span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    </span>
+<span class="sd">Print a description of an object.</span>
+
+<span class="sd">If the object has a `!dump` method then this is used to create the</span>
+<span class="sd">output, so that ``cf.dump(f)`` is equivalent to ``print f.dump()``.</span>
+<span class="sd">Otherwise ``cf.dump(x)`` is equivalent to ``print x``.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    x :</span>
+<span class="sd">        The object to print.</span>
+
+<span class="sd">    kwargs : *optional*</span>
+<span class="sd">        As for the input variable&#39;s `!dump` method, if it has one.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    None</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; x = 3.14159</span>
+<span class="sd">&gt;&gt;&gt; cf.dump(x)</span>
+<span class="sd">3.14159</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Field: rainfall_rate(latitude(10), longitude(20)) kg m2 s-1&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.dump(f)</span>
+<span class="sd">&gt;&gt;&gt; cf.dump(f, complete=True)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;dump&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">callable</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">dump</span><span class="p">):</span>
+        <span class="k">print</span> <span class="n">x</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">x</span></div>
+<span class="c1">#--- End: def</span>
+
+<span class="n">_max_number_of_open_files</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">getrlimit</span><span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">RLIMIT_NOFILE</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="k">if</span> <span class="n">_linux</span><span class="p">:</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># GNU/LINUX</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+
+    <span class="c1"># Directory containing a symbolic link for each file opened by the</span>
+    <span class="c1"># current python session</span>
+    <span class="n">_fd_dir</span> <span class="o">=</span> <span class="s1">&#39;/proc/&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">getpid</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/fd&#39;</span>
+
+    <span class="k">def</span> <span class="nf">open_files_threshold_exceeded</span><span class="p">():</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return True if the total number of open files is greater than the</span>
+<span class="sd">current threshold. GNU/LINUX.</span>
+
+<span class="sd">The threshold is defined as a fraction of the maximum possible number</span>
+<span class="sd">of concurrently open files (an operating system dependent amount). The</span>
+<span class="sd">fraction is retrieved and set with the `OF_FRACTION` function.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the number of open files exceeds the threshold.</span>
+
+<span class="sd">.. seealso:: `cf.close_files`, `cf.close_one_file`, `cf.open_files`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">In this example, the number of open files is 75% of the maximum</span>
+<span class="sd">possible number of concurrently open files:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.OF_FRACTION()</span>
+<span class="sd">0.5</span>
+<span class="sd">&gt;&gt;&gt; print cf.open_files_threshold_exceeded()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.OF_FRACTION(0.9)</span>
+<span class="sd">&gt;&gt;&gt; print cf.open_files_threshold_exceeded()</span>
+<span class="sd">False</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">listdir</span><span class="p">(</span><span class="n">_fd_dir</span><span class="p">))</span> <span class="o">&gt;</span> <span class="n">_max_number_of_open_files</span> <span class="o">*</span> <span class="n">OF_FRACTION</span><span class="p">()</span>
+    <span class="c1">#---End: def</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># NOT GNU/LINUX</span>
+    <span class="c1"># ---------------------------------------------------------------- </span>
+    <span class="n">_process</span> <span class="o">=</span> <span class="n">Process</span><span class="p">(</span><span class="n">getpid</span><span class="p">())</span>
+
+<div class="viewcode-block" id="open_files_threshold_exceeded"><a class="viewcode-back" href="../../generated/cf.open_files_threshold_exceeded.html#cf.open_files_threshold_exceeded">[docs]</a>    <span class="k">def</span> <span class="nf">open_files_threshold_exceeded</span><span class="p">():</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return True if the total number of open files is greater than the</span>
+<span class="sd">current threshold.</span>
+
+<span class="sd">The threshold is defined as a fraction of the maximum possible number</span>
+<span class="sd">of concurrently open files (an operating system dependent amount). The</span>
+<span class="sd">fraction is retrieved and set with the `OF_FRACTION` function.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the number of open files exceeds the threshold.</span>
+
+<span class="sd">.. seealso:: `cf.close_files`, `cf.close_one_file`, `cf.open_files`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">In this example, the number of open files is 75% of the maximum</span>
+<span class="sd">possible number of concurrently open files:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.OF_FRACTION()</span>
+<span class="sd">0.5</span>
+<span class="sd">&gt;&gt;&gt; print cf.open_files_threshold_exceeded()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.OF_FRACTION(0.9)</span>
+<span class="sd">&gt;&gt;&gt; print cf.open_files_threshold_exceeded()</span>
+<span class="sd">False</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">_process</span><span class="o">.</span><span class="n">open_files</span><span class="p">())</span> <span class="o">&gt;</span> <span class="n">_max_number_of_open_files</span> <span class="o">*</span> <span class="n">OF_FRACTION</span><span class="p">()</span></div>
+    <span class="c1">#---End: def</span>
+<span class="c1">#---End: if</span>
+
+<div class="viewcode-block" id="close_files"><a class="viewcode-back" href="../../generated/cf.close_files.html#cf.close_files">[docs]</a><span class="k">def</span> <span class="nf">close_files</span><span class="p">(</span><span class="n">file_format</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Close open files containing sub-arrays of master data arrays.</span>
+
+<span class="sd">By default all such files are closed, but this may be restricted to</span>
+<span class="sd">files of a particular format.</span>
+
+<span class="sd">Note that closed files will be automatically reopened if subsequently</span>
+<span class="sd">needed by a variable to access the sub-array.</span>
+
+<span class="sd">If there are no appropriate open files then no action is taken.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    file_format : str, optional</span>
+<span class="sd">        Only close files of the given format. Recognised formats are</span>
+<span class="sd">        ``&#39;netCDF&#39;`` and ``&#39;PP&#39;``. By default files of any format are</span>
+<span class="sd">        closed.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    None</span>
+
+<span class="sd">.. seealso:: `cf.close_one_file`, `cf.open_files`,</span>
+<span class="sd">             `cf.open_files_threshold_exceeded`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.close_files()</span>
+<span class="sd">&gt;&gt;&gt; cf.close_files(&#39;netCDF&#39;)</span>
+<span class="sd">&gt;&gt;&gt; cf.close_files(&#39;PP&#39;)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">file_format</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">file_format</span> <span class="ow">in</span> <span class="n">_file_to_fh</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">fh</span> <span class="ow">in</span> <span class="n">_file_to_fh</span><span class="p">[</span><span class="n">file_format</span><span class="p">]</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+                <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        
+            <span class="n">_file_to_fh</span><span class="p">[</span><span class="n">file_format</span><span class="p">]</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">file_format</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">_file_to_fh</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">fh</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+                <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        
+            <span class="n">_file_to_fh</span><span class="p">[</span><span class="n">file_format</span><span class="p">]</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+<span class="c1">#---End: def</span>
+
+<div class="viewcode-block" id="close_one_file"><a class="viewcode-back" href="../../generated/cf.close_one_file.html#cf.close_one_file">[docs]</a><span class="k">def</span> <span class="nf">close_one_file</span><span class="p">(</span><span class="n">file_format</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Close an arbitrary open file containing a sub-array of a master data</span>
+<span class="sd">array.</span>
+
+<span class="sd">By default a file of arbitrary format is closed, but the choice may be</span>
+<span class="sd">restricted to files of a particular format.</span>
+
+<span class="sd">Note that the closed file will be automatically reopened if</span>
+<span class="sd">subsequently needed by a variable to access the sub-array.</span>
+
+<span class="sd">If there are no appropriate open files then no action is taken.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    file_format : str, optional</span>
+<span class="sd">        Only close a file of the given format. Recognised formats are</span>
+<span class="sd">        ``&#39;netCDF&#39;`` and ``&#39;PP&#39;``. By default a file of any format is</span>
+<span class="sd">        closed.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    None</span>
+
+<span class="sd">.. seealso:: `cf.close_files`, `cf.open_files`,</span>
+<span class="sd">             `cf.open_files_threshold_exceeded`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.close_one_file()</span>
+<span class="sd">&gt;&gt;&gt; cf.close_one_file(&#39;netCDF&#39;)</span>
+<span class="sd">&gt;&gt;&gt; cf.close_one_file(&#39;PP&#39;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.open_files()</span>
+<span class="sd">{&#39;netCDF&#39;: {&#39;file1.nc&#39;: &lt;netCDF4.Dataset at 0x181bcd0&gt;,</span>
+<span class="sd">            &#39;file2.nc&#39;: &lt;netCDF4.Dataset at 0x1e42350&gt;,</span>
+<span class="sd">            &#39;file3.nc&#39;: &lt;netCDF4.Dataset at 0x1d185e9&gt;}}</span>
+<span class="sd">&gt;&gt;&gt; cf.close_one_file()</span>
+<span class="sd">&gt;&gt;&gt; cf.open_files()</span>
+<span class="sd">{&#39;netCDF&#39;: {&#39;file1.nc&#39;: &lt;netCDF4.Dataset at 0x181bcd0&gt;,</span>
+<span class="sd">            &#39;file3.nc&#39;: &lt;netCDF4.Dataset at 0x1d185e9&gt;}}</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">file_format</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">file_format</span> <span class="ow">in</span> <span class="n">_file_to_fh</span> <span class="ow">and</span> <span class="n">_file_to_fh</span><span class="p">[</span><span class="n">file_format</span><span class="p">]:</span>
+            <span class="n">filename</span><span class="p">,</span> <span class="n">fh</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">_file_to_fh</span><span class="p">[</span><span class="n">file_format</span><span class="p">]</span><span class="o">.</span><span class="n">iteritems</span><span class="p">())</span>
+            <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">del</span> <span class="n">_file_to_fh</span><span class="p">[</span><span class="n">file_format</span><span class="p">][</span><span class="n">filename</span><span class="p">]</span>
+   
+    <span class="k">else</span><span class="p">:</span>    
+        <span class="k">for</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">_file_to_fh</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">values</span><span class="p">:</span>
+                <span class="k">continue</span>
+        
+            <span class="n">filename</span><span class="p">,</span> <span class="n">fh</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">iteritems</span><span class="p">())</span>
+            <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">del</span> <span class="n">values</span><span class="p">[</span><span class="n">filename</span><span class="p">]</span>
+            <span class="k">return</span></div>
+<span class="c1">#---End: def</span>
+
+<div class="viewcode-block" id="open_files"><a class="viewcode-back" href="../../generated/cf.open_files.html#cf.open_files">[docs]</a><span class="k">def</span> <span class="nf">open_files</span><span class="p">(</span><span class="n">file_format</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return the open files containing sub-arrays of master data arrays.</span>
+
+<span class="sd">By default all such files are returned, but the selection may be</span>
+<span class="sd">restricted to files of a particular format.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    file_format : str, optional</span>
+<span class="sd">        Only return files of the given format. Recognised formats are</span>
+<span class="sd">        ``&#39;netCDF&#39;`` and ``&#39;PP&#39;``. By default all files are returned.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : dict</span>
+<span class="sd">        If *file_format* is set then return a dictionary of file names</span>
+<span class="sd">        of the specified format and their open file objects. If</span>
+<span class="sd">        *file_format* is not set then return a dictionary for which</span>
+<span class="sd">        each key is a file format whose value is the dictionary that</span>
+<span class="sd">        would have been returned if the *file_format* parameter was</span>
+<span class="sd">        set.</span>
+
+<span class="sd">.. seealso:: `cf.close_files`, `cf.close_one_file`,</span>
+<span class="sd">             `cf.open_files_threshold_exceeded`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.open_files()</span>
+<span class="sd">{&#39;netCDF&#39;: {&#39;file1.nc&#39;: &lt;netCDF4.Dataset at 0x187b6d0&gt;}}</span>
+<span class="sd">&gt;&gt;&gt; cf.open_files(&#39;netCDF&#39;)</span>
+<span class="sd">{&#39;file1.nc&#39;: &lt;netCDF4.Dataset at 0x187b6d0&gt;}</span>
+<span class="sd">&gt;&gt;&gt; cf.open_files(&#39;PP&#39;)</span>
+<span class="sd">{}</span>
+
+<span class="sd">&#39;&#39;&#39;</span>  
+    <span class="k">if</span> <span class="n">file_format</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">file_format</span> <span class="ow">in</span> <span class="n">_file_to_fh</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_file_to_fh</span><span class="p">[</span><span class="n">file_format</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">else</span><span class="p">:</span>   
+        <span class="n">out</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">file_format</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">_file_to_fh</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">file_format</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            
+        <span class="k">return</span> <span class="n">out</span></div>
+<span class="c1">#---End: def</span>
+
+
+<span class="k">def</span> <span class="nf">ufunc</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The variable must have a `!copy` method and a method called</span>
+<span class="sd">*name*. Any optional positional and keyword arguments are passed</span>
+<span class="sd">unchanged to the variable&#39;s *name* method.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    name : str</span>
+
+<span class="sd">    x :</span>
+<span class="sd">        The input variable.</span>
+
+<span class="sd">    args, kwargs :</span>
+
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : </span>
+<span class="sd">        A new variable with size 1 axes inserted into the data array.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">name</span><span class="p">)(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">x</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">_numpy_allclose</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Returns True if two broadcastable arrays have equal values to within</span>
+<span class="sd">numerical tolerance, False otherwise.</span>
+
+<span class="sd">The tolerance values are positive, typically very small numbers. The</span>
+<span class="sd">relative difference (``rtol * abs(b)``) and the absolute difference</span>
+<span class="sd">``atol`` are added together to compare against the absolute difference</span>
+<span class="sd">between ``a`` and ``b``.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    a, b : array_like</span>
+<span class="sd">        Input arrays to compare.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Returns True if the arrays are equal, otherwise False.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf._numpy_allclose([1, 2], [1, 2])</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf._numpy_allclose(numpy.array([1, 2]), numpy.array([1, 2]))</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf._numpy_allclose([1, 2], [1, 2, 3])</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; cf._numpy_allclose([1, 2], [1, 4])</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; a = numpy.ma.array([1])</span>
+<span class="sd">&gt;&gt;&gt; b = numpy.ma.array([2])</span>
+<span class="sd">&gt;&gt;&gt; a[0] = numpy.ma.masked</span>
+<span class="sd">&gt;&gt;&gt; b[0] = numpy.ma.masked</span>
+<span class="sd">&gt;&gt;&gt; cf._numpy_allclose(a, b)</span>
+<span class="sd">True</span>
+
+<span class="sd">&#39;&#39;&#39;</span>      
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">numpy_ma_isMA</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">or</span> <span class="n">numpy_ma_isMA</span><span class="p">(</span><span class="n">b</span><span class="p">)):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">numpy_allclose</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">IndexError</span><span class="p">,</span> <span class="ne">NotImplementedError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">numpy_all</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">b</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">numpy_ma_allclose</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">IndexError</span><span class="p">,</span> <span class="ne">NotImplementedError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">numpy_ma_all</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">b</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">out</span> <span class="ow">is</span> <span class="n">numpy_ma_masked</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">out</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">parse_indices</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">cyclic</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    data : array-like</span>
+
+<span class="sd">    indices : tuple</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : list [, dict]</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">parsed_indices</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">roll</span>           <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="p">(</span><span class="n">indices</span><span class="p">,)</span>
+
+    <span class="c1"># Initialize the list of parsed indices as the input indices with any</span>
+    <span class="c1"># Ellipsis objects expanded</span>
+    <span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">ndim</span>
+    <span class="n">ndim</span> <span class="o">=</span> <span class="n">n</span>
+    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">index</span> <span class="ow">is</span> <span class="bp">Ellipsis</span><span class="p">:</span>
+            <span class="n">m</span> <span class="o">=</span> <span class="n">n</span><span class="o">-</span><span class="n">length</span><span class="o">+</span><span class="mi">1</span>
+            <span class="n">parsed_indices</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="nb">slice</span><span class="p">(</span><span class="bp">None</span><span class="p">)]</span> <span class="o">*</span> <span class="n">m</span><span class="p">)</span>
+            <span class="n">n</span> <span class="o">-=</span> <span class="n">m</span>            
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">parsed_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+            <span class="n">n</span> <span class="o">-=</span> <span class="mi">1</span>
+
+        <span class="n">length</span> <span class="o">-=</span> <span class="mi">1</span>
+    <span class="c1">#--- End: for</span>
+    <span class="n">len_parsed_indices</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">parsed_indices</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">ndim</span> <span class="ow">and</span> <span class="n">len_parsed_indices</span> <span class="o">&gt;</span> <span class="n">ndim</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="s2">&quot;Invalid indices </span><span class="si">%s</span><span class="s2"> for array with shape </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                         <span class="p">(</span><span class="n">parsed_indices</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">len_parsed_indices</span> <span class="o">&lt;</span> <span class="n">ndim</span><span class="p">:</span>
+        <span class="n">parsed_indices</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="nb">slice</span><span class="p">(</span><span class="bp">None</span><span class="p">)]</span><span class="o">*</span><span class="p">(</span><span class="n">ndim</span><span class="o">-</span><span class="n">len_parsed_indices</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ndim</span> <span class="ow">and</span> <span class="n">parsed_indices</span><span class="p">:</span>
+        <span class="c1">## If data is scalar then allow it to be indexed with an</span>
+        <span class="c1">## equivalent to [0]</span>
+        <span class="c1">#if (len_parsed_indices == 1 and</span>
+        <span class="c1">#    parsed_indices[0] in (0, </span>
+        <span class="c1">#                          -1,</span>
+        <span class="c1">#                          slice(0, 1), </span>
+        <span class="c1">#                          slice(-1, None, -1),  </span>
+        <span class="c1">#                          slice(None, None, None))):</span>
+        <span class="c1">#    parsed_indices = []</span>
+        <span class="c1">#else:            </span>
+        <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="s2">&quot;Scalar array can only be indexed with () or Ellipsis&quot;</span><span class="p">)</span>
+
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">parsed_indices</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">)):</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="nb">slice</span><span class="p">):</span>            
+            <span class="n">start</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">start</span>
+            <span class="n">stop</span>  <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">stop</span>
+            <span class="n">step</span>  <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">step</span>
+            <span class="k">if</span> <span class="n">start</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">stop</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">step</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">elif</span> <span class="n">step</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">step</span> <span class="o">=</span> <span class="mi">1</span>
+
+            <span class="k">if</span> <span class="n">step</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="n">size</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">stop</span> <span class="o">&lt;=</span> <span class="n">start</span><span class="p">:</span>
+                    <span class="c1"># 6:0:1 =&gt; -4:0:1</span>
+                    <span class="c1"># 6:1:1 =&gt; -4:1:1</span>
+                    <span class="c1"># 6:3:1 =&gt; -4:3:1</span>
+                    <span class="c1"># 6:6:1 =&gt; -4:6:1</span>
+                    <span class="n">start</span> <span class="o">=</span> <span class="n">size</span><span class="o">-</span><span class="n">start</span>
+                <span class="k">elif</span> <span class="o">-</span><span class="n">size</span> <span class="o">&lt;=</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="o">-</span><span class="n">size</span> <span class="o">&lt;=</span> <span class="n">stop</span> <span class="o">&lt;=</span> <span class="n">start</span><span class="p">:</span>
+                    <span class="c1"># -4:-10:1  =&gt; -4:1:1</span>
+                    <span class="c1"># -4:-9:1   =&gt; -4:1:1</span>
+                    <span class="c1"># -4:-7:1   =&gt; -4:3:1</span>
+                    <span class="c1"># -4:-4:1   =&gt; -4:6:1 </span>
+                    <span class="c1"># -10:-10:1 =&gt; -10:0:1</span>
+                    <span class="n">stop</span> <span class="o">+=</span> <span class="n">size</span>
+            <span class="k">elif</span> <span class="n">step</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="o">-</span><span class="n">size</span> <span class="o">&lt;=</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">start</span> <span class="o">&lt;=</span> <span class="n">stop</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="c1"># -4:-1:-1   =&gt; 6:-1:-1</span>
+                    <span class="c1"># -4:-2:-1   =&gt; 6:-2:-1</span>
+                    <span class="c1"># -4:-4:-1   =&gt; 6:-4:-1</span>
+                    <span class="c1"># -10:-2:-1  =&gt; 0:-2:-1</span>
+                    <span class="c1"># -10:-10:-1 =&gt; 0:-10:-1</span>
+                    <span class="n">start</span> <span class="o">+=</span> <span class="n">size</span>
+                <span class="k">elif</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="n">size</span> <span class="ow">and</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="n">stop</span> <span class="o">&lt;</span> <span class="n">size</span><span class="p">:</span>
+                    <span class="c1"># 0:6:-1 =&gt; 0:-4:-1</span>
+                    <span class="c1"># 3:6:-1 =&gt; 3:-4:-1</span>
+                    <span class="c1"># 3:9:-1 =&gt; 3:-1:-1</span>
+                    <span class="n">stop</span> <span class="o">-=</span> <span class="n">size</span>
+            <span class="c1">#--- End: if            </span>
+                        
+            <span class="k">if</span> <span class="n">step</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="o">-</span><span class="n">size</span> <span class="o">&lt;=</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">stop</span> <span class="o">&lt;=</span> <span class="n">size</span><span class="o">+</span><span class="n">start</span><span class="p">:</span>
+                <span class="c1"># [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</span>
+                <span class="c1"># -1:0:1  =&gt; [9]</span>
+                <span class="c1"># -1:1:1  =&gt; [9, 0]</span>
+                <span class="c1"># -1:3:1  =&gt; [9, 0, 1, 2]</span>
+                <span class="c1"># -1:9:1  =&gt; [9, 0, 1, 2, 3, 4, 5, 6, 7, 8]</span>
+                <span class="c1"># -4:0:1  =&gt; [6, 7, 8, 9]</span>
+                <span class="c1"># -4:1:1  =&gt; [6, 7, 8, 9, 0]</span>
+                <span class="c1"># -4:3:1  =&gt; [6, 7, 8, 9, 0, 1, 2]</span>
+                <span class="c1"># -4:6:1  =&gt; [6, 7, 8, 9, 0, 1, 2, 3, 4, 5]</span>
+                <span class="c1"># -9:0:1  =&gt; [1, 2, 3, 4, 5, 6, 7, 8, 9]</span>
+                <span class="c1"># -9:1:1  =&gt; [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]</span>
+                <span class="c1"># -10:0:1 =&gt; [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</span>
+                <span class="k">if</span> <span class="n">cyclic</span><span class="p">:</span>
+                    <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">stop</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span>
+                    <span class="n">roll</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">start</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span>
+
+            <span class="k">elif</span> <span class="n">step</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="n">size</span> <span class="ow">and</span> <span class="n">start</span><span class="o">-</span><span class="n">size</span> <span class="o">&lt;=</span> <span class="n">stop</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c1"># [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</span>
+                <span class="c1"># 0:-4:-1  =&gt; [0, 9, 8, 7]</span>
+                <span class="c1"># 6:-1:-1  =&gt; [6, 5, 4, 3, 2, 1, 0]</span>
+                <span class="c1"># 6:-2:-1  =&gt; [6, 5, 4, 3, 2, 1, 0, 9]</span>
+                <span class="c1"># 6:-4:-1  =&gt; [6, 5, 4, 3, 2, 1, 0, 9, 8, 7]</span>
+                <span class="c1"># 0:-2:-1  =&gt; [0, 9]</span>
+                <span class="c1"># 0:-10:-1 =&gt; [0, 9, 8, 7, 6, 5, 4, 3, 2, 1]</span>
+                <span class="k">if</span> <span class="n">cyclic</span><span class="p">:</span>
+                    <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">start</span><span class="o">-</span><span class="n">stop</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span>
+                    <span class="n">roll</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span> <span class="o">-</span> <span class="n">stop</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">step</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">indices</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">start</span> <span class="o">==</span> <span class="n">stop</span> <span class="ow">or</span>
+                    <span class="p">(</span><span class="n">start</span> <span class="o">&lt;</span> <span class="n">stop</span> <span class="ow">and</span> <span class="n">step</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span>
+                    <span class="p">(</span><span class="n">start</span> <span class="o">&gt;</span> <span class="n">stop</span> <span class="ow">and</span> <span class="n">step</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)):</span>
+                    <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="s2">&quot;Invalid indices </span><span class="si">%s</span><span class="s2"> for array with shape </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                                     <span class="p">(</span><span class="n">parsed_indices</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">step</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">stop</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">stop</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span>
+         
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">long</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span> 
+                <span class="n">index</span> <span class="o">+=</span> <span class="n">size</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">index</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">convert2positve</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span> <span class="s1">&#39;kind&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;b&#39;</span><span class="p">:</span>
+                <span class="c1"># Convert booleans to non-negative integers. We&#39;re</span>
+                <span class="c1"># assuming that anything with a dtype attribute also</span>
+                <span class="c1"># has a size attribute.</span>
+                <span class="k">if</span> <span class="n">index</span><span class="o">.</span><span class="n">size</span> <span class="o">!=</span> <span class="n">size</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span>
+                        <span class="s2">&quot;Invalid indices </span><span class="si">%s</span><span class="s2"> for array with shape </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                        <span class="p">(</span><span class="n">parsed_indices</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+
+                <span class="n">index</span> <span class="o">=</span> <span class="n">numpy_where</span><span class="p">(</span><span class="n">index</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">convert2positve</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="c1">#--- End: if</span>
+
+            <span class="n">len_index</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">len_index</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>                
+                <span class="n">index</span> <span class="o">=</span> <span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">index</span> <span class="o">+=</span> <span class="n">size</span>
+                    
+                <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">index</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">len_index</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="s2">&quot;Invalid indices </span><span class="si">%s</span><span class="s2"> for array with shape </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                                 <span class="p">(</span><span class="n">parsed_indices</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">convert2positve</span><span class="p">:</span>
+                    <span class="c1"># Convert to non-negative integer numpy array</span>
+                    <span class="n">index</span> <span class="o">=</span> <span class="n">numpy_array</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                    <span class="n">index</span> <span class="o">=</span> <span class="n">numpy_where</span><span class="p">(</span><span class="n">index</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">index</span><span class="o">+</span><span class="n">size</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span>
+
+                <span class="n">steps</span> <span class="o">=</span> <span class="n">index</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">-</span> <span class="n">index</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">step</span> <span class="o">=</span> <span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">step</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">steps</span> <span class="o">-</span> <span class="n">step</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+                    <span class="c1"># We can replace the list with a slice object</span>
+                    <span class="k">if</span> <span class="n">step</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">start</span><span class="p">,</span> <span class="n">stop</span> <span class="o">=</span> <span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">index</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span>
+                    <span class="k">elif</span> <span class="n">step</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">start</span><span class="p">,</span> <span class="n">stop</span> <span class="o">=</span> <span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">index</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span>
+                        
+                    <span class="k">if</span> <span class="n">stop</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">stop</span> <span class="o">=</span> <span class="bp">None</span>
+                            
+                    <span class="n">index</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span>
+
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">index</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="c1">#--- End: if</span>
+        <span class="c1">#--- End: if</span>
+                    
+        <span class="n">parsed_indices</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">index</span>    
+    <span class="c1">#--- End: for</span>
+
+    <span class="k">if</span> <span class="n">cyclic</span><span class="p">:</span>    
+        <span class="k">return</span> <span class="n">parsed_indices</span><span class="p">,</span> <span class="n">roll</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">parsed_indices</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">get_subspace</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    array : numpy array</span>
+
+<span class="sd">    indices : list</span>
+
+<span class="sd">Subset the input numpy array with the given indices. Indexing is similar to</span>
+<span class="sd">that of a numpy array. The differences to numpy array indexing are:</span>
+
+<span class="sd">1. An integer index i takes the i-th element but does not reduce the rank of</span>
+<span class="sd">   the output array by one.</span>
+
+<span class="sd">2. When more than one dimension&#39;s slice is a 1-d boolean array or 1-d sequence</span>
+<span class="sd">   of integers then these indices work independently along each dimension</span>
+<span class="sd">   (similar to the way vector subscripts work in Fortran).</span>
+
+<span class="sd">indices must contain an index for each dimension of the input array.</span>
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">gg</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">slice</span><span class="p">)]</span>
+    <span class="n">len_gg</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">gg</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">len_gg</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="c1"># At most one axis has a list-of-integers index so we can do a</span>
+        <span class="c1"># normal numpy subspace</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="k">return</span> <span class="n">array</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">indices</span><span class="p">)]</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="c1"># At least two axes have list-of-integers indices so we can&#39;t</span>
+        <span class="c1"># do a normal numpy subspace</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="k">if</span> <span class="n">numpy_ma_isMA</span><span class="p">(</span><span class="n">array</span><span class="p">):</span>
+            <span class="n">take</span> <span class="o">=</span> <span class="n">numpy_ma_take</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">take</span> <span class="o">=</span> <span class="n">numpy_take</span>
+
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[:]</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">gg</span><span class="p">:</span>
+            <span class="n">array</span> <span class="o">=</span> <span class="n">take</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">indices</span><span class="p">[</span><span class="n">axis</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">)</span>
+            <span class="n">indices</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+        <span class="c1">#--- End: for</span>
+
+        <span class="k">if</span> <span class="n">len_gg</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">):</span>
+            <span class="n">array</span> <span class="o">=</span> <span class="n">array</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">indices</span><span class="p">)]</span>
+
+        <span class="k">return</span> <span class="n">array</span>
+    <span class="c1">#--- End: if</span>
+
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">set_subspace</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">gg</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">slice</span><span class="p">)]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">gg</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span> 
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="c1"># At most one axis has a list-of-integers index so we can do a</span>
+        <span class="c1"># normal numpy assignment</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="n">array</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">indices</span><span class="p">)]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="c1"># At least two axes have list-of-integers indices so we can&#39;t</span>
+        <span class="c1"># do a normal numpy assignment</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="n">indices1</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[:]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">indices</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">gg</span><span class="p">:</span>
+                <span class="n">y</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="nb">iter</span><span class="p">(</span><span class="n">x</span><span class="p">)]</span> <span class="o">*</span> <span class="mi">2</span>
+                <span class="k">for</span> <span class="n">start</span><span class="p">,</span> <span class="n">stop</span> <span class="ow">in</span> <span class="n">izip_longest</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">stop</span><span class="p">:</span>
+                        <span class="n">y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">start</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">step</span> <span class="o">=</span> <span class="n">stop</span> <span class="o">-</span> <span class="n">start</span>
+                        <span class="n">stop</span> <span class="o">+=</span> <span class="mi">1</span>
+                        <span class="n">y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">step</span><span class="p">))</span>
+                <span class="c1">#--- End: for</span>
+                <span class="n">indices1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">y</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">indices1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span><span class="p">,)</span>
+        <span class="c1">#--- End: for</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">numpy_ndim</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">itertools_product</span><span class="p">(</span><span class="o">*</span><span class="n">indices1</span><span class="p">):</span>
+                <span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+                
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">indices2</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">ndim_difference</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="n">numpy_ndim</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">numpy_shape</span><span class="p">(</span><span class="n">value</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">indices2</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">slice</span><span class="p">(</span><span class="bp">None</span><span class="p">),))</span>
+                <span class="k">elif</span> <span class="n">i</span> <span class="o">+</span> <span class="n">ndim_difference</span> <span class="ow">in</span> <span class="n">gg</span><span class="p">:</span>
+                    <span class="n">y</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="n">start</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="k">while</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="n">n</span><span class="p">:</span>
+                        <span class="n">stop</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="mi">2</span>
+                        <span class="n">y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">))</span>
+                        <span class="n">start</span> <span class="o">=</span> <span class="n">stop</span>
+                    <span class="c1">#--- End: for</span>
+                    <span class="n">indices2</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">indices2</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">slice</span><span class="p">(</span><span class="bp">None</span><span class="p">),))</span>
+            <span class="c1">#--- End: for</span>
+
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">izip</span><span class="p">(</span><span class="n">itertools_product</span><span class="p">(</span><span class="o">*</span><span class="n">indices1</span><span class="p">),</span>
+                             <span class="n">itertools_product</span><span class="p">(</span><span class="o">*</span><span class="n">indices2</span><span class="p">)):</span>
+                <span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="ATOL"><a class="viewcode-back" href="../../generated/cf.ATOL.html#cf.ATOL">[docs]</a><span class="k">def</span> <span class="nf">ATOL</span><span class="p">(</span><span class="o">*</span><span class="n">arg</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The value of absolute tolerance for testing numerically tolerant</span>
+<span class="sd">equality.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    arg : int, optional</span>
+<span class="sd">        The new value of absolute tolerance. The default is to not</span>
+<span class="sd">        change the current value.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : float</span>
+<span class="sd">        The value prior to the change, or the current value if no</span>
+<span class="sd">        new value was specified.</span>
+
+<span class="sd">.. seealso:: `cf.RTOL`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.ATOL()</span>
+<span class="sd">1e-08</span>
+<span class="sd">&gt;&gt;&gt; old = cf.ATOL(1e-10)</span>
+<span class="sd">&gt;&gt;&gt; cf.ATOL(old)</span>
+<span class="sd">1e-10</span>
+<span class="sd">&gt;&gt;&gt; cf.ATOL()</span>
+<span class="sd">1e-08</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">old</span> <span class="o">=</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;ATOL&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;ATOL&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">old</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="RTOL"><a class="viewcode-back" href="../../generated/cf.RTOL.html#cf.RTOL">[docs]</a><span class="k">def</span> <span class="nf">RTOL</span><span class="p">(</span><span class="o">*</span><span class="n">arg</span><span class="p">):</span>    
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The value of relative tolerance for testing numerically</span>
+<span class="sd">tolerant equality.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    arg : int, optional</span>
+<span class="sd">        The new value of relative tolerance. The default is to not</span>
+<span class="sd">        change the current value.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : float</span>
+<span class="sd">        The value prior to the change, or the current value if no</span>
+<span class="sd">        new value was specified.</span>
+
+<span class="sd">.. seealso:: `cf.ATOL`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.RTOL()</span>
+<span class="sd">1.0000000000000001e-05</span>
+<span class="sd">&gt;&gt;&gt; old = cf.RTOL(1e-10)</span>
+<span class="sd">&gt;&gt;&gt; cf.RTOL(old)</span>
+<span class="sd">1e-10</span>
+<span class="sd">&gt;&gt;&gt; cf.RTOL()</span>
+<span class="sd">1.0000000000000001e-05</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">old</span> <span class="o">=</span> <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;RTOL&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+        <span class="n">CONSTANTS</span><span class="p">[</span><span class="s1">&#39;RTOL&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">old</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="equals"><a class="viewcode-back" href="../../generated/cf.equals.html#cf.equals">[docs]</a><span class="k">def</span> <span class="nf">equals</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">ignore_fill_value</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+           <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if and only if two objects are logically equal.</span>
+
+<span class="sd">If the first argument, *x*, has an :meth:`equals` method then it is</span>
+<span class="sd">used, and in this case ``equals(x, y)`` is equivalent to</span>
+<span class="sd">``x.equals(y)``. Else if the second argument, *y*, has an</span>
+<span class="sd">:meth:`equals` method then it is used, and in this case ``equals(x,</span>
+<span class="sd">y)`` is equivalent to ``y.equals(x)``.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    x, y :</span>
+<span class="sd">        The objects to compare for equality.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">    ignore_fill_value : bool, optional</span>
+<span class="sd">        If True then `cf.Data` arrays with different fill values are</span>
+<span class="sd">        considered equal. By default they are considered unequal.</span>
+
+<span class="sd">    traceback : bool, optional</span>
+<span class="sd">        If True then print a traceback highlighting where the two</span>
+<span class="sd">        objects differ.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two objects are equal.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Field: rainfall_rate(latitude(10), longitude(20)) kg m2 s-1&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(f, f)</span>
+<span class="sd">True</span>
+
+<span class="sd">&gt;&gt;&gt; cf.equals(1.0, 1.0)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(1.0, 33)</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; cf.equals(&#39;a&#39;, &#39;a&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(&#39;a&#39;, &#39;b&#39;)</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; type(x), x.dtype</span>
+<span class="sd">(&lt;type &#39;numpy.ndarray&#39;&gt;, dtype(&#39;int64&#39;))</span>
+<span class="sd">&gt;&gt;&gt; y = x.copy()</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(x, y)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(x, x+1)</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; class A(object):</span>
+<span class="sd">...     pass</span>
+<span class="sd">...</span>
+<span class="sd">&gt;&gt;&gt; a = A()</span>
+<span class="sd">&gt;&gt;&gt; b = A()</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(a, a)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(a, b)</span>
+<span class="sd">False</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">eq</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;equals&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">eq</span><span class="p">):</span>
+        <span class="c1"># x has a callable equals method</span>
+        <span class="k">return</span> <span class="n">eq</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                  <span class="n">ignore_fill_value</span><span class="o">=</span><span class="n">ignore_fill_value</span><span class="p">,</span>
+                  <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">)</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="n">eq</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="s1">&#39;equals&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">eq</span><span class="p">):</span>
+        <span class="c1"># y has a callable equals method</span>
+        <span class="k">return</span> <span class="n">eq</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                  <span class="n">ignore_fill_value</span><span class="o">=</span><span class="n">ignore_fill_value</span><span class="p">,</span>
+                  <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">)</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">numpy_ndarray</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">numpy_ndarray</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">False</span>
+
+            <span class="k">if</span> <span class="n">rtol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">rtol</span> <span class="o">=</span> <span class="n">RTOL</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">atol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">atol</span> <span class="o">=</span> <span class="n">ATOL</span><span class="p">()</span>
+                    
+            <span class="k">return</span> <span class="n">_numpy_allclose</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">numpy_ndarray</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span> <span class="o">==</span> <span class="n">y</span></div>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">set_equals</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">ignore_fill_value</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+               <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>    
+    <span class="n">eq</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;set_equals&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">eq</span><span class="p">):</span>
+        <span class="c1"># x has a callable set_equals method</span>
+        <span class="k">return</span> <span class="n">eq</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                  <span class="n">ignore_fill_value</span><span class="o">=</span><span class="n">ignore_fill_value</span><span class="p">,</span>
+                  <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">)</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="n">eq</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="s1">&#39;set_equals&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">eq</span><span class="p">):</span>
+        <span class="c1"># y has a callable set_equals method</span>
+        <span class="k">return</span> <span class="n">eq</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                  <span class="n">ignore_fill_value</span><span class="o">=</span><span class="n">ignore_fill_value</span><span class="p">,</span>
+                  <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">)</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">return</span> <span class="n">equals</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span>
+                  <span class="n">ignore_fill_value</span><span class="o">=</span><span class="n">ignore_fill_value</span><span class="p">,</span>
+                  <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="equivalent"><a class="viewcode-back" href="../../generated/cf.equivalent.html#cf.equivalent">[docs]</a><span class="k">def</span> <span class="nf">equivalent</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if and only if two objects are logically equivalent.</span>
+
+<span class="sd">If the first argument, *x*, has an `!equivalent` method then it is</span>
+<span class="sd">used, and in this case ``equivalent(x, y)`` is the same as</span>
+<span class="sd">``x.equivalent(y)``.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    x, y :</span>
+<span class="sd">        The objects to compare for equivalence.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">    traceback : bool, optional</span>
+<span class="sd">        If True then print a traceback highlighting where the two</span>
+<span class="sd">        objects differ.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two objects are equivalent.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Field: rainfall_rate(latitude(10), longitude(20)) kg m2 s-1&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.equivalent(f, f)</span>
+<span class="sd">True</span>
+
+<span class="sd">&gt;&gt;&gt; cf.equivalent(1.0, 1.0)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.equivalent(1.0, 33)</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; cf.equivalent(&#39;a&#39;, &#39;a&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.equivalent(&#39;a&#39;, &#39;b&#39;)</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; cf.equivalent(cf.Data(1000, units=&#39;m&#39;), cf.Data(1, units=&#39;km&#39;))</span>
+<span class="sd">True</span>
+
+<span class="sd">For a field, ``f``:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.equivalent(f, f.transpose())</span>
+<span class="sd">True</span>
+
+
+<span class="sd">&#39;&#39;&#39;</span>
+
+    <span class="k">if</span> <span class="n">rtol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">rtol</span> <span class="o">=</span> <span class="n">RTOL</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">atol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">atol</span> <span class="o">=</span> <span class="n">ATOL</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;equivalent&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">callable</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">equivalent</span><span class="p">):</span>
+        <span class="c1"># x has a callable eequivalent method</span>
+        <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">equivalent</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">equals</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">,</span> <span class="n">ignore_fill_value</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">traceback</span><span class="o">=</span><span class="n">traceback</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="flat"><a class="viewcode-back" href="../../generated/cf.flat.html#cf.flat">[docs]</a><span class="k">def</span> <span class="nf">flat</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return an iterator over an arbitrarily nested sequence.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    x : scalar or arbitrarily nested sequence</span>
+<span class="sd">        The arbitrarily nested sequence to be flattened. Note that a</span>
+<span class="sd">        If *x* is a string or a scalar then this is equivalent to</span>
+<span class="sd">        passing a single element sequence containing *x*.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : generator</span>
+<span class="sd">        An iterator over flattened sequence.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; print cf.flat([1, [2, [3, 4]]])</span>
+<span class="sd">&lt;generator object flat at 0x3649cd0&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; print list(cf.flat([1, (2, [3, 4])]))</span>
+<span class="sd">[1, 2, 3, 4]</span>
+
+<span class="sd">&gt;&gt;&gt; import numpy</span>
+<span class="sd">&gt;&gt;&gt; print list(cf.flat((1, [2, numpy.array([[3, 4], [5, 6]])]))</span>
+<span class="sd">[1, 2, 3, 4, 5, 6]</span>
+
+<span class="sd">&gt;&gt;&gt; for a in cf.flat([1, [2, [3, 4]]]):</span>
+<span class="sd">...     print a,</span>
+<span class="sd">1 2 3 4</span>
+
+<span class="sd">&gt;&gt;&gt; for a in cf.flat([&#39;a&#39;, [&#39;bc&#39;, [&#39;def&#39;, &#39;ghij&#39;]]]):</span>
+<span class="sd">...     print a, &#39; &#39;,</span>
+<span class="sd">a bc def ghij</span>
+
+<span class="sd">&gt;&gt;&gt; for a in cf.flat(2004):</span>
+<span class="sd">...     print a</span>
+<span class="sd">2004</span>
+
+<span class="sd">&gt;&gt;&gt; for a in cf.flat(&#39;abcdefghij&#39;):</span>
+<span class="sd">...     print a</span>
+<span class="sd">abcdefghij</span>
+
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">&lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;</span>
+<span class="sd">&gt;&gt;&gt; for a in cf.flat(f):</span>
+<span class="sd">...     print repr(a)</span>
+<span class="sd">&lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; for a in cf.flat([f, [f, [f, f]]]):</span>
+<span class="sd">...     print repr(a)</span>
+<span class="sd">&lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;</span>
+<span class="sd">&lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;</span>
+<span class="sd">&lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;</span>
+<span class="sd">&lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; fl = cf.FieldList(cf.flat([f, [f, [f, f]]])</span>
+<span class="sd">&gt;&gt;&gt; fl</span>
+<span class="sd">[&lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;,</span>
+<span class="sd"> &lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;,</span>
+<span class="sd"> &lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;,</span>
+<span class="sd"> &lt;CF Field: eastward_wind(air_pressure(5), latitude(110), longitude(106)) m s-1&gt;]</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span><span class="p">,)</span>
+
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">sub</span> <span class="ow">in</span> <span class="n">flat</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+                <span class="k">yield</span> <span class="n">sub</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">a</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="pickle"><a class="viewcode-back" href="../../generated/cf.pickle.html#cf.pickle">[docs]</a><span class="k">def</span> <span class="nf">pickle</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Write a binary pickled representation of an object to a file.</span>
+
+<span class="sd">Note that Field and FieldList objects are picklable and their pickle</span>
+<span class="sd">file size will be very small if their data arrays contain file</span>
+<span class="sd">pointers as opposed to numpy arrays.</span>
+
+<span class="sd">The pickling is equivalent to::</span>
+
+<span class="sd">   import cPickle</span>
+<span class="sd">   fh = open(&#39;file.pkl&#39;, &#39;wb&#39;)</span>
+<span class="sd">   cPickle.dump(x, fh, 2)</span>
+<span class="sd">   fh.close()</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    x : </span>
+<span class="sd">        The object to be pickled.</span>
+
+<span class="sd">    filename : str</span>
+<span class="sd">        The name of the file in which to write the pickled</span>
+<span class="sd">        representation of *x*.</span>
+
+<span class="sd">    overwrite : bool, optional</span>
+<span class="sd">        If True a pre-existing output file is over written. By default</span>
+<span class="sd">        an exception is raised if the output file pre-exists.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    None</span>
+
+<span class="sd">:Raises:</span>
+
+<span class="sd">    IOError :</span>
+<span class="sd">        If *overwrite* is False and the output file pre-exists.</span>
+
+<span class="sd">    PickleError :</span>
+<span class="sd">        If the object is not picklable.</span>
+
+<span class="sd">.. seealso:: `cf.unpickle`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">For any picklable object, x:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.pickle(x, &#39;file.pkl&#39;)</span>
+<span class="sd">&gt;&gt;&gt; y = cf.unpickle(&#39;file.pkl&#39;)</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(x, y)</span>
+<span class="sd">True</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">overwrite</span> <span class="ow">and</span> <span class="n">os_path_isfile</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span>
+            <span class="s2">&quot;Can&#39;t pickle to an existing file unless overwrite=True&quot;</span><span class="p">)</span>
+
+    <span class="n">fh</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">cPickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">fh</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">PickleError</span><span class="p">(</span><span class="s2">&quot;Failed whilst pickling </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="nb">repr</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+    <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="unpickle"><a class="viewcode-back" href="../../generated/cf.unpickle.html#cf.unpickle">[docs]</a><span class="k">def</span> <span class="nf">unpickle</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return the reconstituted (unpickled) object from a binary pickle file.</span>
+
+<span class="sd">Any binary pickle file may be used as input.</span>
+
+<span class="sd">The unpickling is equivalent to::</span>
+
+<span class="sd">   import cPickle</span>
+<span class="sd">   fh = open(&#39;file.pkl&#39;, &#39;rb&#39;)</span>
+<span class="sd">   x = cPickle.load(fh)</span>
+<span class="sd">   fh.close()</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    filename : str</span>
+<span class="sd">        The name of the file containing the pickled object.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : </span>
+<span class="sd">        The reconstituted object.</span>
+
+<span class="sd">:Raises:</span>
+
+<span class="sd">    UnpicklingError :</span>
+<span class="sd">        If the file can not be unpickled. In particular, this might be</span>
+<span class="sd">        raised when attempting to unpickle fields which were pickled</span>
+<span class="sd">        with a different, incompatible version of cf.</span>
+
+<span class="sd">.. seealso:: `cf.pickle`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">For any picklable object, x:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.pickle(x, &#39;file.pkl&#39;)</span>
+<span class="sd">&gt;&gt;&gt; y = cf.unpickle(&#39;file.pkl&#39;)</span>
+<span class="sd">&gt;&gt;&gt; cf.equals(x, y)</span>
+<span class="sd">True</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">fh</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="c1"># Failed unpickling can throw up any type of error, so trap</span>
+        <span class="c1"># them all, but raise an informative UnpicklingError.</span>
+        <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">UnpicklingError</span><span class="p">(</span>
+            <span class="s2">&quot;Failed whilst unpickling file &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">filename</span><span class="p">)</span>
+    
+    <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">x</span></div>
+<span class="c1">#--- End: def</span>
+
+<span class="n">_d</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;char&#39;</span><span class="p">:</span> <span class="n">numpy_dtype</span><span class="p">(</span><span class="s1">&#39;S1&#39;</span><span class="p">)}</span>
+
+<span class="k">def</span> <span class="nf">string_to_numpy_data_type</span><span class="p">(</span><span class="n">string</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">numpy_dtype</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_d</span><span class="p">[</span><span class="n">string</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;asdasd  kkasdhahsjj734654376&quot;</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="abspath"><a class="viewcode-back" href="../../generated/cf.abspath.html#cf.abspath">[docs]</a><span class="k">def</span> <span class="nf">abspath</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a normalized absolute version of a file name.</span>
+
+<span class="sd">If a string containing URL is provided then it is returned unchanged.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    filename : str</span>
+<span class="sd">        The name of the file.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : str</span>
+<span class="sd">        The normalized absolutized version of *filename*.</span>
+<span class="sd"> </span>
+<span class="sd">.. seealso:: `cf.dirname`, `cf.pathjoin`, `cf.relpath`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; import os</span>
+<span class="sd">&gt;&gt;&gt; os.getcwd()</span>
+<span class="sd">&#39;/data/archive&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.abspath(&#39;file.nc&#39;)</span>
+<span class="sd">&#39;/data/archive/file.nc&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.abspath(&#39;..//archive///file.nc&#39;)</span>
+<span class="sd">&#39;/data/archive/file.nc&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.abspath(&#39;http://data/archive/file.nc&#39;)</span>
+<span class="sd">&#39;http://data/archive/file.nc&#39;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">urlparse_urlparse</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">u</span><span class="o">.</span><span class="n">scheme</span> <span class="o">!=</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">filename</span>
+
+    <span class="k">return</span> <span class="n">os_path_abspath</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="relpath"><a class="viewcode-back" href="../../generated/cf.relpath.html#cf.relpath">[docs]</a><span class="k">def</span> <span class="nf">relpath</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a relative filepath to a file.</span>
+
+<span class="sd">The filepath is relative either from the current directory or from an</span>
+<span class="sd">optional start point.</span>
+
+<span class="sd">If a string containing URL is provided then it is returned unchanged.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    filename : str</span>
+<span class="sd">        The name of the file.</span>
+
+<span class="sd">    start : str, optional</span>
+<span class="sd">        The start point for the relative path. By default the current</span>
+<span class="sd">        directoty is used.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : str</span>
+<span class="sd">        The relative path.</span>
+
+<span class="sd">.. seealso:: `cf.abspath`, `cf.dirname`, `cf.pathjoin`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.relpath(&#39;/data/archive/file.nc&#39;)</span>
+<span class="sd">&#39;../file.nc&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.relpath(&#39;/data/archive///file.nc&#39;, start=&#39;/data&#39;)</span>
+<span class="sd">&#39;archive/file.nc&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.relpath(&#39;http://data/archive/file.nc&#39;)</span>
+<span class="sd">&#39;http://data/archive/file.nc&#39;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">urlparse_urlparse</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">u</span><span class="o">.</span><span class="n">scheme</span> <span class="o">!=</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">filename</span>
+
+    <span class="k">if</span> <span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">os_path_relpath</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">start</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">os_path_relpath</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="dirname"><a class="viewcode-back" href="../../generated/cf.dirname.html#cf.dirname">[docs]</a><span class="k">def</span> <span class="nf">dirname</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return the directory name of a file.</span>
+
+<span class="sd">If a string containing URL is provided then everything up to, but not</span>
+<span class="sd">including, the last slash (/) is returned.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    filename : str</span>
+<span class="sd">        The name of the file.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : str</span>
+<span class="sd">        The directory name.</span>
+
+<span class="sd">.. seealso:: `cf.abspath`, `cf.pathjoin`, `cf.relpath`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.dirname(&#39;/data/archive/file.nc&#39;)</span>
+<span class="sd">&#39;/data/archive&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.dirname(&#39;..//file.nc&#39;)</span>
+<span class="sd">&#39;..&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.dirname(&#39;http://data/archive/file.nc&#39;)</span>
+<span class="sd">&#39;http://data/archive&#39;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">urlparse_urlparse</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">u</span><span class="o">.</span><span class="n">scheme</span> <span class="o">!=</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">filename</span><span class="o">.</span><span class="n">rpartition</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">os_path_dirname</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="pathjoin"><a class="viewcode-back" href="../../generated/cf.pathjoin.html#cf.pathjoin">[docs]</a><span class="k">def</span> <span class="nf">pathjoin</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Join two file path components intelligently.</span>
+
+<span class="sd">If either of the paths is a URL then a URL will be returned</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    path1 : str</span>
+<span class="sd">        The first component of the path.</span>
+
+<span class="sd">    path2 : str</span>
+<span class="sd">        The second component of the path.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : str</span>
+<span class="sd">        The joined paths.</span>
+
+<span class="sd">.. seealso:: `cf.abspath`, `cf.dirname`, `cf.relpath`</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.pathjoin(&#39;/data/archive&#39;, &#39;../archive/file.nc&#39;)</span>
+<span class="sd">&#39;/data/archive/../archive/file.nc&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.pathjoin(&#39;/data/archive&#39;, &#39;../archive/file.nc&#39;)</span>
+<span class="sd">&#39;/data/archive/../archive/file.nc&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.abspath(cf.pathjoin(&#39;/data/&#39;, &#39;archive/&#39;)</span>
+<span class="sd">&#39;/data/archive&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.pathjoin(&#39;http://data&#39;, &#39;archive/file.nc&#39;)</span>
+<span class="sd">&#39;http://data/archive/file.nc&#39;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">urlparse_urlparse</span><span class="p">(</span><span class="n">path1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">u</span><span class="o">.</span><span class="n">scheme</span> <span class="o">!=</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">urlparse_urljoin</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">os_path_join</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">hash_array</span><span class="p">(</span><span class="n">array</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return the hash value of a numpy array.</span>
+
+<span class="sd">The hash value is dependent on the data type, shape of the data</span>
+<span class="sd">array. If the array is a masked array then the hash value is</span>
+<span class="sd">independent of the fill value and of data array values underlying any</span>
+<span class="sd">masked elements.</span>
+
+<span class="sd">The hash value is not guaranteed to be portable across versions of</span>
+<span class="sd">Python, numpy and cf.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    array : numpy.ndarray</span>
+<span class="sd">        The numpy array to be hashed. May be a masked array.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : int</span>
+<span class="sd">        The hash value</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; print array</span>
+<span class="sd">[[0 1 2 3]]</span>
+<span class="sd">&gt;&gt;&gt; cf.hash_array(array)</span>
+<span class="sd">-8125230271916303273</span>
+<span class="sd">&gt;&gt;&gt; array[1, 0] = numpy.ma.masked</span>
+<span class="sd">&gt;&gt;&gt; print array</span>
+<span class="sd">[[0 -- 2 3]]</span>
+<span class="sd">&gt;&gt;&gt; cf.hash_array(array)</span>
+<span class="sd">791917586613573563</span>
+<span class="sd">&gt;&gt;&gt; array.hardmask = False</span>
+<span class="sd">&gt;&gt;&gt; array[0, 1] = 999</span>
+<span class="sd">&gt;&gt;&gt; array[0, 1] = numpy.ma.masked</span>
+<span class="sd">&gt;&gt;&gt; cf.hash_array(array)</span>
+<span class="sd">791917586613573563</span>
+<span class="sd">&gt;&gt;&gt; array.squeeze()</span>
+<span class="sd">&gt;&gt;&gt; print array</span>
+<span class="sd">[0 -- 2 3]</span>
+<span class="sd">&gt;&gt;&gt; cf.hash_array(array)</span>
+<span class="sd">-7007538450787927902</span>
+<span class="sd">&gt;&gt;&gt; array.dtype = float</span>
+<span class="sd">&gt;&gt;&gt; print array</span>
+<span class="sd">[0.0 -- 2.0 3.0]</span>
+<span class="sd">&gt;&gt;&gt; cf.hash_array(array)</span>
+<span class="sd">-4816859207969696442</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">h</span> <span class="o">=</span> <span class="n">hashlib_md5</span><span class="p">()</span>
+    
+    <span class="n">h_update</span> <span class="o">=</span> <span class="n">h</span><span class="o">.</span><span class="n">update</span>
+    
+    <span class="n">h_update</span><span class="p">(</span><span class="n">marshal_dumps</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+    <span class="n">h_update</span><span class="p">(</span><span class="n">marshal_dumps</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+    
+    <span class="k">if</span> <span class="n">numpy_ma_isMA</span><span class="p">(</span><span class="n">array</span><span class="p">):</span>        
+        <span class="k">if</span> <span class="n">numpy_ma_is_masked</span><span class="p">(</span><span class="n">array</span><span class="p">):</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">mask</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">mask</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">c_contiguous</span><span class="p">:</span>               
+                <span class="n">mask</span> <span class="o">=</span> <span class="n">numpy_ascontiguousarray</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+
+            <span class="n">h_update</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+            <span class="n">array</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">set_fill_value</span><span class="p">()</span>
+            <span class="n">array</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">filled</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">array</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">data</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">array</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">c_contiguous</span><span class="p">:</span>               
+<span class="c1">#        array = array.copy()</span>
+        <span class="n">array</span> <span class="o">=</span> <span class="n">numpy_ascontiguousarray</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+        
+    <span class="n">h_update</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="n">h</span><span class="o">.</span><span class="n">digest</span><span class="p">())</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Inspect the attributes of an object.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : str</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; print x.inspect</span>
+<span class="sd">&lt;CF CoordinateReference: rotated_latitude_longitude&gt;</span>
+<span class="sd">----------------------------------------------------</span>
+<span class="sd">_dict: {&#39;grid_north_pole_latitude&#39;: 38.0, &#39;grid_north_pole_longitude&#39;: 190.0}</span>
+<span class="sd">coord_terms: set([])</span>
+<span class="sd">coords: set([&#39;dim2&#39;, &#39;dim1&#39;, &#39;aux2&#39;, &#39;aux3&#39;])</span>
+<span class="sd">name: &#39;rotated_latitude_longitude&#39;</span>
+<span class="sd">ncvar: &#39;rotated_latitude_longitude&#39;</span>
+<span class="sd">type: &#39;grid_mapping&#39;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="s1">&#39;-&#39;</span><span class="p">)]</span>
+    
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;__dict__&#39;</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">value</span><span class="p">)))</span>
+        
+    <span class="k">return</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">broadcast_array</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Broadcast an array to a given shape.</span>
+<span class="sd">    </span>
+<span class="sd">It is assumed that ``numpy.ndim(array) &lt;= len(shape)`` and that the</span>
+<span class="sd">array is broadcastable to the shape by the normal numpy broadcasting</span>
+<span class="sd">rules, but neither of these things is checked.</span>
+<span class="sd">    </span>
+<span class="sd">For example, ``a[...] = broadcast_array(a, b.shape)`` is equivalent to</span>
+<span class="sd">``a[...] = b``.</span>
+<span class="sd">    </span>
+<span class="sd">:Parameters:</span>
+<span class="sd">  </span>
+<span class="sd">    a : numpy array-like</span>
+<span class="sd">    </span>
+<span class="sd">    shape : tuple</span>
+<span class="sd">    </span>
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : numpy array</span>
+<span class="sd">    </span>
+<span class="sd">:Examples:</span>
+
+
+<span class="sd">&gt;&gt;&gt; a = numpy.arange(8).reshape(2, 4)</span>
+<span class="sd">[[0 1 2 3]</span>
+<span class="sd"> [4 5 6 7]]</span>
+
+<span class="sd">&gt;&gt;&gt; print cf.broadcast_array(a, (3, 2, 4))</span>
+<span class="sd">[[[0 1 2 3]</span>
+<span class="sd">  [4 5 6 0]]</span>
+
+<span class="sd"> [[0 1 2 3]</span>
+<span class="sd">  [4 5 6 0]]</span>
+
+<span class="sd"> [[0 1 2 3]</span>
+<span class="sd">  [4 5 6 0]]]</span>
+
+<span class="sd">&gt;&gt;&gt; a = numpy.arange(8).reshape(2, 1, 4)</span>
+<span class="sd">[[[0 1 2 3]]</span>
+
+<span class="sd"> [[4 5 6 7]]]</span>
+
+<span class="sd">&gt;&gt;&gt; print cf.broadcast_array(a, (2, 3, 4))</span>
+<span class="sd">[[[0 1 2 3]</span>
+<span class="sd">  [0 1 2 3]</span>
+<span class="sd">  [0 1 2 3]]</span>
+
+<span class="sd"> [[4 5 6 7]</span>
+<span class="sd">  [4 5 6 7]</span>
+<span class="sd">  [4 5 6 7]]]</span>
+
+<span class="sd">&gt;&gt;&gt; a = numpy.ma.arange(8).reshape(2, 4)</span>
+<span class="sd">&gt;&gt;&gt; a[1, 3] = numpy.ma.masked</span>
+<span class="sd">&gt;&gt;&gt; print a</span>
+<span class="sd">[[0 1 2 3]</span>
+<span class="sd"> [4 5 6 --]]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.broadcast_array(a, (3, 2, 4))</span>
+<span class="sd">[[[0 1 2 3]</span>
+<span class="sd">  [4 5 6 --]]</span>
+
+<span class="sd"> [[0 1 2 3]</span>
+<span class="sd">  [4 5 6 --]]</span>
+
+<span class="sd"> [[0 1 2 3]</span>
+<span class="sd">  [4 5 6 --]]]</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">a_shape</span> <span class="o">=</span> <span class="n">numpy_shape</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">a_shape</span> <span class="o">==</span> <span class="n">shape</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">array</span>
+
+    <span class="n">tile</span> <span class="o">=</span> <span class="p">[(</span><span class="n">m</span> <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">a_shape</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">shape</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">])]</span>
+    <span class="n">tile</span> <span class="o">=</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span><span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">a_shape</span><span class="p">)]</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">tile</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    
+    <span class="k">return</span> <span class="n">numpy_tile</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">tile</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">allclose</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Returns True if two broadcastable arrays have equal values to within</span>
+<span class="sd">numerical tolerance, False otherwise.</span>
+
+<span class="sd">The tolerance values are positive, typically very small numbers. The</span>
+<span class="sd">relative difference (``rtol * abs(b)``) and the absolute difference</span>
+<span class="sd">``atol`` are added together to compare against the absolute difference</span>
+<span class="sd">between ``a`` and ``b``.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    x, y : array_like</span>
+<span class="sd">        Input arrays to compare.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Returns True if the arrays are equal, otherwise False.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>    
+    <span class="k">if</span> <span class="n">rtol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">rtol</span> <span class="o">=</span> <span class="n">RTOL</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">atol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">atol</span> <span class="o">=</span> <span class="n">ATOL</span><span class="p">()</span>
+
+    <span class="n">allclose</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;allclose&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">allclose</span><span class="p">):</span>
+        <span class="c1"># x has a callable allclose method</span>
+       <span class="k">return</span> <span class="n">allclose</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">)</span>
+
+    <span class="n">allclose</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="s1">&#39;allclose&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">allclose</span><span class="p">):</span>
+        <span class="c1"># y has a callable allclose method</span>
+       <span class="k">return</span> <span class="n">allclose</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">)</span>
+
+    <span class="c1"># x nor y has a callable allclose method</span>
+    <span class="k">return</span> <span class="n">_numpy_allclose</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">_section</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">stop</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">Return a list of m dimensional sections of a Field of n dimensions or</span>
+<span class="sd">a dictionary of m dimensional sections of a Data object of n</span>
+<span class="sd">dimensions, where m &lt;= n. In the case of a Data object the keys of the</span>
+<span class="sd">dictionary are the indicies of the sections in the original Data</span>
+<span class="sd">object. The m dimensions that are not sliced are marked with None as a</span>
+<span class="sd">placeholder making it possible to reconstruct the original data</span>
+<span class="sd">object. The corresponding values are the resulting sections of type</span>
+<span class="sd">cf.Data.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    axes : *optional*</span>
+<span class="sd">        In the case of a Field this is a query for the m axes that</span>
+<span class="sd">        define the sections of the Field as accepted by the Field</span>
+<span class="sd">        object&#39;s axes method.  The keyword arguments are also passed</span>
+<span class="sd">        to this method. See `cf.Field.axes` for details. If an axis is</span>
+<span class="sd">        returned that is not a data axis it is ignored, since it is</span>
+<span class="sd">        assumed to be a dimension coordinate of size 1. In the case of</span>
+<span class="sd">        a Data object this should be a tuple or a list of the m</span>
+<span class="sd">        indices of the m axes that define the sections of the Data</span>
+<span class="sd">        object. If axes is None (the default) all axes are selected.</span>
+<span class="sd">    </span>
+<span class="sd">    data : bool, optional</span>
+<span class="sd">        If True this indicates that a data object has been passed, if</span>
+<span class="sd">        false it indicates that a field object has been passed. By</span>
+<span class="sd">        default it is false.</span>
+
+<span class="sd">    stop : int, optional</span>
+<span class="sd">        Stop after taking this number of sections and return. If stop</span>
+<span class="sd">        is None all sections are taken.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : list or dict</span>
+<span class="sd">        The list of m dimensional sections of the Field or the</span>
+<span class="sd">        dictionary of m dimensional sections of the Data object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">Section a field into 2D longitude/time slices, checking the units:</span>
+
+<span class="sd">&gt;&gt;&gt; _section(f, {None: &#39;longitude&#39;, units: &#39;radians&#39;},</span>
+<span class="sd">...             {None: &#39;time&#39;,</span>
+<span class="sd">...              &#39;units&#39;: &#39;days since 2006-01-01 00:00:00&#39;})</span>
+
+<span class="sd">Section a field into 2D longitude/latitude slices, requiring exact</span>
+<span class="sd">names:</span>
+
+<span class="sd">&gt;&gt;&gt; _section(f, [&#39;latitude&#39;, &#39;longitude&#39;], exact=True)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="c1"># retrieve the index of each axis defining the sections</span>
+    <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">axes</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">axis_indices</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">ndim</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">axis_indices</span> <span class="o">=</span> <span class="n">axes</span>
+        <span class="c1">#--- End: if</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">axis_keys</span> <span class="o">=</span> <span class="n">o</span><span class="o">.</span><span class="n">axes</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">axis_indices</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">axis_keys</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">axis_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">data_axes</span><span class="p">()</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="c1">#--- End: for</span>
+    <span class="c1">#--- End: if</span>
+    
+    <span class="c1"># find the size of each dimension</span>
+    <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+        <span class="n">sizes</span> <span class="o">=</span> <span class="n">o</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">sizes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">o</span><span class="o">.</span><span class="n">data_axes</span><span class="p">():</span>
+            <span class="n">sizes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">axis_size</span><span class="p">((</span><span class="n">axis</span><span class="p">)))</span>
+        <span class="c1">#--- End: for</span>
+    <span class="c1">#--- End: if</span>
+    
+    <span class="c1"># use recursion to slice out each 2D horizontal section</span>
+    <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">fl</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1">#--- End: if</span>
+    
+    <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span><span class="nb">slice</span><span class="p">(</span><span class="bp">None</span><span class="p">)]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">sizes</span><span class="p">)</span>
+    
+    <span class="n">nl_vars</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;count&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+    <span class="k">def</span> <span class="nf">loop_over_index</span><span class="p">(</span><span class="n">current_index</span><span class="p">):</span>
+        <span class="c1"># Expects an index to loop over in the list indices. If this is less</span>
+        <span class="c1"># than 0 the horizontal slice defined by indices is appended to the</span>
+        <span class="c1"># FieldList fl, if it is the specified axis indices the value in</span>
+        <span class="c1"># indices is left as slice(None) and it calls itself recursively with</span>
+        <span class="c1"># the next index, otherwise each index is looped over. In this loop</span>
+        <span class="c1"># the routine is called recursively with the next index. If the count</span>
+        <span class="c1"># of the number of slices taken is greater than or equal to stop</span>
+        <span class="c1"># it returns before taking any more slices.</span>
+        
+        <span class="k">if</span> <span class="n">current_index</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+                <span class="n">d</span><span class="p">[</span><span class="nb">tuple</span><span class="p">([</span><span class="bp">None</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="nb">slice</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span> <span class="k">else</span> <span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">])]</span> \
+                    <span class="o">=</span> <span class="n">o</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">indices</span><span class="p">)]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">fl</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">subspace</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">indices</span><span class="p">)])</span>
+            <span class="c1">#--- End: if</span>
+            <span class="n">nl_vars</span><span class="p">[</span><span class="s1">&#39;count&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">return</span>
+        <span class="c1">#--- End: if</span>
+        
+        <span class="k">if</span> <span class="n">current_index</span> <span class="ow">in</span> <span class="n">axis_indices</span><span class="p">:</span>
+            <span class="n">loop_over_index</span><span class="p">(</span><span class="n">current_index</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="c1">#--- End: if</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">sizes</span><span class="p">[</span><span class="n">current_index</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">stop</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">nl_vars</span><span class="p">[</span><span class="s1">&#39;count&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">stop</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="n">indices</span><span class="p">[</span><span class="n">current_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
+            <span class="n">loop_over_index</span><span class="p">(</span><span class="n">current_index</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="c1">#--- End: for</span>
+    <span class="c1">#--- End: def</span>
+    
+    <span class="n">current_index</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sizes</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="n">loop_over_index</span><span class="p">(</span><span class="n">current_index</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">d</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">fl</span>
+    <span class="c1">#--- End: if</span>
+<span class="c1">#--- End: def</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Hassell.
+      Last updated on Feb 21, 2016.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

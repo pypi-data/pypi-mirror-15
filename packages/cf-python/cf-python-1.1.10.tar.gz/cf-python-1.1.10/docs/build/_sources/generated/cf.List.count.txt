@@ -1,0 +1,7 @@
+cf.List.count
+=============
+
+.. currentmodule:: cf
+.. default-role:: obj
+
+.. automethod:: cf.List.count

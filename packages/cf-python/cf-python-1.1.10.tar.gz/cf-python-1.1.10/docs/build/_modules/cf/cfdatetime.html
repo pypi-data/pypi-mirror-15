@@ -1,0 +1,816 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cf.cfdatetime &mdash; Documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/copybutton.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cf.cfdatetime</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">netCDF4</span>
+
+<span class="c1"># Work: Running Sphinx v1.2b1</span>
+
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">array</span>     <span class="k">as</span> <span class="n">numpy_array</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ndarray</span>   <span class="k">as</span> <span class="n">numpy_ndarray</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ndim</span>      <span class="k">as</span> <span class="n">numpy_ndim</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">vectorize</span> <span class="k">as</span> <span class="n">numpy_vectorize</span>
+
+<span class="kn">from</span> <span class="nn">.functions</span> <span class="kn">import</span> <span class="n">inspect</span> <span class="k">as</span> <span class="n">cf_inspect</span>
+<span class="kn">from</span> <span class="nn">.units</span>     <span class="kn">import</span> <span class="n">Units</span>
+
+<span class="k">if</span> <span class="n">netCDF4</span><span class="o">.</span><span class="n">__version__</span> <span class="o">&lt;=</span> <span class="s1">&#39;1.1.1&#39;</span><span class="p">:</span>
+    <span class="n">_netCDF4_netcdftime_parse_date</span> <span class="o">=</span> <span class="n">netCDF4</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">_parse_date</span>
+    <span class="n">_netCDF4_netcdftime_strftime</span>   <span class="o">=</span> <span class="n">netCDF4</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">_strftime</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">_netCDF4_netcdftime_parse_date</span> <span class="o">=</span> <span class="n">netCDF4</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">_parse_date</span>
+    <span class="n">_netCDF4_netcdftime_strftime</span>   <span class="o">=</span> <span class="n">netCDF4</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">_datetime</span><span class="o">.</span><span class="n">_strftime</span>
+
+
+<span class="c1"># ====================================================================</span>
+<span class="c1">#</span>
+<span class="c1"># Datetime object (overrides netCDF4.netcdftime.datetime)</span>
+<span class="c1">#</span>
+<span class="c1"># ====================================================================</span>
+
+<div class="viewcode-block" id="Datetime"><a class="viewcode-back" href="../../classes/cf.Datetime.html#cf.Datetime">[docs]</a><span class="k">class</span> <span class="nc">Datetime</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Adapted from Jeff Whitaker&#39;s netCDF4.netcdftime.datetime</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">A date-time object which supports CF calendars.</span>
+
+<span class="sd">Any date and time valid in any CF calendar is allowed.</span>
+
+<span class="sd">In many situations, it may be used interchangeably with a built-in</span>
+<span class="sd">`datetime.datetime` object. For example:</span>
+
+<span class="sd">&gt;&gt;&gt; import datetime</span>
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2004, 2, 30)</span>
+<span class="sd">&gt;&gt;&gt; d &gt; datetime.datetime(2004, 2, 1)</span>
+<span class="sd">True</span>
+
+<span class="sd">**Attributes**</span>
+
+<span class="sd">==============  ======================================================</span>
+<span class="sd">Attribute       Description</span>
+<span class="sd">==============  ======================================================</span>
+<span class="sd">`!year`         The year of the date</span>
+<span class="sd">`!month`        The month of the year of the date</span>
+<span class="sd">`!day`          The day of the month of the date</span>
+<span class="sd">`!hour`         The hour of the day of the date</span>
+<span class="sd">`!minute`       The minute of the hour of the date</span>
+<span class="sd">`!second`       The second of the minute of the date</span>
+<span class="sd">`!microsecond`  The microsecond of the second of the date</span>
+<span class="sd">==============  ======================================================</span>
+
+<span class="sd">.. seealso:: `cf.dt`, `cf.TimeDuration`</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                 <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dayofwk</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">dayofyr</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;**Initialization**</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    year : int</span>
+<span class="sd">        The year.</span>
+
+<span class="sd">    month, day, hour, minute, second, microsecond : ints, optional</span>
+<span class="sd">        The month of the year, the day of the month and time of the</span>
+<span class="sd">        day. *month* and *day* default to 1 and *hour*; *minute*,</span>
+<span class="sd">        *second* and *microsecond* default to 0.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.Datetime(2003)</span>
+<span class="sd">&lt;CF Datetime: 2003-01-01 00:00:00&gt;</span>
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2003, 2, 30)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2003, 2, 30, 0)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2003, 2, 30, 0, 0)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2003, 2, 30, 0, 0, 0)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2003, 4, 5, 12, 30, 15)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(year=2003, month=4, day=5, hour=12, minute=30, second=15)</span>
+<span class="sd">&gt;&gt;&gt; d.year, d.month, d.day, d.hour, d.minute, d.second</span>
+<span class="sd">(2003, 4, 5, 12, 30, 15)</span>
+<span class="sd">&gt;&gt;&gt; d.timetuple()</span>
+<span class="sd">(2003, 4, 5, 12, 30, 15, -1, 1)</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="c1"># NOTE: dayofyr is set to 1 by default, otherwise</span>
+        <span class="c1"># time.strftime will complain.</span>
+        <span class="c1"># ------------------------------------------------------------</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">year</span>        <span class="o">=</span> <span class="n">year</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">month</span>       <span class="o">=</span> <span class="n">month</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">day</span>         <span class="o">=</span> <span class="n">day</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hour</span>        <span class="o">=</span> <span class="n">hour</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">minute</span>      <span class="o">=</span> <span class="n">minute</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">second</span>      <span class="o">=</span> <span class="n">second</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">microsecond</span> <span class="o">=</span> <span class="n">microsecond</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dayofwk</span>     <span class="o">=</span> <span class="n">dayofwk</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dayofyr</span>     <span class="o">=</span> <span class="n">dayofyr</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">format</span>      <span class="o">=</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__deepcopy__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">memo</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Used if copy.deepcopy is called</span>
+
+<span class="sd">&#39;&#39;&#39;</span> 
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x__repr__() &lt;==&gt; repr(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">return</span> <span class="s1">&#39;&lt;CF </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&gt;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x__str__() &lt;==&gt; str(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">strftime</span><span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x__eq__(y) &lt;==&gt; x==y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timetuple6</span><span class="p">()</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()[:</span><span class="mi">6</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x__ne__(y) &lt;==&gt; x!=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timetuple6</span><span class="p">()</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()[:</span><span class="mi">6</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ge__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x__ge__(y) &lt;==&gt; x&gt;=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timetuple6</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()[:</span><span class="mi">6</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__gt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x__gt__(y) &lt;==&gt; x&gt;y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timetuple6</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">other</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()[:</span><span class="mi">6</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__le__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x__le__(y) &lt;==&gt; x&lt;=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timetuple6</span><span class="p">()</span> <span class="o">&lt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()[:</span><span class="mi">6</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x__lt__(y) &lt;==&gt; x&lt;y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timetuple6</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()[:</span><span class="mi">6</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">_to_real_datetime</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">minute</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">second</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">microsecond</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_real_datetime</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timetuple</span><span class="p">())</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+<span class="c1">#    @property</span>
+<span class="c1">#    def year(self): return self._year</span>
+<span class="c1">#</span>
+<span class="c1">#    @property</span>
+<span class="c1">#    def month(self): return self._month </span>
+<span class="c1">#        </span>
+<span class="c1">#    @property</span>
+<span class="c1">#    def day(self): return self._day         </span>
+<span class="c1">#        </span>
+<span class="c1">#    @property</span>
+<span class="c1">#    def hour(self):return  self._hour       </span>
+<span class="c1">#        </span>
+<span class="c1">#    @property</span>
+<span class="c1">#    def minute(self): return self._minute   </span>
+<span class="c1">#        </span>
+<span class="c1">#    @property</span>
+<span class="c1">#    def second(self): return self._second   </span>
+<span class="c1">#        </span>
+<span class="c1">#    @property</span>
+<span class="c1">#    def microsecond(self): return self._microsecond </span>
+<span class="c1">#        </span>
+<span class="c1">#    @property</span>
+<span class="c1">#    def dayofwk(self): return self._dayofwk    </span>
+<span class="c1">#        </span>
+<span class="c1">#    @property</span>
+<span class="c1">#    def dayofyr(self): return self._dayofyr     </span>
+    
+    <span class="k">def</span> <span class="nf">_timetuple6</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a tuple of the first six date-time attributes.</span>
+
+<span class="sd">``d._timetuple6()`` is equivalent to ``(d.year, d.month, d.day,</span>
+<span class="sd">d.hour, d.minute, d.second)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : tuple</span>
+<span class="sd">        The first six date-time attributes.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2005, 6, 7, 23, 45, 57)</span>
+<span class="sd">&gt;&gt;&gt; d._timetuple6()</span>
+<span class="sd">(2005, 6, 7, 23, 45, 57)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">minute</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">second</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Datetime.copy"><a class="viewcode-back" href="../../generated/cf.Datetime.copy.html#cf.Datetime.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a deep copy.</span>
+
+<span class="sd">``d.copy()`` is equivalent to ``copy.deepcopy(d)``.</span>
+
+<span class="sd">:Returns:	</span>
+
+<span class="sd">    out :</span>
+<span class="sd">        The deep copy.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; e = d.copy()</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Datetime.inspect"><a class="viewcode-back" href="../../generated/cf.Datetime.inspect.html#cf.Datetime.inspect">[docs]</a>    <span class="k">def</span> <span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Inspect the attributes.</span>
+
+<span class="sd">.. seealso:: `cf.inspect`</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    None</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">print</span> <span class="n">cf_inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">strftime</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">format</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">format</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">format</span>
+    
+        <span class="k">return</span> <span class="n">_netCDF4_netcdftime_strftime</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">format</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="Datetime.timetuple"><a class="viewcode-back" href="../../generated/cf.Datetime.timetuple.html#cf.Datetime.timetuple">[docs]</a>    <span class="k">def</span> <span class="nf">timetuple</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a tuple of the date-time attributes.</span>
+
+<span class="sd">``d.timetuple()`` is equivalent to ``(d.year, d.month, d.day, d.hour,</span>
+<span class="sd">d.minute, d.second, d.dayofwk, d.dayofyr, -1)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : tuple</span>
+<span class="sd">        The date-time attributes.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2005, 6, 7, 23, 45, 57, 999888)</span>
+<span class="sd">&gt;&gt;&gt; d.timetuple()</span>
+<span class="sd">(2005, 6, 7, 23, 45, 57, -1, 1, -1)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">minute</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">second</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dayofwk</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dayofyr</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span></div>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="Datetime.utcnow"><a class="viewcode-back" href="../../generated/cf.Datetime.utcnow.html#cf.Datetime.utcnow">[docs]</a>    <span class="k">def</span> <span class="nf">utcnow</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return the current Gregorian calendar UTC date and time.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out: cf.Datetime</span>
+<span class="sd">        The current UTC date and time.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.Datetime.utcnow()</span>
+<span class="sd">&lt;CF Datetime: 2013-11-19 17:55:59&gt;</span>
+<span class="sd">&gt;&gt;&gt; d = cf.Datetime(2005, 6, 7)</span>
+<span class="sd">&gt;&gt;&gt; d.utcnow()</span>
+<span class="sd">&lt;CF Datetime: 2013-11-19 17:56:07&gt;</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF Datetime: 2005-06-07 00:00:00&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+
+        <span class="k">return</span> <span class="n">cls</span><span class="p">(</span><span class="o">*</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span></div></div>
+    <span class="c1">#--- End: def</span>
+
+<span class="c1">#--- End: class</span>
+<span class="n">netCDF4</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">=</span> <span class="n">Datetime</span>
+
+
+<div class="viewcode-block" id="dt"><a class="viewcode-back" href="../../generated/cf.dt.html#cf.dt">[docs]</a><span class="k">def</span> <span class="nf">dt</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a date-time variable for a given date and time.</span>
+
+<span class="sd">The date and time may be specified with an ISO 8601-like date-time</span>
+<span class="sd">string (in which non-Gregorian calendar dates are allowed) or by</span>
+<span class="sd">providing a value for the year and, optionally, the month, day, hour,</span>
+<span class="sd">minute, second and microsecond.</span>
+
+<span class="sd">.. seealso:: `cf.Datetime`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    args, kwargs :</span>
+<span class="sd">        If the first positional argument is a string, then it must be</span>
+<span class="sd">        an ISO 8601-like date-time string from which a `cf.Datetime`</span>
+<span class="sd">        object is initialized. Otherwise, the positional and keyword</span>
+<span class="sd">        arguments are used to explicitly initialize a `cf.Datetime`</span>
+<span class="sd">        object, so see `cf.Datetime` for details.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Datetime</span>
+<span class="sd">        The new date-time object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2003, 2, 30)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2003, 2, 30, 0, 0, 0)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.dt(&#39;2003-2-30&#39;)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.dt(&#39;2003-2-30 0:0:0&#39;)</span>
+
+<span class="sd">&gt;&gt;&gt; d = cf.dt(2003, 4, 5, 12, 30, 15)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.dt(year=2003, month=4, day=5, hour=12, minute=30, second=15)</span>
+<span class="sd">&gt;&gt;&gt; d = cf.dt(&#39;2003-04-05 12:30:15&#39;)</span>
+<span class="sd">&gt;&gt;&gt; d.year, d.month, d.day, d.hour, d.minute, d.second</span>
+<span class="sd">(2003, 4, 5, 12, 30, 15)</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Datetime</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="ow">not</span> <span class="n">args</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;34 woah!&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">arg0</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg0</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">st2Datetime</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">Datetime</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">st2dt</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">units_in</span><span class="p">,</span> <span class="n">dummy0</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">dummy1</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    </span>
+<span class="sd">The returned array is always independent.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    array : numpy array-like</span>
+
+<span class="sd">    units_in : cf.Units</span>
+
+<span class="sd">    dummy0 : *optional*</span>
+<span class="sd">        Ignored.</span>
+
+<span class="sd">    dummy1 : *optional*</span>
+<span class="sd">        Ignored.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : numpy array</span>
+<span class="sd">        An array of `cf.Datetime` or `datetime.datetime` objects with</span>
+<span class="sd">        the same shape as *array*.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">units_in</span><span class="o">.</span><span class="n">_calendar</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;gregorian&#39;</span> <span class="s1">&#39;standard&#39;</span><span class="p">,</span> <span class="s1">&#39;none&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">array_st2datetime</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">array_st2Datetime</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">st2datetime</span><span class="p">(</span><span class="n">date_string</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Parse an ISO 8601 date-time string into a datetime.datetime object.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    date_string : str</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : datetime.datetime</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">date_string</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;A string must contain a year, a month and a day&quot;</span><span class="p">)</span>
+
+    <span class="n">year</span><span class="p">,</span><span class="n">month</span><span class="p">,</span><span class="n">day</span><span class="p">,</span><span class="n">hour</span><span class="p">,</span><span class="n">minute</span><span class="p">,</span><span class="n">second</span><span class="p">,</span><span class="n">utc_offset</span> <span class="o">=</span> <span class="n">_netCDF4_netcdftime_parse_date</span><span class="p">(</span><span class="n">date_string</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">utc_offset</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t specify a time offset from UTC&quot;</span><span class="p">)</span>
+            
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+
+<span class="n">array_st2datetime</span> <span class="o">=</span> <span class="n">numpy_vectorize</span><span class="p">(</span><span class="n">st2datetime</span><span class="p">,</span> <span class="n">otypes</span><span class="o">=</span><span class="p">[</span><span class="nb">object</span><span class="p">])</span>
+
+<span class="k">def</span> <span class="nf">st2Datetime</span><span class="p">(</span><span class="n">date_string</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Parse an ISO 8601 date-time string into a `cf.Datetime` object.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    date_string : str</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.Datetime</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">date_string</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;A string must contain a year, a month and a day&quot;</span><span class="p">)</span>
+
+    <span class="n">year</span><span class="p">,</span><span class="n">month</span><span class="p">,</span><span class="n">day</span><span class="p">,</span><span class="n">hour</span><span class="p">,</span><span class="n">minute</span><span class="p">,</span><span class="n">second</span><span class="p">,</span><span class="n">utc_offset</span> <span class="o">=</span> <span class="n">_netCDF4_netcdftime_parse_date</span><span class="p">(</span><span class="n">date_string</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">utc_offset</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t specify a time offset from UTC&quot;</span><span class="p">)</span>
+            
+    <span class="k">return</span> <span class="n">Datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+
+<span class="n">array_st2Datetime</span> <span class="o">=</span> <span class="n">numpy_vectorize</span><span class="p">(</span><span class="n">st2Datetime</span><span class="p">,</span> <span class="n">otypes</span><span class="o">=</span><span class="p">[</span><span class="nb">object</span><span class="p">])</span>
+
+<span class="k">def</span> <span class="nf">rt2dt</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">units_in</span><span class="p">,</span> <span class="n">dummy0</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">dummy1</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The returned array is always independent.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    array : numpy array-like</span>
+
+<span class="sd">    units_in : cf.Units</span>
+
+<span class="sd">    dummy0 :</span>
+<span class="sd">        Ignored.</span>
+
+<span class="sd">    dummy1 :</span>
+<span class="sd">        Ignored.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : numpy array</span>
+<span class="sd">        An array of `cf.Datetime` or `datetime.datetime` objects with</span>
+<span class="sd">        the same shape as *array*.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>           
+    <span class="n">ndim</span> <span class="o">=</span> <span class="n">numpy_ndim</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+    
+    <span class="n">array</span> <span class="o">=</span> <span class="n">units_in</span><span class="o">.</span><span class="n">_utime</span><span class="o">.</span><span class="n">num2date</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ndim</span><span class="p">:</span>
+        <span class="n">array</span> <span class="o">=</span> <span class="n">numpy_array</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">array</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">dt2rt</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">dummy0</span><span class="p">,</span> <span class="n">units_out</span><span class="p">,</span> <span class="n">dummy1</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    </span>
+<span class="sd">The returned array is always independent.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    array : numpy array-like of date-time objects</span>
+
+<span class="sd">    dummy0 :</span>
+<span class="sd">        Ignored.</span>
+
+<span class="sd">    units_out : cf.Units</span>
+
+<span class="sd">    dummy1 :</span>
+<span class="sd">        Ignored.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : numpy array</span>
+<span class="sd">        An array of numbers with the same shape as *array*.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">ndim</span> <span class="o">=</span> <span class="n">numpy_ndim</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ndim</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">numpy_ndarray</span><span class="p">):</span>
+        <span class="c1"># This necessary because date2num gets upset if you pass</span>
+        <span class="c1"># it a scalar numpy array</span>
+        <span class="n">array</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+
+    <span class="n">array</span> <span class="o">=</span> <span class="n">units_out</span><span class="o">.</span><span class="n">_utime</span><span class="o">.</span><span class="n">date2num</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ndim</span><span class="p">:</span>
+        <span class="n">array</span> <span class="o">=</span> <span class="n">numpy_array</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">array</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">_JulianDayFromDate</span><span class="p">(</span><span class="n">date</span><span class="p">,</span> <span class="n">calendar</span><span class="o">=</span><span class="s1">&#39;standard&#39;</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Create a Julian Day from a &#39;datetime-like&#39; object.  Returns the</span>
+<span class="sd">fractional Julian Day (resolution 1 second).</span>
+
+<span class="sd">if calendar=&#39;standard&#39; or &#39;gregorian&#39; (default), Julian day follows</span>
+<span class="sd">Julian Calendar on and before 1582-10-5, Gregorian calendar after</span>
+<span class="sd">1582-10-15.</span>
+
+<span class="sd">if calendar=&#39;proleptic_gregorian&#39;, Julian Day follows gregorian</span>
+<span class="sd">calendar.</span>
+
+<span class="sd">if calendar=&#39;julian&#39;, Julian Day follows julian calendar.</span>
+
+<span class="sd">Algorithm:</span>
+
+<span class="sd">Meeus, Jean (1998) Astronomical Algorithms (2nd</span>
+<span class="sd">Edition). Willmann-Bell, Virginia. p. 63</span>
+
+<span class="sd">This is taken from netCDF4.netcdftime.JulianDayFromDate, with an error</span>
+<span class="sd">check added.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="c1"># based on redate.py by David Finlayson.</span>
+
+    <span class="n">year</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">year</span><span class="p">;</span> <span class="n">month</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">month</span><span class="p">;</span> <span class="n">day</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">day</span>
+    <span class="n">hour</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">hour</span><span class="p">;</span> <span class="n">minute</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">minute</span><span class="p">;</span> <span class="n">second</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">second</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Bad </span><span class="si">%s</span><span class="s2"> calendar date: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">calendar</span><span class="p">,</span> <span class="n">date</span><span class="p">))</span>
+
+    <span class="c1"># Convert time to fractions of a day</span>
+    <span class="n">day</span> <span class="o">=</span> <span class="n">day</span> <span class="o">+</span> <span class="n">hour</span><span class="o">/</span><span class="mf">24.0</span> <span class="o">+</span> <span class="n">minute</span><span class="o">/</span><span class="mf">1440.0</span> <span class="o">+</span> <span class="n">second</span><span class="o">/</span><span class="mf">86400.0</span>
+
+    <span class="c1"># Start Meeus algorithm (variables are in his notation)</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">month</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">):</span>
+        <span class="n">month</span> <span class="o">=</span> <span class="n">month</span> <span class="o">+</span> <span class="mi">12</span>
+        <span class="n">year</span> <span class="o">=</span> <span class="n">year</span> <span class="o">-</span> <span class="mi">1</span>
+
+    <span class="n">A</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">year</span><span class="o">/</span><span class="mi">100</span><span class="p">)</span>
+
+    <span class="c1"># MC</span>
+    <span class="c1"># jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + \</span>
+    <span class="c1">#      day - 1524.5</span>
+    <span class="n">jd</span> <span class="o">=</span> <span class="mf">365.</span><span class="o">*</span><span class="n">year</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="mf">0.25</span> <span class="o">*</span> <span class="n">year</span> <span class="o">+</span> <span class="mf">2000.</span><span class="p">)</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="mf">30.6001</span> <span class="o">*</span> <span class="p">(</span><span class="n">month</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span> <span class="o">+</span> \
+         <span class="n">day</span> <span class="o">+</span> <span class="mf">1718994.5</span>
+
+    <span class="c1"># optionally adjust the jd for the switch from</span>
+    <span class="c1"># the Julian to Gregorian Calendar</span>
+    <span class="c1"># here assumed to have occurred the day after 1582 October 4</span>
+    <span class="k">if</span> <span class="n">calendar</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;standard&#39;</span><span class="p">,</span><span class="s1">&#39;gregorian&#39;</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">jd</span> <span class="o">&gt;=</span> <span class="mf">2299170.5</span><span class="p">:</span>
+            <span class="c1"># 1582 October 15 (Gregorian Calendar)</span>
+            <span class="n">B</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">A</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">A</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">jd</span> <span class="o">&lt;</span> <span class="mf">2299160.5</span><span class="p">:</span>
+            <span class="c1"># 1582 October 5 (Julian Calendar)</span>
+            <span class="n">B</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;impossible date (falls in gap between end of Julian calendar and beginning of Gregorian calendar&#39;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">calendar</span> <span class="o">==</span> <span class="s1">&#39;proleptic_gregorian&#39;</span><span class="p">:</span>
+        <span class="n">B</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">A</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">A</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">calendar</span> <span class="o">==</span> <span class="s1">&#39;julian&#39;</span><span class="p">:</span>
+        <span class="n">B</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;unknown calendar, must be one of julian,standard,gregorian,proleptic_gregorian, got </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">calendar</span><span class="p">)</span>
+
+    <span class="c1"># adjust for Julian calendar if necessary</span>
+    <span class="n">jd</span> <span class="o">=</span> <span class="n">jd</span> <span class="o">+</span> <span class="n">B</span>
+
+    <span class="k">return</span> <span class="n">jd</span>
+<span class="c1">#--- End: def</span>
+<span class="n">netCDF4</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">JulianDayFromDate</span> <span class="o">=</span> <span class="n">_JulianDayFromDate</span>
+
+<span class="k">def</span> <span class="nf">_NoLeapDayFromDate</span><span class="p">(</span><span class="n">date</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Creates a Julian Day for a calendar with no leap years from a</span>
+<span class="sd">date-time instance.  Returns the fractional Julian Day (resolution 1</span>
+<span class="sd">second).</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="n">year</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">year</span><span class="p">;</span> <span class="n">month</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">month</span><span class="p">;</span> <span class="n">day</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">day</span>
+    <span class="n">hour</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">hour</span><span class="p">;</span> <span class="n">minute</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">minute</span><span class="p">;</span> <span class="n">second</span><span class="o">=</span><span class="n">date</span><span class="o">.</span><span class="n">second</span>
+
+    <span class="k">if</span> <span class="n">month</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">day</span> <span class="o">&gt;</span> <span class="mi">28</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Bad 365_day calendar date: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">date</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">year</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Bad 365_day calendar date: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">date</span><span class="p">)</span>
+    
+    <span class="c1"># Convert time to fractions of a day</span>
+    <span class="n">day</span> <span class="o">=</span> <span class="n">day</span> <span class="o">+</span> <span class="n">hour</span><span class="o">/</span><span class="mf">24.0</span> <span class="o">+</span> <span class="n">minute</span><span class="o">/</span><span class="mf">1440.0</span> <span class="o">+</span> <span class="n">second</span><span class="o">/</span><span class="mf">86400.0</span>
+
+    <span class="c1"># Start Meeus algorithm (variables are in his notation)</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">month</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">):</span>
+        <span class="n">month</span> <span class="o">=</span> <span class="n">month</span> <span class="o">+</span> <span class="mi">12</span>
+        <span class="n">year</span> <span class="o">=</span> <span class="n">year</span> <span class="o">-</span> <span class="mi">1</span>
+
+    <span class="n">jd</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">365.</span> <span class="o">*</span> <span class="p">(</span><span class="n">year</span> <span class="o">+</span> <span class="mi">4716</span><span class="p">))</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="mf">30.6001</span> <span class="o">*</span> <span class="p">(</span><span class="n">month</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span> <span class="o">+</span> \
+         <span class="n">day</span> <span class="o">-</span> <span class="mf">1524.5</span>
+
+    <span class="k">return</span> <span class="n">jd</span>
+<span class="c1">#--- End: def</span>
+<span class="k">if</span> <span class="n">netCDF4</span><span class="o">.</span><span class="n">__version__</span> <span class="o">&lt;=</span> <span class="s1">&#39;1.1.1&#39;</span><span class="p">:</span>
+    <span class="n">netCDF4</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">_NoLeapDayFromDate</span> <span class="o">=</span> <span class="n">_NoLeapDayFromDate</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">netCDF4</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">netcdftime</span><span class="o">.</span><span class="n">_NoLeapDayFromDate</span> <span class="o">=</span> <span class="n">_NoLeapDayFromDate</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Hassell.
+      Last updated on Feb 21, 2016.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

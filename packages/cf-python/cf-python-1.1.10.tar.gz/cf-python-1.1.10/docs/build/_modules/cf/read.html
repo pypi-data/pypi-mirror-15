@@ -1,0 +1,622 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cf.read &mdash; Documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/copybutton.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cf.read</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">struct</span> <span class="kn">import</span> <span class="n">unpack</span> <span class="k">as</span> <span class="n">struct_unpack</span>
+
+<span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
+<span class="kn">from</span> <span class="nn">os</span>   <span class="kn">import</span> <span class="n">SEEK_SET</span>
+
+<span class="kn">from</span> <span class="nn">os.path</span> <span class="kn">import</span> <span class="n">expandvars</span> <span class="k">as</span> <span class="n">os_path_expandvars</span>
+<span class="kn">from</span> <span class="nn">os.path</span> <span class="kn">import</span> <span class="n">expanduser</span> <span class="k">as</span> <span class="n">os_path_expanduser</span>
+
+<span class="kn">from</span> <span class="nn">.field</span>     <span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">FieldList</span>
+<span class="c1">#from .fieldlist import FieldList</span>
+<span class="kn">from</span> <span class="nn">.functions</span> <span class="kn">import</span> <span class="n">flat</span>
+<span class="kn">from</span> <span class="nn">.aggregate</span> <span class="kn">import</span> <span class="n">aggregate</span> <span class="k">as</span> <span class="n">cf_aggregate</span>
+
+<span class="kn">from</span> <span class="nn">.netcdf.read</span> <span class="kn">import</span> <span class="n">read</span> <span class="k">as</span> <span class="n">netcdf_read</span>
+<span class="kn">from</span> <span class="nn">.netcdf.read</span> <span class="kn">import</span> <span class="n">is_netcdf_file</span>
+<span class="kn">from</span> <span class="nn">.um.read</span>     <span class="kn">import</span> <span class="n">read</span> <span class="k">as</span> <span class="n">um_read</span>
+<span class="kn">from</span> <span class="nn">.um.read</span>     <span class="kn">import</span> <span class="n">is_um_file</span>
+
+<div class="viewcode-block" id="read"><a class="viewcode-back" href="../../generated/cf.read.html#cf.read">[docs]</a><span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">ignore_read_error</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+         <span class="n">aggregate</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">umversion</span><span class="o">=</span><span class="mf">4.5</span><span class="p">,</span> <span class="n">nfields</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">squeeze</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+         <span class="n">unsqueeze</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">select</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">select_options</span><span class="o">=</span><span class="p">{},</span>
+         <span class="n">top_level</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">height_at_top_of_model</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Read fields from files into `cf.Field` objects.</span>
+
+<span class="sd">A file may be on disk or on a OPeNDAP server.</span>
+
+<span class="sd">Any amount of any combination of CF-netCDF, CFA-netCDF and Met Office</span>
+<span class="sd">(UK) PP format files may be read.</span>
+
+<span class="sd">**netCDF files**</span>
+<span class="sd">   * The netCDF variable names of the field and its components are</span>
+<span class="sd">     stored in their `!ncvar` attributes.</span>
+<span class="sd">   </span>
+<span class="sd">   * Fields referenced within coordinate reference or ancillary</span>
+<span class="sd">     variables objects are not included in the returned list of</span>
+<span class="sd">     fields.</span>
+
+<span class="sd">**PP files**</span>
+<span class="sd">   * If any PP files are read then the *aggregate* option</span>
+<span class="sd">     ``&#39;relaxed_units&#39;`` is set to True for all input files.</span>
+<span class="sd">    </span>
+<span class="sd">   * STASH code to standard conversion uses the table in</span>
+<span class="sd">     ``cf/etc/STASH_to_CF.txt``.</span>
+
+<span class="sd">**Files on OPeNDAP servers**</span>
+<span class="sd">   * All files on OPeNDAP servers are assumed to be netCDF files.</span>
+
+<span class="sd">.. seealso:: `cf.write`</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    files : (arbitrarily nested sequence of) str</span>
+
+<span class="sd">        A string or arbitrarily nested sequence of strings giving the</span>
+<span class="sd">        file names or OPenDAP URLs from which to read fields. Various</span>
+<span class="sd">        type of expansion are applied to the file names:</span>
+<span class="sd">        </span>
+<span class="sd">          ====================  ======================================</span>
+<span class="sd">          Expansion             Description</span>
+<span class="sd">          ====================  ======================================</span>
+<span class="sd">          Tilde                 An initial component of ``~`` or</span>
+<span class="sd">                                ``~user`` is replaced by that *user*&#39;s</span>
+<span class="sd">                                home directory.</span>
+<span class="sd">           </span>
+<span class="sd">          Environment variable  Substrings of the form ``$name`` or</span>
+<span class="sd">                                ``${name}`` are replaced by the value</span>
+<span class="sd">                                of environment variable *name*.</span>
+
+<span class="sd">          Pathname              A string containing UNIX file name</span>
+<span class="sd">                                metacharacters as understood by the</span>
+<span class="sd">                                :py:obj:`glob` module is replaced by</span>
+<span class="sd">                                the list of matching file names. This</span>
+<span class="sd">                                type of expansion is ignored for</span>
+<span class="sd">                                OPenDAP URLs.</span>
+<span class="sd">          ====================  ======================================</span>
+<span class="sd">    </span>
+<span class="sd">        Where more than one type of expansion is used in the same</span>
+<span class="sd">        string, they are applied in the order given in the above</span>
+<span class="sd">        table.</span>
+
+<span class="sd">          Example: If the environment variable *MYSELF* has been set</span>
+<span class="sd">          to the &quot;david&quot;, then ``&#39;~$MYSELF/*.nc&#39;`` is equivalent to</span>
+<span class="sd">          ``&#39;~david/*.nc&#39;``, which will read all netCDF files in the</span>
+<span class="sd">          user david&#39;s home directory.</span>
+<span class="sd">  </span>
+<span class="sd">    verbose : bool, optional</span>
+<span class="sd">        If True then print information to stdout.</span>
+<span class="sd">    </span>
+<span class="sd">    umversion : int or float, optional</span>
+<span class="sd">        Met Office (UK) PP files and Met Office (UK) fields files</span>
+<span class="sd">        only, the Unified Model (UM) version to be used when decoding</span>
+<span class="sd">        the PP header. Valid versions are, for example, ``402`` or</span>
+<span class="sd">        ``4.2`` (v4.2), ``606.3`` (v6.6.3) and ``1001`` or ``10.1``</span>
+<span class="sd">        (v10.1). The default version is ``4.5`` (v4.5). The version is</span>
+<span class="sd">        ignored if it can be inferred from the PP headers, which will</span>
+<span class="sd">        generally be the case for files created at v5.3 and</span>
+<span class="sd">        later. Note that the PP header can not encode tertiary version</span>
+<span class="sd">        elements (such as the ``3`` in ``606.3``), so it may be</span>
+<span class="sd">        necessary to provide a UM version in such cases.</span>
+<span class="sd">    </span>
+<span class="sd">        Ignored for any other type of input files.</span>
+
+<span class="sd">    ignore_read_error : bool, optional</span>
+<span class="sd">        If True then ignore any file which raises an IOError whilst</span>
+<span class="sd">        being read, as would be the case for an empty file, unknown</span>
+<span class="sd">        file format, etc. By default the IOError is raised.</span>
+<span class="sd">    </span>
+<span class="sd">    fmt : str, optional</span>
+<span class="sd">        Only read files of the given format, ignoring all other</span>
+<span class="sd">        files. Valid formats are ``&#39;NETCDF&#39;`` for CF-netCDF files,</span>
+<span class="sd">        ``&#39;CFA&#39;`` for CFA-netCDF files and ``&#39;PP&#39;`` for PP files and</span>
+<span class="sd">        &#39;FF&#39; for UM fields files. By default files of any of these</span>
+<span class="sd">        formats are read.  default files of any of these formats are</span>
+<span class="sd">        read.</span>
+
+<span class="sd">    aggregate : bool or dict, optional</span>
+<span class="sd">        If True (the default) or a (possibly empty) dictionary then</span>
+<span class="sd">        aggregate the fields read in from all input files into as few</span>
+<span class="sd">        fields as possible using the CF aggregation rules. If</span>
+<span class="sd">        *aggregate* is a dictionary then it is passed as keyword</span>
+<span class="sd">        arguments to the `cf.aggregate` function. If False then the</span>
+<span class="sd">        fields are not aggregated.</span>
+
+<span class="sd">    squeeze : bool, optional</span>
+<span class="sd">        If True then remove size 1 axes from each field&#39;s data array.</span>
+
+<span class="sd">    unsqueeze : bool, optional</span>
+<span class="sd">        If True then insert size 1 axes from each field&#39;s domain into</span>
+<span class="sd">        its data array.</span>
+
+<span class="sd">    select, select_options : *optional*</span>
+<span class="sd">        Only return fields which satisfy the given conditions on their</span>
+<span class="sd">        property values. Only fields which, prior to any aggregation,</span>
+<span class="sd">        satisfy ``f.match(select, **select_options) == True`` are</span>
+<span class="sd">        returned. See `cf.Field.match` for details.</span>
+
+<span class="sd">    top_level : (sequence of) str, optional</span>
+<span class="sd">        Promote field components to independent top-level fields. The</span>
+<span class="sd">        *top_level* parameter may be or, or a sequence, of:</span>
+
+<span class="sd">          ===============  ===========================================</span>
+<span class="sd">          *top_level*      Extra top-level fields</span>
+<span class="sd">          ===============  ===========================================</span>
+<span class="sd">          ``&#39;reference&#39;``  Fields in coordinate reference objects</span>
+<span class="sd">          ``&#39;ancillary&#39;``  Ancillary data fields</span>
+<span class="sd">          ``&#39;field&#39;``      Fields in coordinate references and</span>
+<span class="sd">                           ancillary data fields</span>
+<span class="sd">          ``&#39;auxiliary&#39;``  Auxiliary coordinate objects</span>
+<span class="sd">          ``&#39;measure&#39;``    Cell measure objects</span>
+<span class="sd">          ``&#39;all&#39;``        All of the above</span>
+<span class="sd">          ===============  ===========================================</span>
+
+<span class="sd">            *Example:*</span>
+<span class="sd">              To promote fields in coordinate reference objects:</span>
+<span class="sd">              ``top_level=&#39;reference&#39;`` or ``top_level=[&#39;reference&#39;]``.</span>
+
+<span class="sd">            *Example:*</span>
+<span class="sd">              To promote ancillary data fields and cell measure</span>
+<span class="sd">              objects: ``top_level=[&#39;ancillary&#39;, &#39;measure&#39;]``.</span>
+
+<span class="sd">        .. versionadded:: 1.0.4</span>
+
+<span class="sd">:Returns:</span>
+<span class="sd">    </span>
+<span class="sd">    out : cf.FieldList or cf.Field</span>
+<span class="sd">        A list of fields, or if there is only one field, the</span>
+<span class="sd">        individual field.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; f = cf.read(&#39;file*.nc&#39;)</span>
+<span class="sd">&gt;&gt;&gt; f</span>
+<span class="sd">[&lt;CF Field: pmsl(30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: z-squared(17, 30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: temperature(17, 30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: temperature_wind(17, 29, 24)&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.read(&#39;file*.nc&#39;)[0:2]</span>
+<span class="sd">[&lt;CF Field: pmsl(30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: z-squared(17, 30, 24)&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.read(&#39;file*.nc&#39;)[-1]</span>
+<span class="sd">&lt;CF Field: temperature_wind(17, 29, 24)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.read(&#39;file*.nc&#39;, select=&#39;units:K)</span>
+<span class="sd">[&lt;CF Field: temperature(17, 30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: temperature_wind(17, 29, 24)&gt;]</span>
+
+<span class="sd">&gt;&gt;&gt; cf.read(&#39;file*.nc&#39;, select=&#39;ncvar%ta&#39;)</span>
+<span class="sd">&lt;CF Field: temperature(17, 30, 24)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.read(&#39;file*.nc&#39;, select={&#39;standard_name&#39;: &#39;.*pmsl*&#39;, &#39;units&#39;:[&#39;K&#39;, &#39;Pa&#39;]})</span>
+<span class="sd">&lt;CF Field: pmsl(30, 24)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.read(&#39;file*.nc&#39;, select={&#39;units&#39;:[&#39;K&#39;, &#39;Pa&#39;]})</span>
+<span class="sd">[&lt;CF Field: pmsl(30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: temperature(17, 30, 24)&gt;,</span>
+<span class="sd"> &lt;CF Field: temperature_wind(17, 29, 24)&gt;]</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">squeeze</span> <span class="ow">and</span> <span class="n">unsqueeze</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t squeeze and unsqueeze whilst reading&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Initialize the output list of fields</span>
+    <span class="n">field_list</span> <span class="o">=</span> <span class="n">FieldList</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">aggregate</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="n">aggregate_options</span> <span class="o">=</span> <span class="n">aggregate</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">aggregate</span>         <span class="o">=</span> <span class="bp">True</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">aggregate_options</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="n">aggregate_options</span><span class="p">[</span><span class="s1">&#39;copy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">False</span>
+    
+    <span class="c1"># Parse umversion</span>
+    <span class="k">if</span> <span class="n">umversion</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">umversion</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">umversion</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="s1">&#39;0&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Parse top_level</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="n">promote</span> <span class="o">=</span> <span class="n">top_level</span>
+    <span class="k">if</span> <span class="n">promote</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">promote</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">promote</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+        <span class="n">promote</span> <span class="o">=</span> <span class="p">(</span><span class="n">promote</span><span class="p">,)</span>
+
+<span class="c1">#    if &#39;all&#39; in promote:</span>
+<span class="c1">#        promote = set((&#39;field&#39;, &#39;coordinate&#39;, &#39;measure&#39;))</span>
+        
+
+    <span class="c1"># Count the number of fields (in all files) and the number of</span>
+    <span class="c1"># files</span>
+    <span class="n">field_counter</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+    <span class="n">file_counter</span>  <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">for</span> <span class="n">file_glob</span> <span class="ow">in</span> <span class="n">flat</span><span class="p">(</span><span class="n">files</span><span class="p">):</span>
+
+        <span class="c1"># Expand variables</span>
+        <span class="n">file_glob</span> <span class="o">=</span> <span class="n">os_path_expanduser</span><span class="p">(</span><span class="n">os_path_expandvars</span><span class="p">(</span><span class="n">file_glob</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">file_glob</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://&#39;</span><span class="p">):</span>
+            <span class="c1"># Do not glob a URL</span>
+            <span class="n">files2</span> <span class="o">=</span> <span class="p">(</span><span class="n">file_glob</span><span class="p">,)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Glob files on disk</span>
+            <span class="n">files2</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">file_glob</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">files2</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ignore_read_error</span><span class="p">:</span>
+                <span class="nb">open</span><span class="p">(</span><span class="n">file_glob</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">files2</span><span class="p">:</span>
+            <span class="c1"># Print some informative messages</span>
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s1">&#39;File: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">filename</span>
+
+            <span class="c1"># --------------------------------------------------------</span>
+            <span class="c1"># Read the file into fields</span>
+            <span class="c1"># --------------------------------------------------------</span>
+            <span class="n">fields</span> <span class="o">=</span> <span class="n">_read_a_file</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span>
+                                  <span class="n">ignore_read_error</span><span class="o">=</span><span class="n">ignore_read_error</span><span class="p">,</span>
+                                  <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
+                                  <span class="n">aggregate</span><span class="o">=</span><span class="n">aggregate</span><span class="p">,</span>
+                                  <span class="n">aggregate_options</span><span class="o">=</span><span class="n">aggregate_options</span><span class="p">,</span>
+                                  <span class="n">umversion</span><span class="o">=</span><span class="n">umversion</span><span class="p">,</span>
+                                  <span class="n">selected_fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span>
+                                  <span class="n">promote</span><span class="o">=</span><span class="n">promote</span><span class="p">,</span>
+                                  <span class="n">height_at_top_of_model</span><span class="o">=</span><span class="n">height_at_top_of_model</span><span class="p">)</span>
+            
+            <span class="c1"># --------------------------------------------------------</span>
+            <span class="c1"># Select matching fields</span>
+            <span class="c1"># --------------------------------------------------------</span>
+            <span class="k">if</span> <span class="n">select</span> <span class="ow">or</span> <span class="n">select_options</span><span class="p">:</span>
+                <span class="n">fields</span> <span class="o">=</span> <span class="n">fields</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">select</span><span class="p">,</span> <span class="o">**</span><span class="n">select_options</span><span class="p">)</span>
+
+            <span class="c1"># --------------------------------------------------------</span>
+            <span class="c1"># Add this file&#39;s fields to those already read from other</span>
+            <span class="c1"># files</span>
+            <span class="c1"># --------------------------------------------------------</span>
+            <span class="n">field_list</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span>
+   
+            <span class="n">field_counter</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">)</span>
+            <span class="n">file_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="c1">#--- End: for            </span>
+    <span class="c1">#--- End: for     </span>
+
+    <span class="c1"># Error check</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ignore_read_error</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">file_counter</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;No files found&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">field_list</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;No fields found from &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">file_counter</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39; files&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="c1"># Print some informative messages</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s2">&quot;Read {0} field{1} from {2} file{3}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span> 
+              <span class="p">(</span><span class="n">field_counter</span><span class="p">,</span> <span class="n">_plural</span><span class="p">(</span><span class="n">field_counter</span><span class="p">),</span>
+               <span class="n">file_counter</span> <span class="p">,</span> <span class="n">_plural</span><span class="p">(</span><span class="n">file_counter</span><span class="p">))))</span>
+    <span class="c1">#--- End: if</span>
+    
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Aggregate the output fields</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">if</span> <span class="n">aggregate</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">org_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">)</span>
+            
+        <span class="n">field_list</span> <span class="o">=</span> <span class="n">cf_aggregate</span><span class="p">(</span><span class="n">field_list</span><span class="p">,</span> <span class="o">**</span><span class="n">aggregate_options</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">)</span>
+            <span class="k">print</span><span class="p">(</span><span class="s1">&#39;{0} input field{1} aggregated into {2} field{3}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                  <span class="p">(</span><span class="n">org_len</span><span class="p">,</span> <span class="n">_plural</span><span class="p">(</span><span class="n">org_len</span><span class="p">),</span> 
+                   <span class="n">n</span><span class="p">,</span> <span class="n">_plural</span><span class="p">(</span><span class="n">n</span><span class="p">))))</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Add standard names to UM fields</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">field_list</span><span class="p">:</span>
+        <span class="n">standard_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s1">&#39;_standard_name&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">standard_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">standard_name</span> <span class="o">=</span> <span class="n">standard_name</span>
+            <span class="k">del</span> <span class="n">f</span><span class="o">.</span><span class="n">_standard_name</span>
+    <span class="c1">#--- End: for</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Squeeze size one dimensions from the data arrays. Do one of:</span>
+    <span class="c1"># </span>
+    <span class="c1"># 1) Squeeze the fields, i.e. remove all size one dimensions from</span>
+    <span class="c1">#    all field data arrays</span>
+    <span class="c1">#</span>
+    <span class="c1"># 2) Unsqueeze the fields, i.e. Include all size 1 domain</span>
+    <span class="c1">#    dimensions in the data array.</span>
+    <span class="c1">#</span>
+    <span class="c1"># 3) Nothing</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">if</span> <span class="n">squeeze</span><span class="p">:</span>
+        <span class="n">field_list</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">unsqueeze</span><span class="p">:</span>
+        <span class="n">field_list</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">nfields</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">)</span> <span class="o">!=</span> <span class="n">nfields</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Error whilst reading file{0}: {1} field{2} requested but {3} found&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">_plural</span><span class="p">(</span><span class="n">file_counter</span><span class="p">),</span>
+                <span class="n">nfields</span><span class="p">,</span>
+                <span class="n">_plural</span><span class="p">(</span><span class="n">nfields</span><span class="p">),</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">)))</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="c1"># Return a field instead of a field list</span>
+        <span class="n">field_list</span> <span class="o">=</span> <span class="n">field_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">field_list</span></div>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">_plural</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s1">&#39;s&#39;</span> <span class="k">if</span> <span class="n">n</span> <span class="o">!=</span><span class="mi">1</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+
+<span class="k">def</span> <span class="nf">_read_a_file</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span>
+                 <span class="n">aggregate</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">aggregate_options</span><span class="o">=</span><span class="p">{},</span>
+                 <span class="n">ignore_read_error</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">umversion</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">selected_fmt</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">promote</span><span class="o">=</span><span class="p">(),</span>
+                 <span class="n">height_at_top_of_model</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Read the contents of a single file into a field list.</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    filename : str</span>
+<span class="sd">        The file name.</span>
+
+<span class="sd">    aggregate_options : dict, optional</span>
+<span class="sd">        The keys and values of this dictionary may be passed as</span>
+<span class="sd">        keyword parameters to an external call of the aggregate</span>
+<span class="sd">        function.</span>
+
+<span class="sd">    ignore_read_error : bool, optional</span>
+<span class="sd">        If True then return an empty field list if reading the file</span>
+<span class="sd">        produces an IOError, as would be the case for an empty file,</span>
+<span class="sd">        unknown file format, etc. By default the IOError is raised.</span>
+<span class="sd">    </span>
+<span class="sd">    verbose : bool, optional</span>
+<span class="sd">        If True then print information to stdout.</span>
+<span class="sd">    </span>
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : FieldList</span>
+<span class="sd">        The fields in the file.</span>
+
+<span class="sd">:Raises:</span>
+
+<span class="sd">    IOError :</span>
+<span class="sd">        If *ignore_read_error* is False and</span>
+
+<span class="sd">        * The file can not be opened.</span>
+
+<span class="sd">        * The file can not be opened.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="c1"># Find this file&#39;s type</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">ftype</span> <span class="o">=</span> <span class="n">file_type</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>        
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">ignore_read_error</span><span class="p">:</span> 
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s1">&#39;WARNING: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">error</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">FieldList</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="n">error</span>
+    <span class="c1">#--- End: try</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Still here? Read the file into fields.</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">if</span> <span class="n">ftype</span> <span class="o">==</span> <span class="s1">&#39;netCDF&#39;</span> <span class="ow">and</span> <span class="p">(</span><span class="n">selected_fmt</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;NETCDF&#39;</span><span class="p">,</span> <span class="s1">&#39;CFA&#39;</span><span class="p">)):</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="n">netcdf_read</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="n">selected_fmt</span><span class="p">,</span> <span class="n">promote</span><span class="o">=</span><span class="n">promote</span><span class="p">,</span>
+                             <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+        
+    <span class="k">elif</span> <span class="n">ftype</span> <span class="o">==</span> <span class="s1">&#39;UM&#39;</span> <span class="ow">and</span> <span class="p">(</span><span class="n">selected_fmt</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;PP&#39;</span><span class="p">,</span> <span class="s1">&#39;FF&#39;</span><span class="p">)):</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="n">um_read</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">um_version</span><span class="o">=</span><span class="n">umversion</span><span class="p">,</span>
+                         <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">set_standard_name</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                         <span class="n">height_at_top_of_model</span><span class="o">=</span><span class="n">height_at_top_of_model</span><span class="p">)</span>
+
+        <span class="c1"># PP fields are aggregated intrafile prior to interfile</span>
+        <span class="c1"># aggregation</span>
+        <span class="k">if</span> <span class="n">aggregate</span><span class="p">:</span>
+            <span class="c1"># For PP fields, the default is strict_units=False</span>
+            <span class="k">if</span> <span class="s1">&#39;strict_units&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">aggregate_options</span><span class="p">:</span>
+                <span class="n">aggregate_options</span><span class="p">[</span><span class="s1">&#39;relaxed_units&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="c1">#--- End: if</span>
+
+    <span class="c1"># Add more file formats here ...</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="n">FieldList</span><span class="p">()</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Return the fields</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">return</span> <span class="n">fields</span>
+<span class="c1">#--- End: def</span>
+
+<span class="k">def</span> <span class="nf">file_type</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    filename : str</span>
+<span class="sd">        The file name.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : str</span>
+<span class="sd">        The format type of the file.</span>
+
+<span class="sd">:Raises:</span>
+<span class="sd"> </span>
+<span class="sd">    IOError :</span>
+<span class="sd">        If the file has an unsupported format.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; ftype = file_type(filename)</span>
+
+<span class="sd">&#39;&#39;&#39;</span> 
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Assume that URLs are in netCDF format</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://&#39;</span><span class="p">):</span>
+       <span class="k">return</span> <span class="s1">&#39;netCDF&#39;</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># netCDF</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">if</span> <span class="n">is_netcdf_file</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s1">&#39;netCDF&#39;</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># PP or FF</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="k">if</span> <span class="n">is_um_file</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s1">&#39;UM&#39;</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Developers: Add more file formats here ...</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+
+    <span class="c1"># Still here?</span>
+    <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="s2">&quot;File </span><span class="si">%s</span><span class="s2"> has unsupported format&quot;</span> <span class="o">%</span> <span class="n">filename</span><span class="p">)</span>
+<span class="c1">#--- End: def</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Hassell.
+      Last updated on Feb 21, 2016.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

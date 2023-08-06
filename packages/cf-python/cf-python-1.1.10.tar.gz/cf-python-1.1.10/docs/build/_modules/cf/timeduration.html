@@ -1,0 +1,1731 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cf.timeduration &mdash; Documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/copybutton.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cf.timeduration</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">operator</span>
+
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">array</span>     <span class="k">as</span> <span class="n">numpy_array</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">size</span>      <span class="k">as</span> <span class="n">numpy_size</span>
+
+<span class="kn">from</span> <span class="nn">cfdatetime</span> <span class="kn">import</span> <span class="n">Datetime</span>
+<span class="kn">from</span> <span class="nn">.functions</span> <span class="kn">import</span> <span class="n">equals</span>
+<span class="kn">from</span> <span class="nn">.functions</span> <span class="kn">import</span> <span class="n">inspect</span> <span class="k">as</span> <span class="n">cf_inspect</span>
+<span class="kn">from</span> <span class="nn">.units</span>     <span class="kn">import</span> <span class="n">Units</span>
+
+<span class="kn">from</span> <span class="nn">.data.data</span> <span class="kn">import</span> <span class="n">Data</span>
+
+
+<span class="c1"># Define some useful units</span>
+<span class="n">_calendar_years</span>  <span class="o">=</span> <span class="n">Units</span><span class="p">(</span><span class="s1">&#39;calendar_years&#39;</span><span class="p">)</span>
+<span class="n">_calendar_months</span> <span class="o">=</span> <span class="n">Units</span><span class="p">(</span><span class="s1">&#39;calendar_months&#39;</span><span class="p">)</span>
+<span class="n">_days</span>            <span class="o">=</span> <span class="n">Units</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">)</span>
+<span class="n">_hours</span>           <span class="o">=</span> <span class="n">Units</span><span class="p">(</span><span class="s1">&#39;hours&#39;</span><span class="p">)</span>
+<span class="n">_minutes</span>         <span class="o">=</span> <span class="n">Units</span><span class="p">(</span><span class="s1">&#39;minutes&#39;</span><span class="p">)</span>
+<span class="n">_seconds</span>         <span class="o">=</span> <span class="n">Units</span><span class="p">(</span><span class="s1">&#39;seconds&#39;</span><span class="p">)</span>
+
+
+<span class="c1"># ====================================================================</span>
+<span class="c1">#</span>
+<span class="c1"># TimeDuration object</span>
+<span class="c1">#</span>
+<span class="c1"># ====================================================================</span>
+
+<div class="viewcode-block" id="TimeDuration"><a class="viewcode-back" href="../../classes/cf.TimeDuration.html#cf.TimeDuration">[docs]</a><span class="k">class</span> <span class="nc">TimeDuration</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;A duration of time.</span>
+
+<span class="sd">The duration of time is a number of either calendar years, calender</span>
+<span class="sd">months, days, hours, minutes or seconds.</span>
+
+
+<span class="sd">**Creating time intervals**</span>
+
+<span class="sd">A time interval of exactly the time duration, starting or ending at a</span>
+<span class="sd">particular date-time, may be produced with the `interval` method:</span>
+
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(6, &#39;calendar_months&#39;)</span>
+<span class="sd">&gt;&gt;&gt; t</span>
+<span class="sd">&lt;CF TimeDuration: 6 calendar_months (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; t.interval(1999, 12)</span>
+<span class="sd">(&lt;CF Datetime: 1999-12-01 00:00:00&gt;, &lt;CF Datetime: 2000-06-01 00:00:00&gt;)</span>
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(5, &#39;days&#39;, hour=6)</span>
+<span class="sd">&gt;&gt;&gt; t</span>
+<span class="sd">&lt;CF TimeDuration: 5 days (from Y-01-01 06:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; t.interval(2004, 3, 2, end=True)</span>
+<span class="sd">(datetime.datetime(2004, 2, 26, 6, 0), &lt;CF Datetime: 2004-03-02 06:00:00&gt;)</span>
+<span class="sd">&gt;&gt;&gt; t.interval(2004, 3, 2, end=True, calendar=&#39;noleap&#39;)</span>
+<span class="sd">(&lt;CF Datetime: 2004-02-25 06:00:00&gt;, &lt;CF Datetime: 2004-03-02 06:00:00&gt;)</span>
+<span class="sd">&gt;&gt;&gt; t.interval(2004, 3, 2, end=True, calendar=&#39;360_day&#39;)</span>
+<span class="sd">(&lt;CF Datetime: 2004-02-27 06:00:00&gt;, &lt;CF Datetime: 2004-03-02 06:00:00&gt;)</span>
+<span class="sd">&gt;&gt;&gt; t.interval(2004, 3, 2, end=True, calendar=&#39;360_day&#39;, iso=&#39;start and duration&#39;)</span>
+<span class="sd">&#39;2004-02-27 06:00:00/P5D&#39;</span>
+
+
+<span class="sd">**Arithmetic and comparison operators**</span>
+
+<span class="sd">Arithmetic and comparison operations are defined for `cf.TimeDuration`</span>
+<span class="sd">objects, `cf.Data` objects, `numpy` arrays and numbers:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;calendar_years&#39;) &gt; cf.TimeDuration(1, &#39;calendar_years&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;calendar_years&#39;) &lt; cf.TimeDuration(25, &#39;calendar_months&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;hours&#39;) &lt;= cf.TimeDuration(1, &#39;days&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;hours&#39;) == cf.TimeDuration(1/12.0, &#39;days&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;days&#39;) == cf.TimeDuration(48, &#39;hours&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;days&#39;) == cf.Data(2)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;days&#39;) == cf.Data([2.], &#39;days&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;days&#39;) &gt; cf.Data([[60]], &#39;seconds&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;hours&#39;) &lt;= 2</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;days&#39;) != 30.5</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;calendar_years&#39;) &gt; numpy.array(1.5)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;calendar_months&#39;) &lt; numpy.array([[12]])</span>
+<span class="sd">True</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(30, &#39;days&#39;) + 2</span>
+<span class="sd">&lt;CF TimeDuration: 32 days (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(64, &#39;calendar_years&#39;) - 2.5</span>
+<span class="sd">&lt;CF TimeDuration: 61.5 calendar_years (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(64, &#39;calendar_years&#39;) + cf.TimeDuration(23, &#39;calendar_months&#39;)</span>
+<span class="sd">&lt;CF TimeDuration: 65.9166666667 calendar_years (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(36, &#39;hours&#39;) / numpy.array(8)</span>
+<span class="sd">&lt;CF TimeDuration: 4 hours (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(36, &#39;hours&#39;) / numpy.array(8.0)</span>
+<span class="sd">&lt;CF TimeDuration: 4.5 hours (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(36, &#39;hours&#39;) // numpy.array(8.0)</span>
+<span class="sd">&lt;CF TimeDuration: 4.0 hours (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(36, &#39;calendar_months&#39;) * cf.Data([[2.25]])</span>
+<span class="sd">&lt;CF TimeDuration: 81.0 calendar_months (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(36, &#39;calendar_months&#39;) // cf.Data([0.825], &#39;10&#39;)</span>
+<span class="sd">&lt;CF TimeDuration: 4.3 calendar_months (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(36, &#39;calendar_months&#39;) % 10</span>
+<span class="sd">&lt;CF Data: 6 calendar_months&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(36, &#39;calendar_months&#39;) % cf.Data(1, &#39;calendar_year&#39;)</span>
+<span class="sd">&lt;CF Data: 0.0 calendar_months&gt;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(36, &#39;calendar_months&#39;) % cf.Data(2, &#39;calendar_year&#39;)</span>
+<span class="sd">&lt;CF Data: 12.0 calendar_months&gt;</span>
+
+<span class="sd">The in place operators (``+=``, ``//=``, etc.) are supported in a</span>
+<span class="sd">similar manner.</span>
+
+<span class="sd">**Attributes**</span>
+
+<span class="sd">===========  =========================================================</span>
+<span class="sd">Attribute    Description</span>
+<span class="sd">===========  =========================================================</span>
+<span class="sd">`!duration`  The length of the time duration in a `cf.Data` object</span>
+<span class="sd">             with units.</span>
+<span class="sd">`!year`      The default year for time interval creation.</span>
+<span class="sd">`!month`     The default month for time interval creation.</span>
+<span class="sd">`!day`       The default day for time interval creation.</span>
+<span class="sd">`!hour`      The default hour for time interval creation.</span>
+<span class="sd">`!minute`    The default minute for time interval creation.</span>
+<span class="sd">`!second`    The default second for time interval creation.</span>
+<span class="sd">===========  =========================================================</span>
+
+
+<span class="sd">**Constructors**</span>
+
+<span class="sd">For convenience, the following functions may also be used to create</span>
+<span class="sd">time duration objects:</span>
+
+<span class="sd">========  ============================================================</span>
+<span class="sd">Function  Description</span>
+<span class="sd">========  ============================================================</span>
+<span class="sd">`cf.Y`    Create a time duration of calendar years.</span>
+<span class="sd">`cf.M`    Create a time duration of calendar months.</span>
+<span class="sd">`cf.D`    Create a time duration of days.</span>
+<span class="sd">`cf.h`    Create a time duration of hours.</span>
+<span class="sd">`cf.m`    Create a time duration of minutes.</span>
+<span class="sd">`cf.s`    Create a time duration of seconds.</span>
+<span class="sd">========  ============================================================</span>
+
+<span class="sd">.. seealso:: `cf.Data`, `cf.Datetime`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+<div class="viewcode-block" id="TimeDuration.__init__"><a class="viewcode-back" href="../../classes/cf.TimeDuration.html#cf.TimeDuration.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                 <span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span> 
+        <span class="sd">&#39;&#39;&#39;**Initialization**</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    duration : data-like</span>
+<span class="sd">        The length of the time duration.</span>
+
+<span class="sd">    units : str, optional</span>
+<span class="sd">        The units of the time duration. Only required if *duration* is</span>
+<span class="sd">        not a `cf.Data` object which contains the units. Must be one</span>
+<span class="sd">        a units string equivalent to calendar years, calendar months,</span>
+<span class="sd">        days, hours, minutes or seconds.</span>
+
+<span class="sd">    year, month, day, hour, minute, second : ints or None, optional </span>
+<span class="sd">        The default date-time elements for defining when a time</span>
+<span class="sd">        interval based on this time duration (created with the</span>
+<span class="sd">        `interval` method) begins or ends. See</span>
+<span class="sd">        `cf.TimeDuration.interval` for details.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(cf.Data(3 , &#39;calendar_years&#39;))</span>
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(cf.Data(12 , &#39;hours&#39;))</span>
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(18 , &#39;calendar_months&#39;)</span>
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(30 , &#39;days&#39;)</span>
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(1 , &#39;day&#39;, hour=6)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">units</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">units</span> <span class="o">=</span> <span class="n">Units</span><span class="p">(</span><span class="n">units</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="n">Data</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">duration</span><span class="p">),</span> <span class="n">units</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">Data</span><span class="o">.</span><span class="n">asdata</span><span class="p">(</span><span class="n">duration</span><span class="p">))</span>
+            <span class="n">units</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="o">.</span><span class="n">Units</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">units</span><span class="o">.</span><span class="n">iscalendartime</span> <span class="ow">or</span> <span class="n">units</span><span class="o">.</span><span class="n">istime</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Can&#39;t create </span><span class="si">%s</span><span class="s2"> of </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">year</span>   <span class="o">=</span> <span class="n">year</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">month</span>  <span class="o">=</span> <span class="n">month</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">day</span>    <span class="o">=</span> <span class="n">day</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hour</span>   <span class="o">=</span> <span class="n">hour</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">minute</span> <span class="o">=</span> <span class="n">minute</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">second</span> <span class="o">=</span> <span class="n">second</span></div>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__array__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">dtype</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="o">.</span><span class="n">__array__</span><span class="p">(</span><span class="o">*</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__data__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Returns a new reference to self.duration.</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__deepcopy__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">memo</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Used if copy.deepcopy is called</span>
+
+<span class="sd">&#39;&#39;&#39;</span> 
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__nonzero__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        </span>
+<span class="sd">Truth value testing and the built-in operation `bool`</span>
+
+<span class="sd">x.__nonzero__() &lt;==&gt; x != 0</span>
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">def</span> <span class="nf">__float__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__float__() &lt;==&gt; float(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__int__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__int__() &lt;==&gt; int(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__repr__() &lt;==&gt; repr(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="s1">&#39;&lt;CF </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&gt;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">x.__str__() &lt;==&gt; str(x)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">year</span>   <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">year</span>  
+        <span class="n">month</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">month</span> 
+        <span class="n">day</span>    <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">day</span>   
+        <span class="n">hour</span>   <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hour</span>  
+        <span class="n">minute</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">minute</span>
+        <span class="n">second</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">second</span>
+
+        <span class="n">year</span>   <span class="o">=</span> <span class="s1">&#39;Y&#39;</span>  <span class="k">if</span> <span class="n">year</span>   <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="s1">&#39;</span><span class="si">%d</span><span class="s1">&#39;</span>   <span class="o">%</span> <span class="n">year</span>
+        <span class="n">month</span>  <span class="o">=</span> <span class="s1">&#39;MM&#39;</span> <span class="k">if</span> <span class="n">month</span>  <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="s1">&#39;</span><span class="si">%02d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">month</span>
+        <span class="n">day</span>    <span class="o">=</span> <span class="s1">&#39;DD&#39;</span> <span class="k">if</span> <span class="n">day</span>    <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="s1">&#39;</span><span class="si">%02d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">day</span>
+        <span class="n">hour</span>   <span class="o">=</span> <span class="s1">&#39;hh&#39;</span> <span class="k">if</span> <span class="n">hour</span>   <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="s1">&#39;</span><span class="si">%02d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">hour</span>
+        <span class="n">minute</span> <span class="o">=</span> <span class="s1">&#39;mm&#39;</span> <span class="k">if</span> <span class="n">minute</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="s1">&#39;</span><span class="si">%02d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">minute</span>
+        <span class="n">second</span> <span class="o">=</span> <span class="s1">&#39;ss&#39;</span> <span class="k">if</span> <span class="n">second</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="s1">&#39;</span><span class="si">%02d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">second</span>
+
+        <span class="k">return</span> <span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1"> (from </span><span class="si">%s</span><span class="s1">-</span><span class="si">%s</span><span class="s1">-</span><span class="si">%s</span><span class="s1"> </span><span class="si">%s</span><span class="s1">:</span><span class="si">%s</span><span class="s1">:</span><span class="si">%s</span><span class="s1">)&#39;</span> <span class="o">%</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">))</span>
+    <span class="c1">#--- End: def</span>
+   
+    <span class="k">def</span> <span class="nf">__ge__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The rich comparison operator ``&gt;=``</span>
+
+<span class="sd">x__ge__(y) &lt;==&gt; x&gt;=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">&gt;=</span> <span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__gt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The rich comparison operator ``&gt;``</span>
+
+<span class="sd">x__gt__(y) &lt;==&gt; x&gt;y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">&gt;</span> <span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__le__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The rich comparison operator ``&lt;=``</span>
+
+<span class="sd">x__le__(y) &lt;==&gt; x&lt;=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">&lt;=</span> <span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The rich comparison operator ``&lt;``</span>
+
+<span class="sd">x__lt__(y) &lt;==&gt; x&lt;y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">&lt;</span> <span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The rich comparison operator ``==``</span>
+
+<span class="sd">x__eq__(y) &lt;==&gt; x==y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">==</span> <span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The rich comparison operator ``!=``</span>
+
+<span class="sd">x__ne__(y) &lt;==&gt; x!=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">!=</span> <span class="n">other</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``+``</span>
+
+<span class="sd">x.__add__(y) &lt;==&gt; x + y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__add__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__sub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``-``</span>
+
+<span class="sd">x.__sub__(y) &lt;==&gt; x - y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__sub__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``*``</span>
+
+<span class="sd">x.__mul__(y) &lt;==&gt; x * y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__mul__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__div__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``/``</span>
+
+<span class="sd">x.__div__(y) &lt;==&gt; x / y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>           
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__div__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__floordiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``//``</span>
+
+<span class="sd">x.__floordiv__(y) &lt;==&gt; x // y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__floordiv__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__truediv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``/`` (true division)</span>
+
+<span class="sd">x.__truediv__(y) &lt;==&gt; x / y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__truediv__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__pow__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">modulo</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operations ``**`` and ``pow``</span>
+
+<span class="sd">x.__pow__(y) &lt;==&gt; x**y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">if</span> <span class="n">modulo</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;3-argument power not supported for &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span>
+                                      <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+            
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__pow__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__rpow__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">modulo</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operations ``**`` and ``pow`` with reflected operands</span>
+
+<span class="sd">x.__rpow__(y) &lt;==&gt; y**x</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">if</span> <span class="n">modulo</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;3-argument power not supported for &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span>
+                                      <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+            
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__rpow__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__iadd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``+=``</span>
+
+<span class="sd">x.__iadd__(y) &lt;==&gt; x += y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__iadd__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__idiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``/=``</span>
+
+<span class="sd">x.__idiv__(y) &lt;==&gt; x /= y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__idiv__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__itruediv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``/=`` (true division)</span>
+
+<span class="sd">x.__truediv__(y) &lt;==&gt; x/y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__itruediv__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ifloordiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``//=``</span>
+
+<span class="sd">x.__ifloordiv__(y) &lt;==&gt; x//=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__ifloordiv__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">def</span> <span class="nf">__imul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``*=``</span>
+
+<span class="sd">x.__imul__(y) &lt;==&gt; x *= y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__imul__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__isub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``-=``</span>
+
+<span class="sd">x.__isub__(y) &lt;==&gt; x -= y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__isub__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__imod__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``%=``</span>
+
+<span class="sd">x.__imod__(y) &lt;==&gt; x %= y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ipow__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">modulo</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``**=``</span>
+
+<span class="sd">x.__ipow__(y) &lt;==&gt; x**=yyyy</span>
+
+<span class="sd">&#39;&#39;&#39;</span>  
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__ipow__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__iadd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``+=``</span>
+
+<span class="sd">x.__iadd__(y) &lt;==&gt; x += y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__iadd__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__idiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``/=``</span>
+
+<span class="sd">x.__idiv__(y) &lt;==&gt; x /= y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__idiv__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__itruediv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``/=`` (true division)</span>
+
+<span class="sd">x.__truediv__(y) &lt;==&gt; x/y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__itruediv__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__ifloordiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``//=``</span>
+
+<span class="sd">x.__ifloordiv__(y) &lt;==&gt; x//=y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__ifloordiv__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: if</span>
+
+    <span class="k">def</span> <span class="nf">__imul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The augmented arithmetic assignment ``*=``</span>
+
+<span class="sd">x.__imul__(y) &lt;==&gt; x *= y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__imul__&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__radd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``+`` with reflected operands</span>
+
+<span class="sd">x.__radd__(y) &lt;==&gt; y+x</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__add__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__rmul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``*`` with reflected operands</span>
+
+<span class="sd">x.__rmul__(y) &lt;==&gt; y*x</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__rmul__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__rsub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``-`` with reflected operands</span>
+
+<span class="sd">x.__rsub__(y) &lt;==&gt; y-x</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_binary_arithmetic</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="s1">&#39;__rsub__&#39;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__mod__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``%``</span>
+
+<span class="sd">x.__mod__(y) &lt;==&gt; x % y</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">%</span> <span class="n">other</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="k">def</span> <span class="nf">__rmod__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">The binary arithmetic operation ``%`` with reflected operands</span>
+
+<span class="sd">x.__rmod__(y) &lt;==&gt; y % x</span>
+
+<span class="sd">&#39;&#39;&#39;</span>   
+        <span class="k">return</span> <span class="n">other</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Attribute</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+
+
+    <span class="k">def</span> <span class="nf">_binary_arithmetic</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">inplace</span><span class="p">:</span>
+            <span class="n">new</span> <span class="o">=</span> <span class="bp">self</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="n">duration</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">new</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="n">method</span><span class="p">)(</span><span class="n">other</span><span class="p">)</span>
+
+        <span class="n">duration</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">duration</span><span class="o">.</span><span class="n">size</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>           
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t create </span><span class="si">%s</span><span class="s2"> with more than one value: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                             <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">duration</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">duration</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t create </span><span class="si">%s</span><span class="s2"> with a negative duration&quot;</span> <span class="o">%</span>
+                             <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+
+        <span class="n">units</span> <span class="o">=</span> <span class="n">duration</span><span class="o">.</span><span class="n">Units</span>          
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">units</span><span class="o">.</span><span class="n">iscalendartime</span> <span class="ow">or</span> <span class="n">units</span><span class="o">.</span><span class="n">istime</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t create </span><span class="si">%s</span><span class="s2"> of </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> 
+                             <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">units</span><span class="p">))</span>
+            
+        <span class="n">duration</span><span class="o">.</span><span class="n">Units</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Units</span>
+
+        <span class="n">new</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="n">duration</span>
+
+        <span class="k">return</span> <span class="n">new</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Attribute (read only)</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">iso</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Return the time duration as an ISO 8601 time duration string.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(45, &#39;days&#39;).iso</span>
+<span class="sd">&#39;P45D&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(5, &#39;seconds&#39;).iso</span>
+<span class="sd">&#39;PT5S&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(10, &#39;calendar_years&#39;).iso</span>
+<span class="sd">&#39;P10Y&#39;</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(18, &#39;calendar_months&#39;).iso</span>
+<span class="sd">&#39;P18M&#39;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">duration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+        <span class="n">units</span>    <span class="o">=</span> <span class="n">duration</span><span class="o">.</span><span class="n">Units</span>
+
+        <span class="k">if</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_calendar_months</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;P</span><span class="si">%d</span><span class="s1">M&#39;</span> <span class="o">%</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_calendar_years</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;P</span><span class="si">%d</span><span class="s1">Y&#39;</span> <span class="o">%</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_days</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;P</span><span class="si">%s</span><span class="s1">D&#39;</span> <span class="o">%</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_hours</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;PT</span><span class="si">%s</span><span class="s1">H&#39;</span> <span class="o">%</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_minutes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;PT</span><span class="si">%s</span><span class="s1">M&#39;</span> <span class="o">%</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_seconds</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;PT</span><span class="si">%s</span><span class="s1">S&#39;</span> <span class="o">%</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;jkbn p7hg un&quot;</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Attribute (read only)</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">isint</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;True if the time duration is a whole number.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;hours&#39;).isint</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2.0, &#39;hours&#39;).isint</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2.5, &#39;hours&#39;).isint</span>
+<span class="sd">False</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">duration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+
+        <span class="k">if</span> <span class="n">duration</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;i&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="n">duration</span> <span class="o">=</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span> <span class="o">==</span> <span class="nb">float</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="c1"># Attribute</span>
+    <span class="c1"># ----------------------------------------------------------------</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">Units</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;The units of the time duration.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(3, &#39;days&#39;).Units</span>
+<span class="sd">&lt;CF Units: days&gt;</span>
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(cf.Data(12, &#39;calendar_months&#39;))</span>
+<span class="sd">&gt;&gt;&gt; t.Units</span>
+<span class="sd">&lt;CF Units: calendar_months&gt;</span>
+<span class="sd">&gt;&gt;&gt; t.Units = cf.Units(&#39;calendar_years&#39;)</span>
+<span class="sd">&gt;&gt;&gt; t.Units</span>
+<span class="sd">&lt;CF Units: calendar_years&gt;</span>
+<span class="sd">&gt;&gt;&gt; t</span>
+<span class="sd">&lt;CF TimeDuration: 1.0 calendar_years (from Y-01-01 00:00:00)&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="o">.</span><span class="n">Units</span>
+    <span class="c1">#--- End: def</span>
+
+    <span class="nd">@Units.setter</span>
+    <span class="k">def</span> <span class="nf">Units</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">duration</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;duration&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">duration</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Can&#39;t set units when there is no duration attribute&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="o">.</span><span class="n">Units</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="TimeDuration.copy"><a class="viewcode-back" href="../../generated/cf.TimeDuration.copy.html#cf.TimeDuration.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Return a deep copy.</span>
+
+<span class="sd">``t.copy()`` is equivalent to ``copy.deepcopy(t)``.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Returns:	</span>
+
+<span class="sd">    out :</span>
+<span class="sd">        The deep copy.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; u = t.copy()</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="n">TimeDuration</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">TimeDuration</span><span class="p">)</span>
+
+        <span class="n">new</span><span class="o">.</span><span class="n">year</span>   <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">year</span>  
+        <span class="n">new</span><span class="o">.</span><span class="n">month</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">month</span> 
+        <span class="n">new</span><span class="o">.</span><span class="n">day</span>    <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">day</span>   
+        <span class="n">new</span><span class="o">.</span><span class="n">hour</span>   <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hour</span>  
+        <span class="n">new</span><span class="o">.</span><span class="n">minute</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">minute</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">second</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">second</span>
+
+        <span class="n">new</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">new</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="TimeDuration.equals"><a class="viewcode-back" href="../../generated/cf.TimeDuration.equals.html#cf.TimeDuration.equals">[docs]</a>    <span class="k">def</span> <span class="nf">equals</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if two time durations are equal.</span>
+
+<span class="sd">.. seealso:: `equivalent`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    other : </span>
+<span class="sd">        The object to compare for equality.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">    traceback : bool, optional</span>
+<span class="sd">        If True then print a traceback highlighting where the two</span>
+<span class="sd">        instances differ.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two instances are equal.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(36, &#39;calendar_months&#39;)</span>
+<span class="sd">&gt;&gt;&gt; u = cf.TimeDuration(3, &#39;calendar_years&#39;) </span>
+<span class="sd">&gt;&gt;&gt; t == u</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; t.equals(u, traceback=True)</span>
+<span class="sd">TimeDuration: Different durations: &lt;CF Data: 36 calendar_months&gt;, &lt;CF Data: 3 calendar_years&gt;</span>
+<span class="sd">False</span>
+
+<span class="sd">&#39;&#39;&#39;</span>       
+        <span class="c1"># Check each instance&#39;s id</span>
+        <span class="k">if</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+ 
+        <span class="c1"># Check that each instance is the same type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different type: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="n">self__dict__</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">other__dict__</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="n">d0</span> <span class="o">=</span> <span class="n">self__dict__</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;duration&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">d1</span> <span class="o">=</span> <span class="n">other__dict__</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;duration&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">equals</span><span class="p">(</span><span class="n">d0</span><span class="p">,</span> <span class="n">d1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different durations: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">d0</span><span class="p">,</span> <span class="n">d1</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">if</span> <span class="n">self__dict__</span> <span class="o">!=</span> <span class="n">other__dict__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different The default date-time elements: </span><span class="si">%r</span><span class="s2"> != </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">self__dict__</span><span class="p">,</span> <span class="n">other__dict__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="TimeDuration.equivalent"><a class="viewcode-back" href="../../generated/cf.TimeDuration.equivalent.html#cf.TimeDuration.equivalent">[docs]</a>    <span class="k">def</span> <span class="nf">equivalent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">traceback</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">True if two time durations are logically equivalent.</span>
+
+<span class="sd">.. seealso:: `equals`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    other : </span>
+<span class="sd">        The object to compare for equivalence.</span>
+
+<span class="sd">    atol : float, optional</span>
+<span class="sd">        The absolute tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `ATOL` function is used.</span>
+
+<span class="sd">    rtol : float, optional</span>
+<span class="sd">        The relative tolerance for all numerical comparisons, By</span>
+<span class="sd">        default the value returned by the `RTOL` function is used.</span>
+
+<span class="sd">    traceback : bool, optional</span>
+<span class="sd">        If True then print a traceback highlighting where the two</span>
+<span class="sd">        instances differ.</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    out : bool</span>
+<span class="sd">        Whether or not the two instances logically equivalent.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(36, &#39;calendar_months&#39;)</span>
+<span class="sd">&gt;&gt;&gt; u = cf.TimeDuration(3, &#39;calendar_years&#39;) </span>
+<span class="sd">&gt;&gt;&gt; t == u</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; t.equivalent(u)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; t.equals(u, traceback=True)</span>
+<span class="sd">TimeDuration: Different durations: &lt;CF Data: 12 calendar_months&gt;, &lt;CF Data: 1 calendar_years&gt;</span>
+<span class="sd">False</span>
+
+<span class="sd">&#39;&#39;&#39;</span>       
+        <span class="c1"># Check each instance&#39;s id</span>
+        <span class="k">if</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+ 
+        <span class="c1"># Check that each instance is the same type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Different type: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="n">self__dict__</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">other__dict__</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="n">d0</span> <span class="o">=</span> <span class="n">self__dict__</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;duration&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">d1</span> <span class="o">=</span> <span class="n">other__dict__</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;duration&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">d0</span> <span class="o">!=</span> <span class="n">d0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Non-equivalent durations: </span><span class="si">%r</span><span class="s2">, </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">d0</span><span class="p">,</span> <span class="n">d1</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">if</span> <span class="n">self__dict__</span> <span class="o">!=</span> <span class="n">other__dict__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">traceback</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: Non-equivalent default date-time elements: </span><span class="si">%r</span><span class="s2"> != </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">self__dict__</span><span class="p">,</span> <span class="n">other__dict__</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1">#--- End: if</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="TimeDuration.inspect"><a class="viewcode-back" href="../../generated/cf.TimeDuration.inspect.html#cf.TimeDuration.inspect">[docs]</a>    <span class="k">def</span> <span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">Inspect the attributes.</span>
+
+<span class="sd">.. seealso:: `cf.inspect`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Returns: </span>
+
+<span class="sd">    None</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; t=cf.TimeDuration(9, &#39;days&#39;)</span>
+<span class="sd">&gt;&gt;&gt; t.inspect()</span>
+<span class="sd">&lt;CF TimeDuration: 9 days (from Y-01-01 00:00:00)&gt;</span>
+<span class="sd">-------------------------------------------------</span>
+<span class="sd">day: 1</span>
+<span class="sd">duration: &lt;CF Data: 9 days&gt;</span>
+<span class="sd">hour: 0</span>
+<span class="sd">minute: 0</span>
+<span class="sd">month: 1</span>
+<span class="sd">second: 0</span>
+<span class="sd">year: None</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">print</span> <span class="n">cf_inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="TimeDuration.interval"><a class="viewcode-back" href="../../generated/cf.TimeDuration.interval.html#cf.TimeDuration.interval">[docs]</a>    <span class="k">def</span> <span class="nf">interval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">hour</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">minute</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">calendar</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">iso</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Return a time interval of exactly the time duration.</span>
+
+<span class="sd">The start (or end, if the *end* parameter is True) date-time of the</span>
+<span class="sd">time interval is determined by the `!year`, `!month`, `!day`, `!hour`,</span>
+<span class="sd">`!minute` and `!second` attributes.</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    year, month, day, hour, minute, second : ints, optional</span>
+<span class="sd">        The date-time of the start (or end) of the time interval. If</span>
+<span class="sd">        any parameter is unset then its value defaults to the</span>
+<span class="sd">        attribute of the same name. The time interval calculation</span>
+<span class="sd">        requires that all of the parameters have numerical values, so</span>
+<span class="sd">        if an unset parameter has a corresponding attribute default</span>
+<span class="sd">        which is `None` then an exception will be raised.</span>
+<span class="sd">        </span>
+<span class="sd">          *Example:*</span>
+<span class="sd">            ``t.interval(year=1999, day=16)`` is equivalent to</span>
+<span class="sd">            ``t.interval(1999, t.month, 16, t.hour, t.minute,</span>
+<span class="sd">            t.second)``.</span>
+
+<span class="sd">    end : bool, optional</span>
+<span class="sd">        If True then the date-time given by the *year*, *month*,</span>
+<span class="sd">        *day*, *hour*, *minute* and *second* parameters defines the</span>
+<span class="sd">        end of the time interval. By default it defines the start of</span>
+<span class="sd">        the time interval.</span>
+
+<span class="sd">    calendar : str, optional</span>
+<span class="sd">        Define a CF calendar for the time interval. By default the</span>
+<span class="sd">        Gregorian calendar is assumed. Ignored for time durations of</span>
+<span class="sd">        calendar years or calendar months.</span>
+
+<span class="sd">    iso : string, optional</span>
+<span class="sd">        Return the time interval as an ISO 8601 time interval string</span>
+<span class="sd">        rather than the default of a tuple of date-time objects. Valid</span>
+<span class="sd">        values are (with example outputs for the time interval &quot;3</span>
+<span class="sd">        years from 2007-03-01 13:00:00&quot;):</span>
+
+<span class="sd">          ========================  =============================================</span>
+<span class="sd">          iso                       Example output</span>
+<span class="sd">          ========================  =============================================</span>
+<span class="sd">          ``&#39;start and end&#39;``       ``&#39;2007-03-01 13:00:00/2010-03-01 13:00:00&#39;``</span>
+<span class="sd">          ``&#39;start and duration&#39;``  ``&#39;2007-03-01 13:00:00/P3Y&#39;``</span>
+<span class="sd">          ``&#39;duration and end&#39;``    ``&#39;P3Y/2010-03-01 13:00:00&#39;``</span>
+<span class="sd">          ========================  =============================================</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : 2-tuple of cf.Datetime or datetime.datetime; or str</span>
+<span class="sd">        The date-times at each end of the time interval. The first</span>
+<span class="sd">        date-time is always earlier than or equal to the second</span>
+<span class="sd">        date-time. If *iso* has been set then an ISO 8601 time</span>
+<span class="sd">        interval string is returned instead of a tuple.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(1, &#39;calendar_months&#39;).interval(1999, 12)</span>
+<span class="sd">(&lt;CF Datetime: 1999-12-01 00:00:00&gt;, &lt;CF Datetime: 2000-01-01 00:00:00&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;calendar_years&#39;).interval(2000, 2, end=True)</span>
+<span class="sd">(&lt;CF Datetime: 1998-02-01 00:00:00&gt;, &lt;CF Datetime: 2000-02-01 00:00:00&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(30, &#39;days&#39;).interval(1983, 12, 1, 6)</span>
+<span class="sd">(&lt;CF Datetime: 1983-12-01 06:00:00&gt;, &lt;CF Datetime: 1983-12-31 06:00:00&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(30, &#39;days&#39;).interval(1983, 12, 1, 6, end=True)</span>
+<span class="sd">(&lt;CF Datetime: 1983-11-01 06:00:00&gt;, &lt;CF Datetime: 1983-12-01 06:00:00&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(0, &#39;days&#39;).interval(1984, 2, 3)</span>
+<span class="sd">(&lt;CF Datetime: 1984-02-03 00:00:00&gt;, &lt;CF Datetime: 1984-02-03 00:00:00&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(5, &#39;days&#39;, hour=6).interval(2004, 3, 2, end=True)</span>
+<span class="sd">(&lt;CF Datetime: 2004-02-26 06:00:00&gt;, &lt;CF Datetime: 2004-03-02 06:00:00&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(5, &#39;days&#39;, hour=6).interval(2004, 3, 2, end=True, calendar=&#39;noleap&#39;)</span>
+<span class="sd">(&lt;CF Datetime: 2004-02-25 06:00:00&gt;, &lt;CF Datetime: 2004-03-02 06:00:00&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(5, &#39;days&#39;, hour=6).interval(2004, 3, 2, end=True, calendar=&#39;360_day&#39;)</span>
+<span class="sd">(&lt;CF Datetime: 2004-02-27 06:00:00&gt;, &lt;CF Datetime: 2004-03-02 06:00:00&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(19897.546, &#39;hours&#39;).interval(1984, 2, 3, 0)</span>
+<span class="sd">(&lt;CF Datetime: 1984-02-03 00:00:00&gt;, &lt;CF Datetime: 1986-05-12 01:32:46&gt;)</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(19897.546, &#39;hours&#39;).interval(1984, 2, 3, 0, end=True)</span>
+<span class="sd">(&lt;CF Datetime: 1981-10-26 22:27:14&gt;, &lt;CF Datetime: 1984-02-03 00:00:00&gt;)</span>
+
+<span class="sd">Create `cf.Query` objects for a time interval - one including both</span>
+<span class="sd">bounds and one which excludes the upper bound:</span>
+
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(2, &#39;calendar_years&#39;)</span>
+<span class="sd">&gt;&gt;&gt; interval = t.interval(1999, 12)</span>
+<span class="sd">&gt;&gt;&gt; c = cf.wi(*interval)</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF Query: (wi [&lt;CF Datetime: 1999-12-01 00:00:00&gt;, &lt;CF Datetime: 2001-01-01 00:00:00&gt;])&gt;</span>
+<span class="sd">&gt;&gt;&gt; d = cf.ge(interval[0]) &amp; cf.lt(interval[1])</span>
+<span class="sd">&gt;&gt;&gt; d</span>
+<span class="sd">&lt;CF Query: [(ge &lt;CF Datetime: 1999-12-01 00:00:00&gt;) &amp; (lt &lt;CF Datetime: 2000-01-01 00:00:00&gt;)]&gt;</span>
+<span class="sd">&gt;&gt;&gt; c == cf.dt(&#39;2001-1-1&#39;)</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; d == cf.dt(&#39;2001-1-1&#39;)</span>
+<span class="sd">False</span>
+
+<span class="sd">Create a `cf.Query` object which may be used to test where a time</span>
+<span class="sd">coordinate object&#39;s bounds lie inside a time interval:</span>
+
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(1, &#39;calendar_months&#39;)</span>
+<span class="sd">&gt;&gt;&gt; c = cf.cellwi(*t.interval(2000, 1, end=True))</span>
+<span class="sd">&gt;&gt;&gt; c</span>
+<span class="sd">&lt;CF Query: [lower_bounds(ge &lt;CF Datetime: 1999-12-01 00:00:00&gt;) &amp; upper_bounds(le &lt;CF Datetime: 2000-01-01 00:00:00&gt;)]&gt;</span>
+
+<span class="sd">Create ISO 8601 time interval strings:</span>
+
+<span class="sd">&gt;&gt;&gt; t = cf.TimeDuration(6, &#39;calendar_years&#39;)</span>
+<span class="sd">&gt;&gt;&gt; t.interval(1999, 12, end=True, iso=&#39;start and end&#39;) </span>
+<span class="sd">&#39;1993-12-01 00:00:00/1999-12-01 00:00:00&#39;</span>
+<span class="sd">&gt;&gt;&gt; t.interval(1999, 12, end=True, iso=&#39;start and duration&#39;)</span>
+<span class="sd">&#39;1993-12-01 00:00:00/P6Y&#39;</span>
+<span class="sd">&gt;&gt;&gt; t.interval(1999, 12, end=True, iso=&#39;duration and end&#39;)</span>
+<span class="sd">&#39;P6Y/1999-12-01 00:00:00&#39;</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>   
+        <span class="k">def</span> <span class="nf">_dHMS</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">,</span> <span class="n">calendar</span><span class="p">):</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">Datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+            <span class="n">units</span> <span class="o">=</span> <span class="n">Units</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1"> since </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">duration</span><span class="o">.</span><span class="n">Units</span><span class="p">,</span> <span class="n">dt</span><span class="p">),</span> <span class="n">calendar</span><span class="p">)</span>
+
+            <span class="n">dt1</span> <span class="o">=</span> <span class="n">Data</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span> 
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">end</span><span class="p">:</span>
+                <span class="n">dt1</span> <span class="o">+=</span> <span class="n">duration</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">dt1</span> <span class="o">-=</span> <span class="n">duration</span>
+
+            <span class="n">dt1</span> <span class="o">=</span> <span class="n">dt1</span><span class="o">.</span><span class="n">asdatetime</span><span class="p">()</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+            
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">end</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">dt</span><span class="p">,</span> <span class="n">dt1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">dt1</span><span class="p">,</span> <span class="n">dt</span>   
+        <span class="c1">#--- End: def</span>
+
+        <span class="k">if</span> <span class="n">year</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">year</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">year</span>
+            <span class="k">if</span> <span class="n">year</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;year must have a value when creating a time interval&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">month</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">month</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">month</span>
+            <span class="k">if</span> <span class="n">month</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;month must have a value when creating a time interval&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">day</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">day</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">day</span>
+            <span class="k">if</span> <span class="n">day</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;day must have a value when creating a time interval&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">hour</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">hour</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hour</span>
+            <span class="k">if</span> <span class="n">hour</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;hour must have a value when creating a time interval&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">minute</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">minute</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">minute</span>
+            <span class="k">if</span> <span class="n">minute</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;minute must have a value when creating a time interval&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">second</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">second</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">second</span>
+            <span class="k">if</span> <span class="n">second</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;second must have a value when creating a time interval&quot;</span><span class="p">)</span>
+        
+        <span class="n">duration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+        <span class="n">units</span>    <span class="o">=</span> <span class="n">duration</span><span class="o">.</span><span class="n">Units</span>
+
+        <span class="k">if</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_calendar_years</span><span class="p">:</span>
+            <span class="n">months</span> <span class="o">=</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span> <span class="o">*</span> <span class="mi">12</span>
+            <span class="n">int_months</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">months</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">int_months</span> <span class="o">!=</span> <span class="n">months</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<span class="s2">&quot;Can&#39;t create a time interval of a non-integer number of calendar months: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">months</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_calendar_months</span><span class="p">:</span>
+            <span class="n">months</span> <span class="o">=</span> <span class="n">duration</span><span class="o">.</span><span class="n">datum</span><span class="p">()</span>
+            <span class="n">int_months</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">months</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">int_months</span> <span class="o">!=</span> <span class="n">months</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<span class="s2">&quot;Can&#39;t create a time interval of a non-integer number of calendar months: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">months</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">int_months</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="n">int_months</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">end</span><span class="p">:</span>
+                <span class="n">y</span><span class="p">,</span> <span class="n">month1</span> <span class="o">=</span> <span class="nb">divmod</span><span class="p">(</span><span class="n">month</span> <span class="o">+</span> <span class="n">int_months</span><span class="p">,</span> <span class="mi">12</span><span class="p">)</span>
+                
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">month1</span><span class="p">:</span>
+                    <span class="n">y</span> <span class="o">-=</span> <span class="mi">1</span>
+                    <span class="n">month1</span> <span class="o">=</span> <span class="mi">12</span>
+                
+                <span class="n">year1</span> <span class="o">=</span> <span class="n">year</span> <span class="o">+</span> <span class="n">y</span>
+        
+                <span class="n">dt0</span> <span class="o">=</span> <span class="n">Datetime</span><span class="p">(</span><span class="n">year</span> <span class="p">,</span> <span class="n">month</span> <span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+                <span class="n">dt1</span> <span class="o">=</span> <span class="n">Datetime</span><span class="p">(</span><span class="n">year1</span><span class="p">,</span> <span class="n">month1</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">y</span><span class="p">,</span> <span class="n">month0</span> <span class="o">=</span> <span class="nb">divmod</span><span class="p">(</span><span class="n">month</span> <span class="o">-</span> <span class="n">int_months</span><span class="p">,</span> <span class="mi">12</span><span class="p">)</span>
+                
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">month0</span><span class="p">:</span>
+                    <span class="n">y</span> <span class="o">-=</span> <span class="mi">1</span>
+                    <span class="n">month0</span> <span class="o">=</span> <span class="mi">12</span>
+                
+                <span class="n">year0</span> <span class="o">=</span> <span class="n">year</span> <span class="o">+</span> <span class="n">y</span>
+                
+                <span class="n">dt0</span> <span class="o">=</span> <span class="n">Datetime</span><span class="p">(</span><span class="n">year0</span><span class="p">,</span> <span class="n">month0</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+                <span class="n">dt1</span> <span class="o">=</span> <span class="n">Datetime</span><span class="p">(</span><span class="n">year</span> <span class="p">,</span> <span class="n">month</span> <span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_days</span><span class="p">:</span>
+            <span class="n">dt0</span><span class="p">,</span> <span class="n">dt1</span> <span class="o">=</span> <span class="n">_dHMS</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">,</span> <span class="n">calendar</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_hours</span><span class="p">:</span>                                                
+            <span class="n">dt0</span><span class="p">,</span> <span class="n">dt1</span> <span class="o">=</span> <span class="n">_dHMS</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">,</span> <span class="n">calendar</span><span class="p">)</span>
+                                                                             
+        <span class="k">elif</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_minutes</span><span class="p">:</span>                                              
+            <span class="n">dt0</span><span class="p">,</span> <span class="n">dt1</span> <span class="o">=</span> <span class="n">_dHMS</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">,</span> <span class="n">calendar</span><span class="p">)</span>
+                                                                             
+        <span class="k">elif</span> <span class="n">units</span> <span class="o">==</span> <span class="n">_seconds</span><span class="p">:</span>                                              
+            <span class="n">dt0</span><span class="p">,</span> <span class="n">dt1</span> <span class="o">=</span> <span class="n">_dHMS</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">,</span> <span class="n">calendar</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">iso</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">dt0</span><span class="p">,</span> <span class="n">dt1</span>
+             
+        <span class="k">if</span> <span class="n">iso</span> <span class="o">==</span> <span class="s1">&#39;start and end&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dt0</span><span class="p">,</span> <span class="n">dt1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">iso</span> <span class="o">==</span> <span class="s1">&#39;start and duration&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dt0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">iso</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">iso</span> <span class="o">==</span> <span class="s1">&#39;duration and end&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iso</span><span class="p">,</span> <span class="n">dt1</span><span class="p">)</span></div>
+    <span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="TimeDuration.is_day_factor"><a class="viewcode-back" href="../../classes/cf.TimeDuration.html#cf.TimeDuration.is_day_factor">[docs]</a>    <span class="k">def</span> <span class="nf">is_day_factor</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">:Returns:	</span>
+
+<span class="sd">    out : bool</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(1, &#39;days&#39;).is_day_factor()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(0.25, &#39;days&#39;).is_day_factor()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(0.3, &#39;days&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2, &#39;days&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(24, &#39;hours&#39;).is_day_factor()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(6, &#39;hours&#39;).is_day_factor()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(7, &#39;hours&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(27, &#39;hours&#39;).is_day_factor()</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(1440, &#39;minutes&#39;).is_day_factor()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(15, &#39;minutes&#39;).is_day_factor()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(17, &#39;minutes&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(2007, &#39;minutes&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(86400, &#39;seconds&#39;).is_day_factor()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(45, &#39;seconds&#39;).is_day_factor()</span>
+<span class="sd">True</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(47, &#39;seconds&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(86401, &#39;seconds&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(1, &#39;calendar_months&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+<span class="sd">&gt;&gt;&gt; cf.TimeDuration(1, &#39;calendar_years&#39;).is_day_factor()</span>
+<span class="sd">False</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="ow">not</span> <span class="n">cf</span><span class="o">.</span><span class="n">Data</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;day&#39;</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span></div></div>
+<span class="c1">#--- End: class</span>
+
+<div class="viewcode-block" id="Y"><a class="viewcode-back" href="../../generated/cf.Y.html#cf.Y">[docs]</a><span class="k">def</span> <span class="nf">Y</span><span class="p">(</span><span class="n">duration</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a time duration of calendar years in a `cf.TimeDuration` object.</span>
+
+<span class="sd">``cf.Y()`` is equivalent to ``cf.TimeDuration(1, &#39;calendar_year&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.M`, `cf.D`, `cf.h`, `cf.m`, `cf.s`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    duration : int, optional</span>
+<span class="sd">        The number of calendar years in the time duration. Must be a</span>
+<span class="sd">        non-negative integer.</span>
+
+<span class="sd">    year, month, day, hour, minute, second : ints, optional</span>
+<span class="sd">        The default date-time elements for defining the start and end</span>
+<span class="sd">        of a time interval based on this time duration. See</span>
+<span class="sd">        `cf.TimeDuration` and `cf.TimeDuration.interval` for details.</span>
+
+<span class="sd">          *Example:*</span>
+<span class="sd">            ``cf.Y(month=12)`` is equivalent to ``cf.TimeDuration(1,</span>
+<span class="sd">            &#39;calendar_years&#39;, month=12)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.TimeDuration</span>
+<span class="sd">        The new `cf.TimeDuration` object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.Y()</span>
+<span class="sd">&lt;CF TimeDuration: 1 calendar year (from Y-01-01 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.Y(10, month=12)   </span>
+<span class="sd">&lt;CF TimeDuration: 10 calendar years (from Y-12-01 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.Y(15, month=4, day=2, hour=12, minute=30, second=2)  </span>
+<span class="sd">&lt;CF TimeDuration: 15 calendar years (from Y-04-02 12:30:02)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.Y(0)       </span>
+<span class="sd">&lt;CF TimeDuration: 0 calendar years (from Y-01-01 00:00:00)&gt;</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">TimeDuration</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="s1">&#39;calendar_years&#39;</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="n">day</span><span class="p">,</span> 
+                        <span class="n">hour</span><span class="o">=</span><span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="n">second</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="M"><a class="viewcode-back" href="../../generated/cf.M.html#cf.M">[docs]</a><span class="k">def</span> <span class="nf">M</span><span class="p">(</span><span class="n">duration</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a time duration of calendar months in a `cf.TimeDuration`</span>
+<span class="sd">object.</span>
+
+<span class="sd">``cf.M()`` is equivalent to ``cf.TimeDuration(1, &#39;calendar_month&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.Y`, `cf.D`, `cf.h`, `cf.m`, `cf.s`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    duration : int, optional</span>
+<span class="sd">        The number of calendar months in the time duration. Must be a</span>
+<span class="sd">        non-negative integer.</span>
+
+<span class="sd">    year, month, day, hour, minute, second : ints, optional</span>
+<span class="sd">        The default date-time elements for defining the start and end</span>
+<span class="sd">        of a time interval based on this time duration. See</span>
+<span class="sd">        `cf.TimeDuration` and `cf.TimeDuration.interval` for details.</span>
+
+<span class="sd">          *Example:*</span>
+<span class="sd">            ``cf.M(day=16)`` is equivalent to ``cf.TimeDuration(1,</span>
+<span class="sd">            &#39;calendar_months&#39;, day=16)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.TimeDuration</span>
+<span class="sd">        The new `cf.TimeDuration` object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.M()</span>
+<span class="sd">&lt;CF TimeDuration: 1 calendar month (from Y-MM-01 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.M(3, day=16)</span>
+<span class="sd">&lt;CF TimeDuration: 3 calendar months (from Y-MM-16 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.M(24, day=2, hour=12, minute=30, second=2)</span>
+<span class="sd">&lt;CF TimeDuration: 24 calendar months (from Y-MM-02 12:30:02)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.M(0)</span>
+<span class="sd">&lt;CF TimeDuration: 0 calendar months (from Y-MM-01 00:00:00)&gt;</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">TimeDuration</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="s1">&#39;calendar_months&#39;</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="n">day</span><span class="p">,</span> 
+                        <span class="n">hour</span><span class="o">=</span><span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="n">second</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="D"><a class="viewcode-back" href="../../generated/cf.D.html#cf.D">[docs]</a><span class="k">def</span> <span class="nf">D</span><span class="p">(</span><span class="n">duration</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a time duration of days in a `cf.TimeDuration` object.</span>
+
+<span class="sd">``cf.D()`` is equivalent to ``cf.TimeDuration(1, &#39;day&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.Y`, `cf.M`, `cf.h`, `cf.m`, `cf.s`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    duration : number, optional</span>
+<span class="sd">        The number of days in the time duration. Must be non-negative.</span>
+
+<span class="sd">    year, month, day, hour, minute, second : ints, optional</span>
+<span class="sd">        The default date-time elements for defining the start and end</span>
+<span class="sd">        of a time interval based on this time duration. See</span>
+<span class="sd">        `cf.TimeDuration` and `cf.TimeDuration.interval` for details.</span>
+
+<span class="sd">          *Example:*</span>
+<span class="sd">             ``cf.D(hour=12)`` is equivalent to ``cf.TimeDuration(1,</span>
+<span class="sd">             &#39;day&#39;, hour=12)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.TimeDuration</span>
+<span class="sd">        The new `cf.TimeDuration` object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.D()</span>
+<span class="sd">&lt;CF TimeDuration: 1 day (from Y-MM-DD 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.D(5, hour=12)       </span>
+<span class="sd">&lt;CF TimeDuration: 5 days (from Y-MM-DD 12:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.D(48.5, minute=30)</span>
+<span class="sd">&lt;CF TimeDuration: 48.5 days (from Y-MM-DD 00:30:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.D(0.25, hour=6, minute=30, second=20)</span>
+<span class="sd">&lt;CF TimeDuration: 0.25 days (from Y-MM-DD 06:30:20)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.D(0)</span>
+<span class="sd">&lt;CF TimeDuration: 0 days (from Y-MM-DD 00:00:00)&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">TimeDuration</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="s1">&#39;days&#39;</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="n">day</span><span class="p">,</span> 
+                        <span class="n">hour</span><span class="o">=</span><span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="n">second</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="h"><a class="viewcode-back" href="../../generated/cf.h.html#cf.h">[docs]</a><span class="k">def</span> <span class="nf">h</span><span class="p">(</span><span class="n">duration</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a time duration of hours in a `cf.TimeDuration` object.</span>
+
+<span class="sd">``cf.h()`` is equivalent to ``cf.TimeDuration(1, &#39;hour&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.Y`, `cf.M`, `cf.D`, `cf.m`, `cf.s`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    duration : number, optional</span>
+<span class="sd">        The number of hours in the time duration. Must be non-negative.</span>
+
+<span class="sd">    year, month, day, hour, minute, second : ints, optional</span>
+<span class="sd">        The default date-time elements for defining the start and end</span>
+<span class="sd">        of a time interval based on this time duration. See</span>
+<span class="sd">        `cf.TimeDuration` and `cf.TimeDuration.interval` for details.</span>
+
+<span class="sd">          *Example:*</span>
+<span class="sd">            ``cf.h(minute=30)`` is equivalent to ``cf.TimeDuration(1,</span>
+<span class="sd">            &#39;hour&#39;, minute=30)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.TimeDuration</span>
+<span class="sd">        The new `cf.TimeDuration` object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.h()</span>
+<span class="sd">&lt;CF TimeDuration: 1 hour (from Y-MM-DD hh:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.h(3, minute=15)</span>
+<span class="sd">&lt;CF TimeDuration: 3 hours (from Y-MM-DD hh:15:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.h(0.5)</span>
+<span class="sd">&lt;CF TimeDuration: 0.5 hours (from Y-MM-DD hh:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.h(6.5, minute=15, second=45)</span>
+<span class="sd">&lt;CF TimeDuration: 6.5 hours (from Y-MM-DD hh:15:45)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.h(0)</span>
+<span class="sd">&lt;CF TimeDuration: 0 hours (from Y-MM-DD hh:00:00)&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">TimeDuration</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="s1">&#39;hours&#39;</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="n">day</span><span class="p">,</span> 
+                        <span class="n">hour</span><span class="o">=</span><span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="n">second</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="m"><a class="viewcode-back" href="../../generated/cf.m.html#cf.m">[docs]</a><span class="k">def</span> <span class="nf">m</span><span class="p">(</span><span class="n">duration</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a time duration of minutes in a `cf.TimeDuration` object.</span>
+
+<span class="sd">``cf.m()`` is equivalent to ``cf.TimeDuration(1, &#39;minute&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.Y`, `cf.M`, `cf.D`, `cf.h`, `cf.s`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    duration : number, optional</span>
+<span class="sd">        The number of hours in the time duration. Must be non-negative.</span>
+
+<span class="sd">    year, month, day, hour, minute, second : ints, optional</span>
+<span class="sd">        The default date-time elements for defining when a time</span>
+<span class="sd">        interval based on this time duration begins or ends. See</span>
+<span class="sd">        `cf.TimeDuration` and `cf.TimeDuration.interval` for details.</span>
+
+<span class="sd">          *Example:*</span>
+<span class="sd">            ``cf.m(second=30)`` is equivalent to ``cf.TimeDuration(1,</span>
+<span class="sd">            &#39;minute&#39;, second=30)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.TimeDuration</span>
+<span class="sd">        The new `cf.TimeDuration` object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.m()</span>
+<span class="sd">&lt;CF TimeDuration: 1 minute (from Y-MM-DD hh:mm:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.m(30, second=15)</span>
+<span class="sd">&lt;CF TimeDuration: 30 minutes (from Y-MM-DD hh:mm:15)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.m(0.5)</span>
+<span class="sd">&lt;CF TimeDuration: 0.5 minutes (from Y-MM-DD hh:mm:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.m(2.5, second=45)</span>
+<span class="sd">&lt;CF TimeDuration: 2.5 minutes (from Y-MM-DD hh:mm:45)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.m(0)</span>
+<span class="sd">&lt;CF TimeDuration: 0 minutes (from Y-MM-DD hh:mm:00)&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">TimeDuration</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="s1">&#39;minutes&#39;</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="n">day</span><span class="p">,</span> 
+                        <span class="n">hour</span><span class="o">=</span><span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="n">second</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+
+<div class="viewcode-block" id="s"><a class="viewcode-back" href="../../generated/cf.s.html#cf.s">[docs]</a><span class="k">def</span> <span class="nf">s</span><span class="p">(</span><span class="n">duration</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Return a time duration of seconds in a `cf.TimeDuration` object.</span>
+
+<span class="sd">``cf.s()`` is equivalent to ``cf.TimeDuration(1, &#39;second&#39;)``.</span>
+
+<span class="sd">.. seealso:: `cf.Y`, `cf.M`, `cf.D`, `cf.h`, `cf.m`</span>
+
+<span class="sd">.. versionadded:: 1.0</span>
+
+<span class="sd">:Parameters:</span>
+
+<span class="sd">    duration : number, optional</span>
+<span class="sd">        The number of hours in the time duration. Must be</span>
+<span class="sd">        non-negative.</span>
+
+<span class="sd">    year, month, day, hour, minute, second : ints, optional</span>
+<span class="sd">        The default date-time elements for defining the start and end</span>
+<span class="sd">        of a time interval based on this time duration. See</span>
+<span class="sd">        `cf.TimeDuration` and `cf.TimeDuration.interval` for details.</span>
+
+<span class="sd">          *Example:*</span>
+<span class="sd">            ``cf.s(hour=6)`` is equivalent to ``cf.TimeDuration(1,</span>
+<span class="sd">            &#39;seconds&#39;, hour=6)``.</span>
+
+<span class="sd">:Returns:</span>
+
+<span class="sd">    out : cf.TimeDuration</span>
+<span class="sd">        The new `cf.TimeDuration` object.</span>
+
+<span class="sd">:Examples:</span>
+
+<span class="sd">&gt;&gt;&gt; cf.s()   </span>
+<span class="sd">&lt;CF TimeDuration: 1 second (from Y-01-01 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.s().interval(1999, 12, 1)</span>
+<span class="sd">(&lt;CF Datetime: 1999-12-01 00:00:00&gt;, datetime.datetime(1999, 12, 1, 0, 0, 1))</span>
+
+<span class="sd">&gt;&gt;&gt; cf.s(30)</span>
+<span class="sd">&lt;CF TimeDuration: 30 seconds (from Y-01-01 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.s(0.5)</span>
+<span class="sd">&lt;CF TimeDuration: 0.5 seconds (from Y-01-01 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.s(12.25)</span>
+<span class="sd">&lt;CF TimeDuration: 12.25 seconds (from Y-01-01 00:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.s(2.5, year=1999, hour=12)</span>
+<span class="sd">&lt;CF TimeDuration: 2.5 seconds (from 1999-01-01 12:00:00)&gt;</span>
+
+<span class="sd">&gt;&gt;&gt; cf.s(0)</span>
+<span class="sd">&lt;CF TimeDuration: 0 seconds (from Y-01-01 00:00:00)&gt;</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">TimeDuration</span><span class="p">(</span><span class="n">duration</span><span class="p">,</span> <span class="s1">&#39;seconds&#39;</span><span class="p">,</span> <span class="n">year</span><span class="o">=</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="o">=</span><span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="o">=</span><span class="n">day</span><span class="p">,</span> 
+                        <span class="n">hour</span><span class="o">=</span><span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="n">second</span><span class="p">)</span></div>
+<span class="c1">#--- End: def</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python 1.1.4</a> &raquo;</li>
+<!--
+  <li><a target="_blank" href="http://cfpython.bitbucket.org">cf-python</a> &raquo;</li>
+  <li><select onchange="location = this.options[this.selectedIndex].value;">
+
+      <option value="../../../1.0/index.html">1.0
+
+      <option value="../../../0.9.9/index.html">0.9.9
+
+      <option value="../../../0.9.8.3/index.html">0.9.8.3
+
+      <option value="../../../archive.html">Archive
+
+      </select>
+  </li>
+-->
+  
+        <li class="nav-item nav-item-0"><a href="../../index.html">Documentation</a> &raquo;</li>
+
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, David Hassell.
+      Last updated on Feb 21, 2016.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

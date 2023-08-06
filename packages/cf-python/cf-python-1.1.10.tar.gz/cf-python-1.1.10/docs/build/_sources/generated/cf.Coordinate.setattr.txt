@@ -1,0 +1,7 @@
+cf.Coordinate.setattr
+=====================
+
+.. currentmodule:: cf
+.. default-role:: obj
+
+.. automethod:: cf.Coordinate.setattr
