@@ -1,0 +1,1 @@
+Search.setIndex({envversion:48,filenames:["index"],objects:{},objnames:{},objtypes:{},terms:{spam:0},titles:["ifconfig"],titleterms:{ifconfig:0}})

@@ -1,0 +1,1 @@
+Search.setIndex({envversion:48,filenames:["index"],objects:{},objnames:{},objtypes:{},terms:{},titles:["test-ext-autosectionlabel"],titleterms:{autosectionlabel:0,ext:0,instal:0,introduc:0,refer:0,sphinx:0,test:0,unix:0,user:0,window:0}})

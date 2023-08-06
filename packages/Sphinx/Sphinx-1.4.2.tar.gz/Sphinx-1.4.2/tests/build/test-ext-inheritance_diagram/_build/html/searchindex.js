@@ -1,0 +1,1 @@
+Search.setIndex({envversion:48,filenames:["index"],objects:{},objnames:{},objtypes:{},terms:{foo:0},titles:["test-ext-inheritance_diagram"],titleterms:{ext:0,inheritance_diagram:0,test:0}})

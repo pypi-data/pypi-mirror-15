@@ -1,0 +1,1 @@
+Search.setIndex({envversion:48,filenames:["bar","baz","foo","index"],objects:{},objnames:{},objtypes:{},terms:{baz:0,should:[0,1,2]},titles:["2. Bar","2.1.1. Baz A","1. Foo","test-tocdepth"],titleterms:{bar:0,baz:1,foo:2,test:3,tocdepth:3}})

@@ -1,0 +1,1 @@
+Search.setIndex({envversion:48,filenames:["index"],objects:{},objnames:{},objtypes:{},terms:{content:0,dummi:0,thi:0},titles:["test-html_extra_path"],titleterms:{html_extra_path:0,test:0}})

@@ -1,0 +1,1 @@
+Search.setIndex({envversion:48,filenames:["index"],objects:{},objnames:{},objtypes:{},terms:{equat:0,inlin:0,multi:0,second:0},titles:["Test Math"],titleterms:{math:0,test:0}})

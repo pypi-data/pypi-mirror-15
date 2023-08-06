@@ -1,0 +1,1 @@
+Search.setIndex({envversion:48,filenames:["index"],objects:{},objnames:{},objtypes:{},terms:{content:0,index:0,modul:0,page:0,search:0},titles:["Welcome to Fullwidth characters: \u30c9\u30a4\u30c4&#8217;s documentation!"],titleterms:{"\u30c9\u30a4\u30c4":0,charact:0,document:0,fullwidth:0,indic:0,tabl:0,welcom:0}})
