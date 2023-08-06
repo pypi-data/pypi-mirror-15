@@ -1,0 +1,277 @@
+.. _release:
+
+
+Release
+=======
+
+Versioning
+----------
+
+PDC Client versioning is based on `Semantic Versioning <http://semver.org/spec/v2.0.0.html>`_.
+
+And it's RPM compatible.
+
+Given a version number MAJOR.MINOR.PATCH, increment the:
+
+#. MAJOR version when you make incompatible API changes,
+#. MINOR version when you add functionality in a backwards-compatible manner,
+#. PATCH version when you make backwards-compatible bug fixing.
+
+Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
+
+#. A pre-release version MAY be denoted by appending a hyphen and an identifier immediately following the patch version.
+
+   Identifier MUST be comprised and only with ASCII alphanumerics [0-9A-Za-z].
+   Identifier MUST NOT be empty.
+   Numeric identifier MUST NOT include leading zeroes.
+   Pre-release versions have a lower precedence than the associated normal version.
+   A pre-release version indicates that the version is unstable and might not satisfy the intended compatibility requirements as denoted by its associated normal version.
+   Examples: 1.0.0-alpha, 1.0.0-sprint5, 1.0.0-rc4.
+
+#. Build metadata MAY be denoted by appending a hyphen and a series of dot separated identifiers immediately following the patch or a dot and a series of dot separated identifiers immediately following the pre-release version.
+
+   Identifiers MUST be comprise and only with ASCII alphanumerics [0-9A-Za-z].
+   Identifiers MUST NOT be empty.
+   Build metadata SHOULD be ignored when determining version precedence.
+   Thus two versions that differ only in the build metadata, have the same precedence.
+   Examples: 1.0.0-12.g1234abc, 1.0.0-s5.4.g1234abc.
+
+
+Release Instruction
+-------------------
+
+In practice, we use `tito` to add git tag and do release including tag based on releases and current HEAD based on test releases.
+
+.. NOTE:: `tito` version >= 0.6.2, install guide refer to: `https://github.com/dgoodwin/tito`
+
+A short instructions as:
+
+#. Tag: ``tito tag``
+#. Test Build: ``tito build --rpm ---offline``
+#. Push: ``git push origin && git push origin $TAG``
+#. Release: ``tito release copr-pdc/copr-pdc-test``
+
+For each step, more detail are:
+
+Tag
+```
+
+A new git tag need to be added before starting a new release::
+
+    $ tito tag
+
+It will:
+
+- bump version or release, based on which `tagger` is used, see `.tito/tito.props`;
+- create an annotated git tag based on our version;
+- update the spec file accordingly, generate changelog event.
+
+For more options about `tito tag`, run `tito tag --help`.
+
+Test Build
+``````````
+
+Once release tag is available, we can do some build tests including source tarball checking, and rpm building testing.
+
+   ::
+
+    # generate local source tarball
+    $ tito build --tgz --offline
+
+    # generate local rpm build
+    $ tito build --rpm --offline
+
+If everything goes well, you could push your commit and tag to remote, otherwise the tag need to be undo::
+
+    $ tito tag -u
+
+.. NOTE:: During developing, we could also generate test build any time, which will be based on current `HEAD` instead of latest tag.
+
+  ::
+
+    # generate test builds
+    $ tito build --test --tgz/srpm/rpm
+
+Push
+````
+
+When you're happy with your build, it's time to push commit and tag to remote.
+
+::
+
+    $ git push origin && git push origin <your_tag>
+
+Release To PyPI
+```````````````
+
+The Python Package Index or `PyPI <https://pypi.python.org/pypi>`_ is the official third-party software repository for the Python programming language.
+Release PDC Client to PyPI make it be able to pip install this for usage in other projects.
+`pdc-client <https://pypi.python.org/pypi/pdc-client>`_ was already registered in PyPI.
+
+If you haven't created an account in PyPI or configured PyPI in local environment, you may need:
+
+- create your account on `PyPI Live  <https://pypi.python.org/pypi?%3Aaction=register_form>`_.
+- contact PDC team to get `PyPI pdc-client <https://pypi.python.org/pypi/pdc-client>`_ access.
+- create  ~/.pypirc configuration file with content::
+
+    [distutils]
+    index-servers=pypi
+
+    [pypi]
+    repository = https://pypi.python.org/pypi
+    username = your_username
+    password = your_password
+
+Finally, you can upload your distributions to PyPI. There are two options:
+
+#. Use `twine <https://python-packaging-user-guide.readthedocs.org/en/latest/projects/#twine>`_.
+   Twine uses only verified TLS to upload to PyPI in order to protect your credentials from theft::
+
+        twine upload dist/*
+
+#. **(Not recommended):** Use `setuptools <https://python-packaging-user-guide.readthedocs.org/en/latest/projects/#setuptools>`_.
+   This approach is covered here due to it being mentioned in other guides,
+   but it is not recommended as it may use a plaintext HTTP or unverified HTTPS connection on some Python versions,
+   allowing your username and password to be intercepted during transmission.
+
+   The command could be::
+
+        python setup.py sdist upload
+
+
+Release to Brew
+---------------
+
+.. NOTE:: A 'dist-git' branch in brew for your project must have been built, otherwise you need to build it firstly.
+
+Install rpmbuild, rhpkg and brew
+````````````````````````````````
+
+- install rpmbuild; the document for `rpmbuild <http://www.rpm.org/max-rpm-snapshot/rpmbuild.8.html/#rpmbuild>`_.
+
+  ::
+
+    # the rpmbuild command is to build a rpm package of the project.
+    $ sudo yum install rpm-build
+
+    $ mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+- install rhpkg; the document for `rhpkg <https://engineering.redhat.com/docs/en-US/Application_Guide/80.Developer/html/Developers_Guide_to_Releasing_Products/using-dist-git.html/#rhpkg>`_.
+
+# For RHEL OS, get `http://download.devel.redhat.com/rel-eng/dist-git/rhel/rhpkg.repo` and copy it to '/etc/yum.repos.d/'.
+
+  ::
+
+    $ sudo yum install rhpkg
+
+# For Fedora OS, get `http://download.devel.redhat.com/rel-eng/dist-git/fedora/rhpkg.repo` and copy it to `/etc/yum.repos.d/` .
+
+  ::
+
+    $ sudo yum install rhpkg
+
+- install brew
+
+  ::
+
+    $ sudo yum install brewkoji
+
+
+Package the project
+```````````````````
+
+Step 1: Build a SRPM package. If there was a SRPM package of the project in your local Evn, you can ignore this step.
+
+  ::
+
+    # To build a tgz package. Please make sure you have tag the local repo before running the followed command.
+    $ tito build --tgz --offline
+
+    # Copy the tgz package and special config files to ~/rpmbuild/SOURCES/, and then copy the SPEC file to the ~/rpmbuild/SPECS/.
+    $ rpmbuild -ba  ~/rpmbuild/SPECS/[spec_name]
+
+Now, the srpm package have been built in ~/rpmbuild/SRPM/[srpm_name]
+
+Step 2: Refs to Brew, with the rhpkg command.
+
+  ::
+
+    # Clone the repo from brew. Assume that [package_name] is the repo in Brew.
+    $ rhpkg clone [package_name]
+    $ cd [package_name]
+
+    # Checkout to the dist-git branch, if the current branch is your needed, please ignore this step.
+    # Assume that package is built against eng-rhel-7-build.
+    $ rhpkg switch-branch eng-rhel-7
+
+    # At the Step 1, the srpm have been built; importing it.
+    $ rhpkg import ~/rpmbuild/SRPM/[srpm_name]
+
+    # Edit the comment.
+    $ rhpkg commit -m "what you changed"
+
+    # Push to origin repo in Brew.
+    $ rhpkg push
+
+    # If you can't make sure whether the package is correct, perform a scratch build with --scratch option.
+    $ rhpkg build
+
+The rhpkg-build command maybe take some minutes to finish the task, please wait it done.
+
+
+Release to Copr
+---------------
+
+The current Copr server link is: `pnt-devops/pdc <https://copr.devel.redhat.com/coprs/pnt-devops/pdc/#pdc-devops/pdc>`_. when you open the link, there are some list headers, include:`Overview`, `package`, `Builds`, `Monitor`, `Setting`.
+
+Permission to Copr
+``````````````````
+
+First of all; please make sure you have the access to deploy the  package in Copr; If you don't have the right; you can contact sochotni(sochotni@redhat.com) to get the permission.
+
+With the SRPM package to build
+``````````````````````````````
+
+Open the `Builds <https://copr.devel.redhat.com/coprs/pnt-devops/pdc/#Builds>`_ button, there are many ways to build the Copr, include:
+
+
+- `From URLs <https://copr.devel.redhat.com/coprs/pnt-devops/pdc/add_build//#From URLs>`_.
+
+
+
+- `Upload SRPM <https://copr.devel.redhat.com/coprs/pnt-devops/pdc/add_build_upload//#Upload SRPM>`_.
+
+
+- `Git and Tito <https://copr.devel.redhat.com/coprs/pnt-devops/pdc/add_build_tito//#Git and Tito>`_.
+
+
+- `Mock SCM <https://copr.devel.redhat.com/coprs/pnt-devops/pdc/add_build_mock//#Mock SCM>`_.
+
+
+This document share the **From URLs** and **Upload SRPM** methods.
+
+
+#. The **From URLs** method. Open `From URLs <https://copr.devel.redhat.com/coprs/pnt-devops/pdc/add_build//#From URLs>`_.
+
+   When the release have been deployed in Brew; you can get the URL value which point to the SRPM source.
+   When input the URL value and click the **Build** button, the Copr server will import the package and build it.
+
+    For example::
+
+      input: 'pdc-client'
+      #Get the URL of the latest version.
+      The SRPM URL is: `<download.devel.redhat.com/brewroot/work/tasks/2503/10572503/pdc-client-0.9.0-1.el7eng.src.rpm>`
+
+
+#. The **Upload SRPM** method. Open `Upload SRPM <https://copr.devel.redhat.com/coprs/pnt-devops/pdc/add_build_upload//#Upload SRPM>`_.
+
+   This method is to upload the local SRPM package to Copr, you just to check the path which absolutely path to the SRPM package.
+   When you build the SRPM package via the rpmbuild command;
+
+    ::
+
+      $ rpmbuild -ba  ~/rpmbuild/SPECS/[spec_name]
+
+You can find the SRPM package path: `~/rpmbuild/SRPMS/*`.
+
+After you find the SRPM file, and click the **Build** button. The Copr server will build it automatically.
