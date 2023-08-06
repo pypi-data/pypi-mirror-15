@@ -1,0 +1,114 @@
+from zope.testing import setupstack
+from unittest import mock
+import collections
+import pickle
+import struct
+import unittest
+
+from .testing import Loop
+from .client import Client
+
+class AsyncTests(setupstack.TestCase):
+
+    def testBasics(self):
+
+        # Here, we'll go through the basic usage of the asyncio ZEO
+        # network client.  The client is responsible for the core
+        # functionality of a ZEO client storage.  The client storage
+        # is largely just a wrapper around the asyncio client.
+
+
+        # To create a client, we need to specify an address, a wrapper
+        # object and a cache.
+        addr = ('127.0.0.1', 8200)
+        wrapper = mock.Mock()
+        cache = MemoryCache()
+
+        # We can also provide an event loop.  We'll use a testing loop
+        # so we don't have to actually make any network connection.
+
+        loop = Loop()
+        client = Client(addr, wrapper, cache, storage_key='TEST', loop=loop)
+        connected = client.connect()
+
+        # The client isn't connected until the server sends it some data.
+        self.assertFalse(connected.done() or loop.transport.data)
+
+        # The server sends the client some data:
+        loop.protocol.data_received(sized(b'Z101'))
+
+        # The client sends back a handshake, and registers the storage.
+        self.assertEqual(self.unsized(loop.transport.pop(2)), b'Z101')
+        parse = self.parse
+        self.assertEqual(parse(loop.transport.pop()),
+                         (1, False, 'register', ('TEST', False)))
+
+
+
+
+    def unsized(self, data, unpickle=False):
+        result = []
+        while data:
+            size, message, *data = data
+            self.assertEqual(struct.unpack(">I", size)[0], len(message))
+            if unpickle:
+                message = pickle.loads(message)
+            result.append(message)
+
+        if len(result) == 1:
+            result = result[0]
+        return result
+
+    def parse(self, data):
+        return self.unsized(data, True)
+
+def sized(message):
+    return struct.pack(">I", len(message)) + message
+
+class MemoryCache:
+
+    def __init__(self):
+        # { oid -> [(start, end, data)] }
+        self.data = collections.defaultdict(list)
+        self.last_tid = None
+
+    clear = __init__
+
+    def close(self):
+        pass
+
+    def load(oid):
+        revisions = self.data[oid]
+        if revisions:
+            start, end, data = revisions[-1]
+            return start, data
+        return None
+
+    def store(oid, start_tid, end_tid, data):
+        assert start is not None
+        revisions = self.data[oid]
+        revisions.append((start, end, data))
+        revisions.sort()
+
+    def loadBefore(oid, tid):
+        for start, end, data in self.data[oid]:
+            if start < tid and end is None or end >= tid:
+                return data, start, end
+
+    def invalidate(oid, tid):
+        revisions = self.data[oid]
+        if revisions:
+            start, end, data = revisions[-1]
+            if end is None:
+                revisions[-1] = start, tid, data
+
+    def getLastTid():
+        return self.last_tid
+
+    def setLastTid(tid):
+        self.last_tid = tid
+
+def test_suite():
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(AsyncTests))
+    return suite

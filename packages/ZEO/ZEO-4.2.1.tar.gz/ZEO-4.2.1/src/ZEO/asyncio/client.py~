@@ -1,0 +1,192 @@
+from pickle import loads, dumps
+import asyncio
+import concurrent.futures
+import logging
+import threading
+
+from . import adapters
+
+logger = logging.getLogger(__name__)
+
+class Disconnected(Exception):
+    pass
+
+class Client(asyncio.Protocol):
+    """asyncio low-level ZEO client interface
+    """
+
+    def __init__(self, addr,
+                 client=None, cache=None,
+                 storage_key='1', read_only=False, loop=None):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        self.loop = loop
+        self.addr = addr
+        self.storage_key = storage_key
+        self.read_only = read_only
+        self.client = client
+        self.connected = self._future
+
+    def _future(self):
+        return asyncio.Future(loop=self.loop)
+
+    def protocol_factory(self):
+        return adapters.SizedProtocolAdapter(self)
+
+    _cache_valid = False
+    def connect(self):
+        self.protocol_version = None
+        self.futures = {} # outstanding requests {request_id -> future}
+        if isinstance(self.addr, tuple):
+            host, port = self.addr
+            cr = self.loop.create_connection(self.protocol_factory, host, port)
+        else:
+            cr = self.loop.create_unix_connection(
+                self.protocol_factory, self.addr)
+
+        self._connect = asyncio.async(cr, loop=self.loop)
+
+        @then(self._connect)
+        def handshake(protocol_version):
+            self.protocol_version = protocol_version
+            self.transport.write(protocol_version)
+            return self.call('register', self.storage_key, self.read_only)
+
+        self.connected = handshake
+
+        @then(handshake)
+        def get_last_tid(_):
+            cache_tid = None
+            if self._cache:
+                cache_tid = self.cache.getLastTid()
+                if not cache_tid:
+                    # Weird, non-empty cache with no tid, don't trust it.
+                    self._cache.clear()
+
+            if cache_tid:
+                # start the verification
+
+                @then(self.call('lastTransaction'))
+                def check_transaction(server_tid):
+                    if server_tid == cache_tid:
+                        self._cache_valid = True
+                    else:
+                        
+                
+
+        @then(get_last_tid):
+            
+
+        
+
+        @future.add_done_callback
+        def done_connecting(future):
+            e = future.exception()
+            if e is not None:
+                self.connected.set_exception(e)
+
+        return self.connected
+
+    def connection_made(self, transport):
+        logger.info("Connected")
+        self.transport = adapters.SizedTransportAdapter(transport)
+
+    def connection_lost(self, exc):
+        logger.info("Disconnected, %r", exc)
+        for f in self.futures.values():
+            d.set_exception(exc or Disconnected())
+        self.futures = {}
+        self.connect() # Reconnect
+
+    exception_type_type = type(Exception)
+    def data_received(self, data):
+        if self.protocol_version is None:
+            self.protocol_version = data
+            self.transport.write(data) # pleased to meet you version :)
+            self.call('register', self.storage_key, self.read_only)
+            self.connected.set_result(data)
+        else:
+            msgid, async, name, args = loads(data)
+            if name == '.reply':
+                future = self.futures.pop(msgid)
+                if (isinstance(args, tuple) and len(args) > 1 and
+                    type(args[0]) == self.exception_type_type and
+                    issubclass(r_args[0], Exception)
+                    ):
+                    future.set_exception(args[0]) # XXX security checks
+                else:
+                    future.set_result(args)
+            else:
+                assert async # clients only get async calls
+                if self.client:
+                    getattr(self.client, name)(*args) # XXX security
+                else:
+                    logger.info('called %r %r', (name, args))
+
+    def call_async(self, method, *args):
+        # XXX connection status...
+        self.transport.write(dumps((0, True, method, args), 3))
+
+    message_id = 0
+    def call(self, method, *args):
+        future = asyncio.Future(loop=self.loop)
+        self.message_id += 1
+        self.futures[self.message_id] = future
+        self.transport.write(dumps((self.message_id, False, method, args), 3))
+        return future
+
+    def call_concurrent(self, result_future, method, *args):
+        future = self.call(method, *args)
+        @future.add_done_callback
+        def concurrent_result(future):
+            if future.exception() is None:
+                result_future.set_result(future.result())
+            else:
+                result_future.set_exception(future.exception())
+
+class ClientThread:
+    """Thread wrapper for client interface
+
+    A ClientProtocol is run in a dedicated thread.
+
+    Calls to it are made in a thread-safe fashion.
+    """
+
+    def __init__(self, addr,
+                 client=None, storage_key='1', read_only=False, timeout=None):
+        self.addr = addr
+        self.client = client
+        self.storage_key = storage_key
+        self.read_only = read_only
+        self.connected = concurrent.futures.Future()
+        threading.Thread(target=self.run,
+                         name='zeo_client_'+storage_key,
+                         daemon=True,
+                         ).start()
+        self.connected.result(timeout)
+
+    def run(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self.loop = loop
+        self.proto = ClientProtocol(
+            self.addr, None, self.storage_key, self.read_only)
+        f = self.proto.connect()
+        @f.add_done_callback
+        def thread_done_connecting(future):
+            e = future.exception()
+            if e is not None:
+                self.connected.set_exception(e)
+            else:
+                self.connected.set_result(None) # XXX prob return some info
+
+        loop.run_forever()
+
+    def call_async(self, method, *args):
+        self.loop.call_soon_threadsafe(self.proto.call_async, method, *args)
+
+    def call(self, method, *args, timeout=None):
+        result = concurrent.futures.Future()
+        self.loop.call_soon_threadsafe(
+            self.proto.call_concurrent, result, method, *args)
+        return result.result()

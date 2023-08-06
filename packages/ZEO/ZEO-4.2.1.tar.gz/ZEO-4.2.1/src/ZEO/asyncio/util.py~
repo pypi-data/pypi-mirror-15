@@ -1,0 +1,32 @@
+import asyncio
+
+def then(future):
+
+    def then_(func):
+        promise = asyncio.Future(loop=future._loop) # XXX _loop
+
+        @future.add_done_callback
+        def then_done(future):
+            e = future.exception()
+            if e is not None:
+                promise.set_exception(e)
+                return
+
+            result = func(future.result())
+
+            if isinstance(result, asyncio.Future):
+
+                @result.add_done_callback
+                def result_done(result):
+                    e = result.exception()
+                    if e is not None:
+                        promise.set_exception(e)
+                    else:
+                        promise.set_result(result.result())
+
+            else:
+                promise.set_result(result.result())
+
+        return promise
+
+    return then_
