@@ -1,0 +1,50 @@
+---
+- name: Download Hadoop
+  get_url: url='{{ hadoop_binaries_url }}' dest='{{ hadoop_download_path }}' mode=0755 validate_certs=no timeout=300
+
+- name: Unarchive Hadoop in install folder
+  unarchive: creates="{{ hadoop_install_path }}" copy=no src="{{ hadoop_download_path }}" dest="{{ install_base_path }}" owner={{ hadoop_user }} group={{ hadoop_group }}
+
+- name: Create directories
+  file: path={{ item.path }} state=directory mode={{ item.mode }}
+  with_items:
+          - { path: "{{ hadoop_install_path }}/pbin", mode: '0755' }
+          - { path: "{{ hadoop_install_path }}/etc/hadoop", mode: '0755' }
+          - { path: "{{ yarn_nm_dir }}", mode: '0755' }
+          - { path: "{{ hdfs_namenode_data_dir }}", mode: '0755' }
+          - { path: "{{ hdfs_datanode_data_dir }}", mode: '0755' }
+
+- name: Change Directory Permissions.
+  file: path={{ hadoop_install_path }} owner={{ hadoop_user }} group={{ hadoop_group }} recurse=yes
+
+- name: Creating a Symbolic Link in {{ soft_link_base_path }}/hadoop.
+  file: src={{ hadoop_install_path }} path={{ soft_link_base_path }}/hadoop state=link owner={{ hadoop_user }} group={{ hadoop_group }}
+
+- name: Change Directory Permissions.
+  file: path={{ item.path }} owner={{ hadoop_user }} group={{ hadoop_group }} mode={{ item.mode }} recurse=yes
+  with_items:
+          - { path: "{{ yarn_nm_dir }}", mode: '0755' }
+          - { path: "{{ hdfs_namenode_data_dir }}", mode: '0755' }
+          - { path: "{{ hdfs_datanode_data_dir }}", mode: '0755' }
+
+- name: Copying templated provisioning scripts
+  template: src={{ item.src }} dest="{{ hadoop_install_path }}/pbin" mode=0755
+  with_items:
+          - { src: 'hadoop-config.sh', dest: 'hadoop-config.sh' }
+          - { src: 'provision-hadoop.sh', dest: 'provision-hadoop.sh' }
+
+- name: Change Directory Permissions.
+  file: path={{ hadoop_install_path }}/pbin owner={{ hadoop_user }} group={{ hadoop_group }} recurse=yes
+
+- name: Copying configuration/archive/control scripts
+  template: src={{ item.src }} dest="{{ hadoop_install_path }}/etc/hadoop" mode={{ item.mode }}
+  with_items:
+          - { src: 'container-executor.cfg', mode: '0644' }
+          - { src: 'capacity-scheduler.xml', mode: '0644' }
+          - { src: 'core-site.xml', mode: '0644' }
+          - { src: 'yarn-site.xml', mode: '0644'  }
+          - { src: 'mapred-site.xml', mode: '0644'  }
+          - { src: 'hdfs-site.xml', mode: '0644'  }
+
+- name: Provision Hadoop 
+  shell: "{{ soft_link_base_path }}/hadoop/pbin/provision-hadoop.sh"
