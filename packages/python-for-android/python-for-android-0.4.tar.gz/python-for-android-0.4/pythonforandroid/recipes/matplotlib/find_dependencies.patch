@@ -1,0 +1,200 @@
+diff --git a/setupext.py b/setupext.py
+index dd872fd..12a1d2c 100755
+--- a/setupext.py
++++ b/setupext.py
+@@ -805,43 +805,47 @@ class Numpy(SetupPackage):
+ 
+     @staticmethod
+     def include_dirs_hook():
+-        if sys.version_info[0] >= 3:
+-            import builtins
+-            if hasattr(builtins, '__NUMPY_SETUP__'):
+-                del builtins.__NUMPY_SETUP__
+-            import imp
+-            import numpy
+-            imp.reload(numpy)
+-        else:
+-            import __builtin__
+-            if hasattr(__builtin__, '__NUMPY_SETUP__'):
+-                del __builtin__.__NUMPY_SETUP__
+-            import numpy
+-            reload(numpy)
+-
+-        ext = Extension('test', [])
+-        ext.include_dirs.append(numpy.get_include())
+-        if not has_include_file(
+-                ext.include_dirs, os.path.join("numpy", "arrayobject.h")):
+-            warnings.warn(
+-                "The C headers for numpy could not be found. "
+-                "You may need to install the development package")
+-
+-        return [numpy.get_include()]
++        # if sys.version_info[0] >= 3:
++        #     import builtins
++        #     if hasattr(builtins, '__NUMPY_SETUP__'):
++        #         del builtins.__NUMPY_SETUP__
++        #     import imp
++        #     import numpy
++        #     imp.reload(numpy)
++        # else:
++        #     import __builtin__
++        #     if hasattr(__builtin__, '__NUMPY_SETUP__'):
++        #         del __builtin__.__NUMPY_SETUP__
++        #     import numpy
++        #     reload(numpy)
++
++        # ext = Extension('test', [])
++        # ext.include_dirs.append(numpy.get_include())
++        # if not has_include_file(
++        #         ext.include_dirs, os.path.join("numpy", "arrayobject.h")):
++        #     warnings.warn(
++        #         "The C headers for numpy could not be found. "
++        #         "You may need to install the development package")
++        from os import environ
++        numpy_include_dir = environ['NUMPY_INCLUDE_DIR']
++        print('numpy include dir is', numpy_include_dir)
++
++        return numpy_include_dir
+ 
+     def check(self):
+-        min_version = extract_versions()['__version__numpy__']
+-        try:
+-            import numpy
+-        except ImportError:
+-            return 'not found. pip may install it below.'
++        return 'version 1.9.2'
++        # min_version = extract_versions()['__version__numpy__']
++        # try:
++        #     import numpy
++        # except ImportError:
++        #     return 'not found. pip may install it below.'
+ 
+-        if not is_min_version(numpy.__version__, min_version):
+-            raise SystemExit(
+-                "Requires numpy %s or later to build.  (Found %s)" %
+-                (min_version, numpy.__version__))
++        # if not is_min_version(numpy.__version__, min_version):
++        #     raise SystemExit(
++        #         "Requires numpy %s or later to build.  (Found %s)" %
++        #         (min_version, numpy.__version__))
+ 
+-        return 'version %s' % numpy.__version__
++        # return 'version %s' % numpy.__version__
+ 
+     def add_flags(self, ext):
+         # Ensure that PY_ARRAY_UNIQUE_SYMBOL is uniquely defined for
+@@ -901,23 +905,26 @@ class FreeType(SetupPackage):
+             check_include_file(get_include_dirs(), 'ft2build.h', 'freetype')
+             return 'Using unknown version found on system.'
+ 
+-        status, output = getstatusoutput("freetype-config --ftversion")
+-        if status == 0:
+-            version = output
+-        else:
+-            version = None
+-
+-        # Early versions of freetype grep badly inside freetype-config,
+-        # so catch those cases. (tested with 2.5.3).
+-        if version is None or 'No such file or directory\ngrep:' in version:
+-            version = self.version_from_header()
+-
+-        # pkg_config returns the libtool version rather than the
+-        # freetype version so we need to explicitly pass the version
+-        # to _check_for_pkg_config
+-        return self._check_for_pkg_config(
+-            'freetype2', 'ft2build.h',
+-            min_version='2.3', version=version)
++        status = 1
++        output = '2.3.12'
++        return 'version {}'.format(output)
++        # status, output = getstatusoutput("freetype-config --ftversion")
++        # if status == 0:
++        #     version = output
++        # else:
++        #     version = None
++
++        # # Early versions of freetype grep badly inside freetype-config,
++        # # so catch those cases. (tested with 2.5.3).
++        # if version is None or 'No such file or directory\ngrep:' in version:
++        #     version = self.version_from_header()
++
++        # # pkg_config returns the libtool version rather than the
++        # # freetype version so we need to explicitly pass the version
++        # # to _check_for_pkg_config
++        # return self._check_for_pkg_config(
++        #     'freetype2', 'ft2build.h',
++        #     min_version='2.3', version=version)
+ 
+     def version_from_header(self):
+         version = 'unknown'
+@@ -976,20 +983,24 @@ class Png(SetupPackage):
+             check_include_file(get_include_dirs(), 'png.h', 'png')
+             return 'Using unknown version found on system.'
+ 
+-        status, output = getstatusoutput("libpng-config --version")
+-        if status == 0:
+-            version = output
+-        else:
+-            version = None
+-
+-        try:
+-            return self._check_for_pkg_config(
+-                'libpng', 'png.h',
+-                min_version='1.2', version=version)
+-        except CheckFailed as e:
+-            if has_include_file(get_include_dirs(), 'png.h'):
+-                return str(e) + ' Using unknown version found on system.'
+-            raise
++        status = 1
++        output = '1.2.38'
++        return 'version {}'.format(output)
++
++        # status, output = getstatusoutput("libpng-config --version")
++        # if status == 0:
++        #     version = output
++        # else:
++        #     version = None
++
++        # try:
++        #     return self._check_for_pkg_config(
++        #         'libpng', 'png.h',
++        #         min_version='1.2', version=version)
++        # except CheckFailed as e:
++        #     if has_include_file(get_include_dirs(), 'png.h'):
++        #         return str(e) + ' Using unknown version found on system.'
++        #     raise
+ 
+     def get_extension(self):
+         sources = [
+@@ -1303,6 +1314,7 @@ class BackendTkAgg(OptionalBackendPackage):
+         self.tcl_tk_cache = None
+ 
+     def check_requirements(self):
++        raise CheckFailed('tkinter not possible on android')
+         try:
+             if PY3:
+                 import tkinter as Tkinter
+@@ -2114,6 +2126,7 @@ class Ghostscript(SetupPackage):
+     optional = True
+ 
+     def check(self):
++        raise CheckFailed()
+         try:
+             if sys.platform == 'win32':
+                 command = 'gswin32c --version'
+@@ -2138,6 +2151,7 @@ class LaTeX(SetupPackage):
+     optional = True
+ 
+     def check(self):
++        raise CheckFailed()
+         try:
+             output = check_output('latex -version', shell=True,
+                                   stderr=subprocess.STDOUT)
+@@ -2154,6 +2168,7 @@ class PdfToPs(SetupPackage):
+     optional = True
+ 
+     def check(self):
++        raise CheckFailed()
+         try:
+             output = check_output('pdftops -v', shell=True,
+                                   stderr=subprocess.STDOUT)

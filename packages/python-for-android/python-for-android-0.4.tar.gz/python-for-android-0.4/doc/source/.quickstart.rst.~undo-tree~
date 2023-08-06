@@ -1,0 +1,283 @@
+"8f7e396f8bb47c4cedeeed90913540d4698a81f5"
+[cl-struct-undo-tree [nil ([nil ([nil (#4=[nil nil ((7589 . 7590)) nil (22355 18965 677318 724000) 0 nil]) ((nil rear-nonsticky nil 1 . 2) (nil fontified nil 1 . 2) (#("
+" 0 1 (fontified nil)) . -7589) (1 . 7590)) nil (22355 18965 677330 859000) 0 nil]) ((#("
+Quickstart
+==========
+
+These simple steps run through the most simple procedure to create an
+APK with some simple default parameters. See the :doc:`commands
+documentation <commands>` for all the different commands and build
+options available.
+
+.. warning:: These instructions are quite preliminary. The
+             installation and use process will become more standard in
+             the near future.
+
+
+Installation
+------------
+
+The easiest way to install is with pip. You need to have setuptools installed, then run::
+
+  pip install git+https://github.com/kivy/python-for-android.git
+
+This should install python-for-android (though you may need to run as root or add --user).
+
+You could also install python-for-android manually, either via git::
+
+  git clone https://github.com/kivy/python-for-android.git
+  cd python-for-android
+
+Or by direct download::
+
+  wget https://github.com/kivy/python-for-android/archive/master.zip
+  unzip revamp.zip
+  cd python-for-android-revamp
+
+Then in both cases run ``python setup.py install``.
+
+Dependencies
+------------
+
+python-for-android has several dependencies that must be installed,
+via your package manager or otherwise. These include:
+
+- git
+- ant
+- python2
+- cython (can be installed via pip)
+- the Android `SDK <https://developer.android.com/sdk/index.html#Other>`_ and `NDK <https://developer.android.com/ndk/downloads/index.html>`_ (see below)
+- a Java JDK (e.g. openjdk-7)
+- zlib (including 32 bit)
+- libncurses (including 32 bit)
+- unzip
+- virtualenv (can be installed via pip)
+- ccache (optional)
+
+On recent versions of Ubuntu and its derivatives you may be able to
+install most of these with::
+
+    sudo dpkg --add-architecture i386
+    sudo apt-get update
+    sudo apt-get install -y build-essential ccache git zlib1g-dev python2.7 python2.7-dev libncurses5:i386 libstdc++6:i386 zlib1g:i386 openjdk-7-jdk unzip ant
+
+When installing the Android SDK and NDK, note the filepaths where they
+may be found, and the version of the NDK installed. You may need to
+set environment variables pointing to these later.
+
+.. _basic_use:
+
+Basic use
+---------
+
+python-for-android provides two executables, ``python-for-android``
+and ``p4a``. These are identical and interchangeable, you can
+substitute either one for the other. These instructions all use
+``python-for-android``.
+
+You can test that p4a was installed correctly by running
+``python-for-android recipes``. This should print a list of all the
+recipes available to be built into your APKs.
+
+Before running any apk packaging or distribution creation, it is
+essential to set some env vars. Make sure you have installed the
+Android SDK and NDK, then:
+
+- Set the ``ANDROIDSDK`` env var to the ``/path/to/the/sdk``
+- Set the ``ANDROIDNDK`` env var to the ``/path/to/the/ndk``
+- Set the ``ANDROIDAPI`` to the targeted API version (or leave it
+  unset to use the default of ``14``).
+- Set the ``ANDROIDNDKVER`` env var to the version of the NDK
+  downloaded, e.g. the current NDK is ``r10e`` (or leave it unset to
+  use the default of ``r9``.
+
+This is **NOT** the only way to set these variables, see the `setting
+SDK/NDK paths <setting_paths_>`_ section for other options and their
+details.
+
+To create a basic distribution, run .e.g::
+
+     python-for-android create --dist_name=testproject --bootstrap=pygame \\
+         --requirements=sdl,python2
+
+This will compile the distribution, which will take a few minutes, but
+will keep you informed about its progress. The arguments relate to the
+properties of the created distribution; the dist_name is an (optional)
+unique identifier, and the requirements is a list of any pure Python
+pypi modules, or dependencies with recipes available, that your app
+depends on. The full list of builtin internal recipes can be seen with
+``python-for-android recipes``.
+
+.. note:: Compiled dists are not located in the same place as with old
+          python-for-android, but instead in an OS-dependent
+          location. The build process will print this location when it
+          finishes, but you no longer need to navigate there manually
+          (see below).
+
+To build an APK, use the ``apk`` command::
+
+    python-for-android apk --private /path/to/your/app --package=org.example.packagename \\
+        --name=\"Your app name\" --version=0.1
+
+The arguments to ``apk`` can be anything accepted by the old
+python-for-android build.py; the above is a minimal set to create a
+basic app. You can see the list with ``python-for-android apk help``.
+
+A new feature of python-for-android is that you can do all of this with just one command::
+
+    python-for-android apk --private /path/to/your/app \\
+        --package=org.example.packagename --name=\"Your app name\" --version=0.5
+        --bootstrap=pygame --requirements=sdl,python2 --dist_name=testproject
+
+This combines the previous ``apk`` command with the arguments to
+``create``, and works in exactly the same way; if no internal
+distribution exists with these requirements then one is first built,
+before being used to package the APK. When the command is run again,
+the build step is skipped and the previous dist re-used.
+
+Using this method you don't have to worry about whether a dist exists,
+though it is recommended to use a different ``dist_name`` for each
+project unless they have precisely the same requirements.
+
+You can build an SDL2 APK similarly, creating a dist as follows::
+
+    python-for-android create --dist_name=testsdl2 --bootstrap=sdl2 --requirements=sdl2,python2,kivy
+
+Note that you must now explicitly add ``kivy`` to the requirements, as
+its presence is now optional (you can alternatively use SDL2 in other
+ways, such as with PySDL2).
+
+You can then make an APK in the same way, but this is more
+experimental and doesn't support as much customisation yet.
+
+Your APKs are not limited to Kivy, for instance you can create apps
+using Vispy, or using PySDL2 directly. The basic command for this
+would be e.g.::
+
+    python-for-android create --dist_name=testvispy --bootstrap=sdl2 --requirements=vispy
+
+python-for-android also has commands to list internal information
+about distributions available, to export or symlink these (they come
+with a standalone APK build script), and in future will also support
+features including binary download to avoid the manual compilation
+step.
+
+See the :doc:`commands` documentation for full details of available
+functionality.
+
+.. _setting_paths:
+
+Setting paths to the the SDK and NDK
+------------------------------------
+
+If building your own dists it is necessary to have installed the
+Android SDK and NDK, and to make Kivy aware of their locations. The
+instructions in `basic use <basic_use_>`_ use environment variables
+for this, but this is not the only option. The different possibilities
+for each setting are given below.
+
+Path to the Android SDK
+~~~~~~~~~~~~~~~~~~~~~~~
+
+python-for-android searches in the following places for this path, in
+order; setting any of these variables overrides all the later ones:
+
+- The ``--sdk_dir`` argument to any python-for-android command.
+- The ``ANDROIDSDK`` environment variable.
+- The ``ANDROID_HOME`` environment variable (this may be used or set
+  by other tools).
+- By using buildozer and letting it download the SDK;
+  python-for-android automatically checks the default buildozer
+  download directory. This is intended to make testing
+  python-for-android easy.
+
+If none of these is set, python-for-android will raise an error and exit.
+
+The Android API to target
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When building for Android it is necessary to target an API number
+corresponding to a specific version of Android. Whatever you choose,
+your APK will probably not work in earlier versions, but you also
+cannot use features introduced in later versions.
+
+You must download specific platform tools for the SDK for any given
+target, it does not come with any. Do this by running
+``/path/to/android/sdk/tools/android``, which will give a gui
+interface, and select the 'platform tools' option under your chosen
+target.
+
+The default target of python-for-android is 14, corresponding to
+Android 4.0. This may be changed in the near future.
+
+You must pass the target API to python-for-android, and can do this in
+several ways. Each choice overrides all the later ones:
+
+- The ``--android_api`` argument to any python-for-android command.
+- The ``ANDROIDAPI`` environment variables.
+- If neither of the above, the default target is used (currently 14).
+
+python-for-android checks if the target you select is available, and
+gives an error if not, so it's easy to test if you passed this
+variable correctly.
+
+Path to the Android NDK
+~~~~~~~~~~~~~~~~~~~~~~~
+
+python-for-android searches in the following places for this path, in
+order; setting any of these variables overrides all the later ones:
+
+- The ``--ndk_dir`` argument to any python-for-android command.
+- The ``ANDROIDNDK`` environment variable.
+- The ``NDK_HOME`` environment variable (this may be used or set
+  by other tools).
+- The ``ANDROID_NDK_HOME`` environment variable (this may be used or set
+- By using buildozer and letting it download the NDK;
+  python-for-android automatically checks the default buildozer
+  download directory. This is intended to make testing
+  python-for-android easy.
+  by other tools).
+
+If none of these is set, python-for-android will raise an error and exit.
+
+The Android NDK version
+~~~~~~~~~~~~~~~~~~~~~~~
+
+python-for-android needs to know what version of the NDK is installed,
+in order to properly resolve its internal filepaths. You can set this
+with any of the following methods - note that the first is preferred,
+and means that you probably do *not* have to manually set this.
+
+- The ``RELEASE.TXT`` file in the NDK directory. If this exists and
+  contains the version (which it probably does automatically), you do
+  not need to set it manually.
+- The ``--ndk_ver`` argument to any python-for-android command.
+- The ``ANDROIDNDKVER`` environment variable.
+
+If ``RELEASE.TXT`` exists but you manually set a different version,
+python-for-android will warn you about it, but will assume you are
+correct and try to continue the build.
+
+Configuration file
+~~~~~~~~~~~~~~~~~~
+
+python-for-android checks in the current directory for a configuration
+file named ``.p4a``. If found, it adds all the lines as options to the
+command line. For example, you can add the options you would always
+include such as:
+
+    --dist_name my_example
+    --android_api 19
+    --requirements kivy,openssl
+" 0 1 (fontified t) 1 11 (fontified t font-lock-multiline t face (rst-level-1)) 11 12 (fontified t font-lock-multiline t) 12 22 (fontified t font-lock-multiline t face (rst-adornment)) 22 142 (fontified t) 142 143 (fontified t font-lock-multiline t) 143 148 (fontified t font-lock-multiline t face rst-directive) 148 183 (fontified t font-lock-multiline t face rst-external) 183 184 (fontified t font-lock-multiline t) 184 245 (fontified t) 245 248 (fontified t face rst-directive) 248 257 (fontified t face rst-directive) 257 407 (fontified t) 407 419 (fontified t font-lock-multiline t face (rst-level-2)) 419 420 (fontified t font-lock-multiline t) 420 432 (fontified t font-lock-multiline t face (rst-adornment)) 432 434 (fontified t) 434 521 (fontified t font-lock-multiline t) 521 523 (fontified t face rst-block font-lock-multiline t) 523 524 (fontified t font-lock-multiline t) 524 525 (fontified t font-lock-multiline t) 525 590 (fontified t font-lock-multiline t face (rst-literal)) 590 683 (fontified t) 683 749 (fontified t font-lock-multiline t) 749 751 (fontified t face rst-block font-lock-multiline t) 751 753 (fontified t font-lock-multiline t) 753 765 (fontified t font-lock-multiline t face #1=(rst-literal)) 765 811 (fontified t face (rst-definition . #1#) font-lock-multiline t) 811 836 (fontified t font-lock-multiline t face #1#) 836 837 (fontified t) 837 858 (fontified t font-lock-multiline t) 858 860 (fontified t face rst-block font-lock-multiline t) 860 862 (fontified t font-lock-multiline t) 862 869 (fontified t font-lock-multiline t face #2=(rst-literal)) 869 930 (fontified t face (rst-definition . #2#) font-lock-multiline t) 930 981 (fontified t font-lock-multiline t face #2#) 981 1005 (fontified t) 1005 1032 (fontified t face rst-literal) 1032 1034 (fontified t) 1034 1035 (fontified t) 1035 1047 (fontified t font-lock-multiline t face (rst-level-2)) 1047 1048 (fontified t font-lock-multiline t) 1048 1060 (fontified t font-lock-multiline t face (rst-adornment)) 1060 1185 (fontified t) 1185 1187 (fontified t face rst-block) 1187 1191 (fontified t) 1191 1193 (fontified t face rst-block) 1193 1197 (fontified t) 1197 1199 (fontified t face rst-block) 1199 1207 (fontified t) 1207 1209 (fontified t face rst-block) 1209 1243 (fontified t) 1243 1245 (fontified t face rst-block) 1245 1257 (fontified t) 1257 1316 (fontified t face rst-reference) 1316 1321 (fontified t) 1321 1384 (fontified t face rst-reference) 1384 1397 (fontified t) 1397 1399 (fontified t face rst-block) 1399 1427 (fontified t) 1427 1429 (fontified t face rst-block) 1429 1453 (fontified t) 1453 1455 (fontified t face rst-block) 1455 1485 (fontified t) 1485 1487 (fontified t face rst-block) 1487 1493 (fontified t) 1493 1495 (fontified t face rst-block) 1495 1533 (fontified t) 1533 1535 (fontified t face rst-block) 1535 1553 (fontified t) 1553 1622 (fontified t) 1622 1648 (fontified t font-lock-multiline t) 1648 1650 (fontified t face rst-block font-lock-multiline t) 1650 1652 (fontified t font-lock-multiline t) 1652 1873 (fontified t font-lock-multiline t face (rst-literal)) 1873 2064 (fontified t) 2064 2065 (fontified t) 2065 2079 (fontified t face rst-definition) 2079 2081 (fontified t) 2081 2090 (fontified t font-lock-multiline t face (rst-level-2)) 2090 2091 (fontified t font-lock-multiline t) 2091 2100 (fontified t font-lock-multiline t face (rst-adornment)) 2100 2147 (fontified t) 2147 2169 (fontified t face rst-literal) 2169 2174 (fontified t) 2174 2181 (fontified t face rst-literal) 2181 2296 (fontified t) 2296 2318 (fontified t face rst-literal) 2318 2378 (fontified t) 2378 2408 (fontified t face rst-literal) 2408 2623 (fontified t) 2623 2651 (fontified t) 2651 2653 (fontified t face rst-block) 2653 2661 (fontified t) 2661 2675 (fontified t face rst-literal) 2675 2691 (fontified t) 2691 2711 (fontified t face rst-literal) 2711 2712 (fontified t) 2712 2714 (fontified t face rst-block) 2714 2722 (fontified t) 2722 2736 (fontified t face rst-literal) 2736 2752 (fontified t) 2752 2772 (fontified t face rst-literal) 2772 2773 (fontified t) 2773 2775 (fontified t face rst-block) 2775 2783 (fontified t) 2783 2797 (fontified t face rst-literal) 2797 2869 (fontified t) 2869 2875 (fontified t face rst-literal) 2875 2878 (fontified t) 2878 2880 (fontified t face rst-block) 2880 2888 (fontified t) 2888 2905 (fontified t face rst-literal) 2905 2978 (fontified t) 2978 2986 (fontified t face rst-literal) 2986 3030 (fontified t) 3030 3036 (fontified t face rst-literal) 3036 3047 (fontified t) 3047 3054 (fontified t face rst-emphasis2) 3054 3099 (fontified t) 3099 3100 (fontified t font-lock-multiline t) 3100 3141 (fontified t font-lock-multiline t face rst-reference) 3141 3142 (fontified t font-lock-multiline t) 3142 3178 (fontified t) 3178 3188 (fontified t) 3188 3228 (fontified t font-lock-multiline t) 3228 3230 (fontified t face rst-block font-lock-multiline t) 3230 3232 (fontified t font-lock-multiline t) 3232 3317 (fontified t font-lock-multiline t face #3=(rst-literal)) 3317 3343 (fontified t face (rst-block . #3#) font-lock-multiline t) 3343 3344 (fontified t font-lock-multiline t face #3#) 3344 3695 (fontified t) 3695 6769 (fontified nil) 6769 6792 (fontified nil font-lock-multiline t face (rst-level-3)) 6792 6793 (fontified nil font-lock-multiline t) 6793 6816 (fontified t font-lock-multiline t face (rst-adornment)) 6816 6817 (fontified t) 6817 6957 (fontified t) 6957 6959 (fontified t face rst-block) 6959 6963 (fontified t) 6963 6976 (fontified t face rst-literal) 6976 7021 (fontified t) 7021 7023 (fontified t face rst-block) 7023 7027 (fontified t) 7027 7041 (fontified t face rst-literal) 7041 7064 (fontified t) 7064 7066 (fontified t face rst-block) 7066 7070 (fontified t) 7070 7086 (fontified t face rst-literal) 7086 7152 (fontified t) 7152 7154 (fontified t face rst-block) 7154 7325 (fontified t) 7325 7428 (fontified t) 7428 7453 (fontified t font-lock-multiline t face (rst-level-3)) 7453 7454 (fontified t font-lock-multiline t) 7454 7479 (fontified t font-lock-multiline t face (rst-adornment)) 7479 7855 (fontified t) 7855 7893 (fontified t face rst-literal) 7893 8241 (fontified t) 8241 8243 (fontified t face rst-block) 8243 8247 (fontified t) 8247 8264 (fontified t face rst-literal) 8264 8309 (fontified t) 8309 8311 (fontified t face rst-block) 8311 8315 (fontified t) 8315 8329 (fontified t face rst-literal) 8329 8353 (fontified t) 8353 8355 (fontified t face rst-block) 8355 8423 (fontified t) 8423 8577 (fontified t) 8577 8600 (fontified t font-lock-multiline t face (rst-level-3)) 8600 8601 (fontified t font-lock-multiline t) 8601 8624 (fontified t font-lock-multiline t face (rst-adornment)) 8624 8765 (fontified t) 8765 8767 (fontified t face rst-block) 8767 8771 (fontified t) 8771 8784 (fontified t face rst-literal) 8784 8829 (fontified t) 8829 8831 (fontified t face rst-block) 8831 8835 (fontified t) 8835 8849 (fontified t face rst-literal) 8849 8872 (fontified t) 8872 8874 (fontified t face rst-block) 8874 8878 (fontified t) 8878 8890 (fontified t face rst-literal) 8890 8937 (fontified t) 8937 8956 (fontified t) 8956 8958 (fontified t face rst-block) 8958 8962 (fontified t) 8962 8982 (fontified t face rst-literal) 8982 9029 (fontified t) 9029 9031 (fontified t face rst-block) 9031 9324 (fontified t) 9324 9347 (fontified t font-lock-multiline t face (rst-level-3)) 9347 9348 (fontified t font-lock-multiline t) 9348 9371 (fontified t font-lock-multiline t face (rst-adornment)) 9371 9444 (fontified t) 9444 9615 (fontified t) 9615 9620 (fontified t face rst-emphasis1) 9620 9649 (fontified t) 9649 9651 (fontified t face rst-block) 9651 9655 (fontified t) 9655 9670 (fontified t face rst-literal) 9670 9818 (fontified t) 9818 9820 (fontified t face rst-block) 9820 9824 (fontified t) 9824 9837 (fontified t face rst-literal) 9837 9882 (fontified t) 9882 9884 (fontified t face rst-block) 9884 9888 (fontified t) 9888 9905 (fontified t face rst-literal) 9905 9932 (fontified t) 9932 9947 (fontified t face rst-literal) 9947 9997 (fontified t) 9997 10104 (fontified t) 10104 10122 (fontified t font-lock-multiline t face (rst-level-3)) 10122 10123 (fontified t font-lock-multiline t) 10123 10141 (fontified t font-lock-multiline t face (rst-adornment)) 10141 10225 (fontified t) 10225 10233 (fontified t face rst-literal) 10233 10423 (fontified t) 10423 10450 (fontified t face rst-block) 10450 10451 (fontified t)) . 1) (undo-tree-id4 . -10451) (undo-tree-id5 . -1184) (undo-tree-id6 . -1184) (undo-tree-id7 . -10451) (undo-tree-id8 . -10451) (undo-tree-id9 . -10451) (undo-tree-id10 . -6793) (undo-tree-id11 . -6957) (undo-tree-id12 . -6957) (undo-tree-id13 . -6957) (undo-tree-id14 . -10451) 10452 (t 22318 27628 508099 274000)) nil (22355 18965 677376 506000) 0 nil] [nil nil ((#("Configuration file
+~~~~~~~~~~~~~~~~~~
+
+python-for-android checks in the current directory for a configuration
+file named ``.p4a``. If found, it adds all the lines as options to the
+command line. For example, you can add the options you would always
+include such as:
+
+    --dist_name my_example
+    --android_api 19
+    --requirements kivy,openssl
+" 0 18 (fontified t font-lock-multiline t face (rst-level-3)) 18 19 (fontified t font-lock-multiline t) 19 37 (fontified t font-lock-multiline t face (rst-adornment)) 37 121 (fontified t) 121 129 (fontified t face rst-literal) 129 319 (fontified t) 319 346 (fontified t face rst-block) 346 347 (fontified t)) . 10105) (undo-tree-id0 . -347) (undo-tree-id1 . -347) (undo-tree-id2 . -347) (undo-tree-id3 . -347) 10452 (t 22318 27628 508099 274000)) ((10105 . 10452)) (22355 14587 855297 127000) 0 nil]) nil nil (22355 14587 855814 983000) 0 nil] #4# 11015 4 nil]
