@@ -1,0 +1,232 @@
+Metadata-Version: 1.0
+Name: alfred-workflow-packager
+Version: 1.0.1
+Summary: A CLI utility for packaging and exporting Alfred workflows
+Home-page: https://github.com/caleb531/alfred-workflow-packager
+Author: Caleb Evans
+Author-email: caleb@calebevans.me
+License: MIT
+Description: Alfred Workflow Packager
+        ========================
+        
+        | *Copyright 2016 Caleb Evans*
+        | *Released under the MIT license*
+        
+        Alfred Workflow Packager is a command-line utility which makes the
+        process of packaging and exporting an
+        `Alfred <https://www.alfredapp.com/>`__ workflow incredibly quick and
+        easy. The utility supports Alfred 3 only.
+        
+        Setup
+        -----
+        
+        You can install the utility via ``pip``, either globally or within a
+        virtualenv:
+        
+        ::
+        
+            pip install alfred-workflow-packager
+        
+        Usage
+        -----
+        
+        1. Create configuration file
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        
+        Once you've installed AWP, you must configure it for every project where
+        you wish to use it. To do so, create a ``packager.json`` file in the
+        root directory of your project; this file configures AWP for that
+        particular project.
+        
+        Example
+        ^^^^^^^
+        
+        .. code:: json
+        
+            {
+              "export_file": "Fruit.alfredworkflow",
+              "bundle_id": "com.yourname.fruit",
+              "readme": "README.txt",
+              "resources": [
+                  "icon.png",
+                  "dostuff/*.py",
+                  "dostuff/data/*.json"
+              ]
+            }
+        
+        Required settings
+        ^^^^^^^^^^^^^^^^^
+        
+        export\_file
+        ''''''''''''
+        
+        The path of the exported workflow (relative to your project directory).
+        
+        bundle\_id
+        ''''''''''
+        
+        The unique bundle ID of your workflow. You must have one set in the
+        installed workflow, or AWP will not be able to find your workflow when
+        packaging.
+        
+        resources
+        '''''''''
+        
+        A list of zero or more files/folder patterns representing files or
+        folders to copy from your project to the installed workflow. The
+        directory structures and filenames are preserved when copying.
+        
+        *Local project:*
+        
+        ::
+        
+            - icon.png
+            - fruit
+                - apple.py
+                - banana.applescript
+                - orange.php
+        
+        *Installed workflow (before running utility):*
+        
+        ::
+        
+            - info.plist
+            - special_file.json
+        
+        *packager.json resources:*
+        
+        .. code:: json
+        
+            [
+                "icon.png",
+                "fruit/*.json"
+            ]
+        
+        *Installed workflow (after running utility):*
+        
+        ::
+        
+            - info.plist
+            - icon.png
+            - special_file.json
+            - fruit
+                - apple.py
+                - banana.applescript
+                - orange.php
+        
+        Note that files and folders already present in the installed workflow
+        are *not* touched if they are not in the *resources* list.
+        
+        Optional settings
+        ^^^^^^^^^^^^^^^^^
+        
+        readme
+        ''''''
+        
+        The path to the README file to use for this workflow; the *About this
+        Workflow* field in your workflow is populated with the contents of this
+        file.
+        
+        2. Validate configuration file
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        
+        Once you've finished writing the ``packager.json`` file for your
+        project, you should validate it by running ``awp --validate`` from the
+        root directory of your project. If you are missing any settings or if
+        any of the setting values are in the wrong format, the utility will
+        output those respective error messages.
+        
+        3. Run utility
+        ~~~~~~~~~~~~~~
+        
+        Now that your project has a valid ``packager.json`` file, you can run
+        the utility via the ``awp`` command:
+        
+        ::
+        
+            awp
+        
+        Running ``awp`` will always do a few things:
+        
+        1. Copy those project resources listed in ``packager.json`` to the
+           installed workflow (in their respective locations)
+        
+        2. Update the installed workflow's README with the contents of the
+           README file listed in ``packager.json`` (if one is listed)
+        
+        Setting the workflow version
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        
+        Passing the ``--version`` option to ``awp`` allows you to set the
+        version of the installed workflow directly. I highly recommend using
+        `semantic versioning <http://semver.org/>`__ to version your workflow
+        releases.
+        
+        ::
+        
+            awp --version 1.2.0
+        
+        Exporting the workflow
+        ^^^^^^^^^^^^^^^^^^^^^^
+        
+        When you're pleased with your work and you're ready to publish a new
+        release, you can export the installed workflow to your project directory
+        by passing the ``--export`` flag to ``awp``.
+        
+        ::
+        
+            awp --export
+        
+        Note that you can set the version and export the workflow
+        simultaneously:
+        
+        ::
+        
+            awp --version 1.2.0 --export
+        
+        4. Configure workflow objects
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        
+        The last important step is to update any script objects in your workflow
+        (*i.e.* objects of type **Script Filter**, **Run Script**, *etc.*) to
+        reference the files copied to the installed workflow directory.
+        
+        You should set the *Language* to ``/bin/bash`` and use the appropriate
+        shell command to call your script. Use ``"$@"`` if your input is passed
+        as argv, or ``"{query}"`` if your input is passed as {query}.
+        
+        Python
+        ^^^^^^
+        
+        ::
+        
+            /usr/bin/python -m fruit.apple "$@"
+        
+        ::
+        
+            /usr/bin/python -m fruit.apple "{query}"
+        
+        AppleScript
+        ^^^^^^^^^^^
+        
+        ::
+        
+            /usr/bin/osascript fruit/banana.applescript "$@"
+        
+        ::
+        
+            /usr/bin/osascript fruit/banana.applescript "{query}"
+        
+        PHP
+        ^^^
+        
+        ::
+        
+            /usr/bin/php fruit/orange.php "$@"
+        
+        ::
+        
+            /usr/bin/php fruit/orange.php "{query}"
+        
+Keywords: alfred workflow package export
+Platform: UNKNOWN
