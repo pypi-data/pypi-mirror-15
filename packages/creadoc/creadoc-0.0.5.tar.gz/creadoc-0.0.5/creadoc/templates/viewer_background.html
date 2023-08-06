@@ -1,0 +1,72 @@
+{% extends 'viewer.html' %}
+
+{% block render_logic %}
+    // Загружаем файл локализации и устанавливаем его по умолчанию
+    Stimulsoft.Base.Localization.StiLocalization.setLocalizationFile("/static/local/ru.xml", true);
+
+    // Формируем экземпляр отчета
+    var report = new Stimulsoft.Report.StiReport();
+
+    // Загружаем шаблон отчета
+    var templatePath = "{{ template_url | safe }}";
+
+    try {
+        report.loadFile(templatePath);
+    } catch (error) {
+        alert(
+            "Не удалось загрузить шаблон " +
+            templatePath +
+            ", возможно он отсутствует."
+        );
+
+        return;
+    }
+
+    // Привязка переменных к шаблону
+    {% for variable in variables %}
+    report.dictionary.variables.add(
+        new Stimulsoft.Report.Dictionary.StiVariable(
+            // Категория
+            '{{ variable.category }}',
+            // Наименование
+            '{{ variable.name }}',
+            // Псевдоним
+            '{{ variable.name }}',
+            // Описание
+            '{{ variable.description }}',
+            // Тип
+            variableTypeGetter('{{ variable.type | safe }}'),
+            // Значение
+            '{{ variable.value }}',
+            true
+        )
+    );
+    {% endfor %}
+
+    // Очищаем от "хвостов" соединений и источников,
+    // они нам только помешают, так как создают лишь видимость присутствия
+    report.dictionary.databases.clear();
+    report.dictionary.dataSources.clear();
+
+    // Привязка источников данных к шаблону
+    {% for source in sources %}
+    var dataSet = new Stimulsoft.System.Data.DataSet();
+    dataSet.readJsonFile('{{ source.get_absolute_url | safe }}');
+    report.regData('{{ source.alias }}', '', dataSet);
+    {% endfor %}
+
+    // Синхронизация источников данных
+    report.dictionary.synchronize();
+
+    var settings = new Stimulsoft.Report.Export.StiPdfExportSettings();
+    settings.useUnicode = true;
+
+    var service = new Stimulsoft.Report.Export.StiPdfExportService();
+    var stream = new Stimulsoft.System.IO.MemoryStream();
+
+    service.exportTo(report, stream, settings);
+
+    var data = stream.toArray();
+
+    Object.saveAs(data, "SimpleList.pdf", "application/pdf");
+{% endblock %}
