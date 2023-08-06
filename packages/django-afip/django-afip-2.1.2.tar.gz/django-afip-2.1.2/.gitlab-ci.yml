@@ -1,0 +1,38 @@
+image: python:3.5
+before_script:
+  - pip install tox
+stages:
+  - style
+  - test
+  - deploy
+
+flake8:
+  stage: style
+  script:
+    - tox -e flake8
+
+imports:
+  stage: style
+  script:
+    - tox -e isort
+
+py35:
+  stage: test
+  script:
+    - echo -e $AFIP_TEST_KEY > testapp/test.key
+    - echo -e $AFIP_TEST_CRT > testapp/test.crt
+    - tox -e py35
+
+docs:
+  stage: test
+  script:
+    - tox -e docs
+
+pypi:
+  stage: deploy
+  script:
+    - pip install -r requirements.txt twine
+    - python setup.py sdist bdist_wheel
+    - twine upload --config-file .pypirc -u $PYPI_USER -p $PYPI_PASSWORD dist/*
+  only:
+    - tags@hobarrera/django-afip
