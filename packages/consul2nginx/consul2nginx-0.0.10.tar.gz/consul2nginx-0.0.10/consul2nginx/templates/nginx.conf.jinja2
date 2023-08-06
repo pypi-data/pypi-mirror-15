@@ -1,0 +1,43 @@
+user nginx;
+worker_processes 1;
+
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+{% if service_groups.get('tcp', []) %}
+http {
+    {% for port_group, services in service_groups.get('tcp', []).items() %}{% for service in services %}
+    upstream {{ service.name }} {
+        least_conn;
+        {% for instance in service.instances %}
+        server {{ instance.Address }}:{{ instance.ServicePort }} max_fails=3 fail_timeout=60 weight=1;{% endfor %}
+    }{% endfor %}{% endfor %}
+
+    server {
+        listen 80;
+
+        {% for port_group, services in service_groups.get('tcp', []).items() %}{% for service in services %}
+        location /{{ service.name }} {
+            proxy_pass {{ service.name }};
+        }{% endfor %}{% endfor %}
+    }
+}{% endif %}
+
+{% if service_groups.get('udp', []) %}
+stream {
+    {% for port_group, services in service_groups.get('udp', []).items() %}{% for service in services %}
+    upstream {{ service.name }} {
+        least_conn;
+        {% for instance in service.instances %}
+        server {{ instance.Address }}:{{ instance.ServicePort }} max_fails=3 fail_timeout=60 weight=1;{% endfor %}
+    }
+
+    server {
+        listen {{ port_group }} udp;
+        proxy_pass {{ service.name }};
+    }{% endfor %}{% endfor %}
+}{% endif %}
