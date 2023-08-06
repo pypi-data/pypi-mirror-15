@@ -1,0 +1,488 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>flake8.utils &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../../index.html"/>
+        <link rel="up" title="Module code" href="../index.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+    <li>flake8.utils</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for flake8.utils</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Utility methods for flake8.&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">fnmatch</span> <span class="kn">as</span> <span class="nn">_fnmatch</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">io</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="n">DIFF_HUNK_REGEXP</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">r&#39;^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@.*$&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="parse_comma_separated_list"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.parse_comma_separated_list">[docs]</a><span class="k">def</span> <span class="nf">parse_comma_separated_list</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="c1"># type: (Union[Sequence[str], str]) -&gt; List[str]</span>
+    <span class="sd">&quot;&quot;&quot;Parse a comma-separated list.</span>
+
+<span class="sd">    :param value:</span>
+<span class="sd">        String or list of strings to be parsed and normalized.</span>
+<span class="sd">    :returns:</span>
+<span class="sd">        List of values with whitespace stripped.</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        list</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">[</span><span class="n">item</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">value</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="normalize_paths"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.normalize_paths">[docs]</a><span class="k">def</span> <span class="nf">normalize_paths</span><span class="p">(</span><span class="n">paths</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">curdir</span><span class="p">):</span>
+    <span class="c1"># type: (Union[Sequence[str], str], str) -&gt; List[str]</span>
+    <span class="sd">&quot;&quot;&quot;Parse a comma-separated list of paths.</span>
+
+<span class="sd">    :returns:</span>
+<span class="sd">        The normalized paths.</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        [str]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">normalize_path</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">parent</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parse_comma_separated_list</span><span class="p">(</span><span class="n">paths</span><span class="p">)]</span></div>
+
+
+<div class="viewcode-block" id="normalize_path"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.normalize_path">[docs]</a><span class="k">def</span> <span class="nf">normalize_path</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">curdir</span><span class="p">):</span>
+    <span class="c1"># type: (str, str) -&gt; str</span>
+    <span class="sd">&quot;&quot;&quot;Normalize a single-path.</span>
+
+<span class="sd">    :returns:</span>
+<span class="sd">        The normalized path.</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        str</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># NOTE(sigmavirus24): Using os.path.sep allows for Windows paths to</span>
+    <span class="c1"># be specified and work appropriately.</span>
+    <span class="n">separator</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span>
+    <span class="k">if</span> <span class="n">separator</span> <span class="ow">in</span> <span class="n">path</span><span class="p">:</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">path</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">path</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="n">separator</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="stdin_get_value"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.stdin_get_value">[docs]</a><span class="k">def</span> <span class="nf">stdin_get_value</span><span class="p">():</span>
+    <span class="c1"># type: () -&gt; str</span>
+    <span class="sd">&quot;&quot;&quot;Get and cache it so plugins can use it.&quot;&quot;&quot;</span>
+    <span class="n">cached_value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">stdin_get_value</span><span class="p">,</span> <span class="s1">&#39;cached_stdin&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">cached_value</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">stdin_value</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="n">cached_type</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cached_type</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span>
+        <span class="n">stdin_get_value</span><span class="o">.</span><span class="n">cached_stdin</span> <span class="o">=</span> <span class="n">cached_type</span><span class="p">(</span><span class="n">stdin_value</span><span class="p">)</span>
+        <span class="n">cached_value</span> <span class="o">=</span> <span class="n">stdin_get_value</span><span class="o">.</span><span class="n">cached_stdin</span>
+    <span class="k">return</span> <span class="n">cached_value</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="parse_unified_diff"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.parse_unified_diff">[docs]</a><span class="k">def</span> <span class="nf">parse_unified_diff</span><span class="p">(</span><span class="n">diff</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="c1"># type: (str) -&gt; List[str]</span>
+    <span class="sd">&quot;&quot;&quot;Parse the unified diff passed on stdin.</span>
+
+<span class="sd">    :returns:</span>
+<span class="sd">        dictionary mapping file names to sets of line numbers</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        dict</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Allow us to not have to patch out stdin_get_value</span>
+    <span class="k">if</span> <span class="n">diff</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">diff</span> <span class="o">=</span> <span class="n">stdin_get_value</span><span class="p">()</span>
+
+    <span class="n">number_of_rows</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">current_path</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">parsed_paths</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">defaultdict</span><span class="p">(</span><span class="nb">set</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">diff</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">number_of_rows</span><span class="p">:</span>
+            <span class="c1"># NOTE(sigmavirus24): Below we use a slice because stdin may be</span>
+            <span class="c1"># bytes instead of text on Python 3.</span>
+            <span class="k">if</span> <span class="n">line</span><span class="p">[:</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;-&#39;</span><span class="p">:</span>
+                <span class="n">number_of_rows</span> <span class="o">-=</span> <span class="mi">1</span>
+            <span class="c1"># We&#39;re in the part of the diff that has lines starting with +, -,</span>
+            <span class="c1"># and &#39; &#39; to show context and the changes made. We skip these</span>
+            <span class="c1"># because the information we care about is the filename and the</span>
+            <span class="c1"># range within it.</span>
+            <span class="c1"># When number_of_rows reaches 0, we will once again start</span>
+            <span class="c1"># searching for filenames and ranges.</span>
+            <span class="k">continue</span>
+
+        <span class="c1"># NOTE(sigmavirus24): Diffs that we support look roughly like:</span>
+        <span class="c1">#    diff a/file.py b/file.py</span>
+        <span class="c1">#    ...</span>
+        <span class="c1">#    --- a/file.py</span>
+        <span class="c1">#    +++ b/file.py</span>
+        <span class="c1"># Below we&#39;re looking for that last line. Every diff tool that</span>
+        <span class="c1"># gives us this output may have additional information after</span>
+        <span class="c1"># ``b/file.py`` which it will separate with a \t, e.g.,</span>
+        <span class="c1">#    +++ b/file.py\t100644</span>
+        <span class="c1"># Which is an example that has the new file permissions/mode.</span>
+        <span class="c1"># In this case we only care about the file name.</span>
+        <span class="k">if</span> <span class="n">line</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;+++&#39;</span><span class="p">:</span>
+            <span class="n">current_path</span> <span class="o">=</span> <span class="n">line</span><span class="p">[</span><span class="mi">4</span><span class="p">:]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="c1"># NOTE(sigmavirus24): This check is for diff output from git.</span>
+            <span class="k">if</span> <span class="n">current_path</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;b/&#39;</span><span class="p">:</span>
+                <span class="n">current_path</span> <span class="o">=</span> <span class="n">current_path</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span>
+            <span class="c1"># We don&#39;t need to do anything else. We have set up our local</span>
+            <span class="c1"># ``current_path`` variable. We can skip the rest of this loop.</span>
+            <span class="c1"># The next line we will see will give us the hung information</span>
+            <span class="c1"># which is in the next section of logic.</span>
+            <span class="k">continue</span>
+
+        <span class="n">hunk_match</span> <span class="o">=</span> <span class="n">DIFF_HUNK_REGEXP</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+        <span class="c1"># NOTE(sigmavirus24): pep8/pycodestyle check for:</span>
+        <span class="c1">#    line[:3] == &#39;@@ &#39;</span>
+        <span class="c1"># But the DIFF_HUNK_REGEXP enforces that the line start with that</span>
+        <span class="c1"># So we can more simply check for a match instead of slicing and</span>
+        <span class="c1"># comparing.</span>
+        <span class="k">if</span> <span class="n">hunk_match</span><span class="p">:</span>
+            <span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">number_of_rows</span><span class="p">)</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="mi">1</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">group</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">hunk_match</span><span class="o">.</span><span class="n">groups</span><span class="p">()</span>
+            <span class="p">]</span>
+            <span class="n">parsed_paths</span><span class="p">[</span><span class="n">current_path</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="nb">range</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">row</span> <span class="o">+</span> <span class="n">number_of_rows</span><span class="p">)</span>
+            <span class="p">)</span>
+
+    <span class="c1"># We have now parsed our diff into a dictionary that looks like:</span>
+    <span class="c1">#    {&#39;file.py&#39;: set(range(10, 16), range(18, 20)), ...}</span>
+    <span class="k">return</span> <span class="n">parsed_paths</span></div>
+
+
+<div class="viewcode-block" id="is_windows"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.is_windows">[docs]</a><span class="k">def</span> <span class="nf">is_windows</span><span class="p">():</span>
+    <span class="c1"># type: () -&gt; bool</span>
+    <span class="sd">&quot;&quot;&quot;Determine if we&#39;re running on Windows.</span>
+
+<span class="sd">    :returns:</span>
+<span class="sd">        True if running on Windows, otherwise False</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;nt&#39;</span></div>
+
+
+<div class="viewcode-block" id="can_run_multiprocessing_on_windows"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.can_run_multiprocessing_on_windows">[docs]</a><span class="k">def</span> <span class="nf">can_run_multiprocessing_on_windows</span><span class="p">():</span>
+    <span class="c1"># type: () -&gt; bool</span>
+    <span class="sd">&quot;&quot;&quot;Determine if we can use multiprocessing on Windows.</span>
+
+<span class="sd">    :returns:</span>
+<span class="sd">        True if the version of Python is modern enough, otherwise False</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">is_new_enough_python27</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">11</span><span class="p">)</span>
+    <span class="n">is_new_enough_python3</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&gt;</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">is_new_enough_python27</span> <span class="ow">or</span> <span class="n">is_new_enough_python3</span></div>
+
+
+<div class="viewcode-block" id="is_using_stdin"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.is_using_stdin">[docs]</a><span class="k">def</span> <span class="nf">is_using_stdin</span><span class="p">(</span><span class="n">paths</span><span class="p">):</span>
+    <span class="c1"># type: (List[str]) -&gt; bool</span>
+    <span class="sd">&quot;&quot;&quot;Determine if we&#39;re going to read from stdin.</span>
+
+<span class="sd">    :param list paths:</span>
+<span class="sd">        The paths that we&#39;re going to check.</span>
+<span class="sd">    :returns:</span>
+<span class="sd">        True if stdin (-) is in the path, otherwise False</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s1">&#39;-&#39;</span> <span class="ow">in</span> <span class="n">paths</span></div>
+
+
+<span class="k">def</span> <span class="nf">_default_predicate</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">False</span>
+
+
+<div class="viewcode-block" id="filenames_from"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.filenames_from">[docs]</a><span class="k">def</span> <span class="nf">filenames_from</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">predicate</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="c1"># type: (str, callable) -&gt; Generator</span>
+    <span class="sd">&quot;&quot;&quot;Generate filenames from an argument.</span>
+
+<span class="sd">    :param str arg:</span>
+<span class="sd">        Parameter from the command-line.</span>
+<span class="sd">    :param callable predicate:</span>
+<span class="sd">        Predicate to use to filter out filenames. If the predicate</span>
+<span class="sd">        returns ``True`` we will exclude the filename, otherwise we</span>
+<span class="sd">        will yield it. By default, we include every filename</span>
+<span class="sd">        generated.</span>
+<span class="sd">    :returns:</span>
+<span class="sd">        Generator of paths</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">predicate</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">predicate</span> <span class="o">=</span> <span class="n">_default_predicate</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">arg</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">sub_directories</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">arg</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">predicate</span><span class="p">(</span><span class="n">root</span><span class="p">):</span>
+                <span class="n">sub_directories</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">continue</span>
+
+            <span class="c1"># NOTE(sigmavirus24): os.walk() will skip a directory if you</span>
+            <span class="c1"># remove it from the list of sub-directories.</span>
+            <span class="k">for</span> <span class="n">directory</span> <span class="ow">in</span> <span class="n">sub_directories</span><span class="p">:</span>
+                <span class="n">joined</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">directory</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">predicate</span><span class="p">(</span><span class="n">directory</span><span class="p">)</span> <span class="ow">or</span> <span class="n">predicate</span><span class="p">(</span><span class="n">joined</span><span class="p">):</span>
+                    <span class="n">sub_directories</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">directory</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+                <span class="n">joined</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">predicate</span><span class="p">(</span><span class="n">joined</span><span class="p">)</span> <span class="ow">or</span> <span class="n">predicate</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                <span class="k">yield</span> <span class="n">joined</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">arg</span></div>
+
+
+<div class="viewcode-block" id="fnmatch"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.fnmatch">[docs]</a><span class="k">def</span> <span class="nf">fnmatch</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">patterns</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="c1"># type: (str, List[str], bool) -&gt; bool</span>
+    <span class="sd">&quot;&quot;&quot;Wrap :func:`fnmatch.fnmatch` to add some functionality.</span>
+
+<span class="sd">    :param str filename:</span>
+<span class="sd">        Name of the file we&#39;re trying to match.</span>
+<span class="sd">    :param list patterns:</span>
+<span class="sd">        Patterns we&#39;re using to try to match the filename.</span>
+<span class="sd">    :param bool default:</span>
+<span class="sd">        The default value if patterns is empty</span>
+<span class="sd">    :returns:</span>
+<span class="sd">        True if a pattern matches the filename, False if it doesn&#39;t.</span>
+<span class="sd">        ``default`` if patterns is empty.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">patterns</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">default</span>
+    <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">_fnmatch</span><span class="o">.</span><span class="n">fnmatch</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">pattern</span><span class="p">)</span> <span class="k">for</span> <span class="n">pattern</span> <span class="ow">in</span> <span class="n">patterns</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="parameters_for"><a class="viewcode-back" href="../../internal/utils.html#flake8.utils.parameters_for">[docs]</a><span class="k">def</span> <span class="nf">parameters_for</span><span class="p">(</span><span class="n">plugin</span><span class="p">):</span>
+    <span class="c1"># type: (flake8.plugins.manager.Plugin) -&gt; List[str]</span>
+    <span class="sd">&quot;&quot;&quot;Return the parameters for the plugin.</span>
+
+<span class="sd">    This will inspect the plugin and return either the function parameters</span>
+<span class="sd">    if the plugin is a function or the parameters for ``__init__`` after</span>
+<span class="sd">    ``self`` if the plugin is a class.</span>
+
+<span class="sd">    :param plugin:</span>
+<span class="sd">        The internal plugin object.</span>
+<span class="sd">    :type plugin:</span>
+<span class="sd">        flake8.plugins.manager.Plugin</span>
+<span class="sd">    :returns:</span>
+<span class="sd">        Parameters to the plugin.</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        list(str)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">func</span> <span class="o">=</span> <span class="n">plugin</span><span class="o">.</span><span class="n">plugin</span>
+    <span class="n">is_class</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">inspect</span><span class="o">.</span><span class="n">isfunction</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">is_class</span><span class="p">:</span>  <span class="c1"># The plugin is a class</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">plugin</span><span class="o">.</span><span class="n">plugin</span><span class="o">.</span><span class="n">__init__</span>
+
+    <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getargspec</span><span class="p">(</span><span class="n">func</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">parameter</span><span class="o">.</span><span class="n">name</span>
+            <span class="k">for</span> <span class="n">parameter</span> <span class="ow">in</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">func</span><span class="p">)</span><span class="o">.</span><span class="n">parameters</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">parameter</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">parameter</span><span class="o">.</span><span class="n">POSITIONAL_OR_KEYWORD</span>
+        <span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">is_class</span><span class="p">:</span>
+        <span class="n">parameters</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;self&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parameters</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

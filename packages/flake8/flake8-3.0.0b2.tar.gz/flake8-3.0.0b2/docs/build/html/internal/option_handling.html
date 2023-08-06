@@ -1,0 +1,876 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Option and Configuration Handling &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../index.html"/>
+        <link rel="up" title="Exploring Flake8’s Internals" href="index.html"/>
+        <link rel="next" title="Plugin Handling" href="plugin_handling.html"/>
+        <link rel="prev" title="Built-in Formatters" href="formatters.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Exploring Flake8&#8217;s Internals</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="contributing.html">Contributing to Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html">Writing Documentation for Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releases.html">Releasing Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="start-to-finish.html">What Happens When You Run Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="checker.html">How Checks are Run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cli.html">Command Line Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="formatters.html">Built-in Formatters</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Option and Configuration Handling</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#option-management">Option Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration-file-management">Configuration File Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#aggregating-configuration-file-and-command-line-arguments">Aggregating Configuration File and Command Line Arguments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#api-documentation">API Documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="plugin_handling.html">Plugin Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html">Utility Functions</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">Exploring Flake8&#8217;s Internals</a> &raquo;</li>
+      
+    <li>Option and Configuration Handling</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/internal/option_handling.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="option-and-configuration-handling">
+<h1>Option and Configuration Handling<a class="headerlink" href="#option-and-configuration-handling" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="option-management">
+<h2>Option Management<a class="headerlink" href="#option-management" title="Permalink to this headline">¶</a></h2>
+<p>Command-line options are often also set in configuration files for <strong class="program">Flake8</strong>.
+While not all options are meant to be parsed from configuration files, many
+default options are also parsed from configuration files as well as
+most plugin options.</p>
+<p>In <strong class="program">Flake8</strong> 2, plugins received a <a class="reference external" href="https://docs.python.org/3.4/library/optparse.html#optparse.OptionParser" title="(in Python v3.4)"><code class="xref py py-class docutils literal"><span class="pre">optparse.OptionParser</span></code></a> instance and
+called <a class="reference external" href="https://docs.python.org/3.4/library/optparse.html#optparse.OptionParser.add_option" title="(in Python v3.4)"><code class="xref py py-meth docutils literal"><span class="pre">optparse.OptionParser.add_option()</span></code></a> to register options. If the
+plugin author also wanted to have that option parsed from config files they
+also had to do something like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">parser</span><span class="o">.</span><span class="n">config_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;my_config_option&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">config_options</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s1">&#39;config_opt1&#39;</span><span class="p">,</span> <span class="s1">&#39;config_opt2&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>This was previously undocumented and led to a lot of confusion about why
+registered options were not automatically parsed from configuration files.</p>
+<p>Since <strong class="program">Flake8</strong> 3 was rewritten from scratch, we decided to take a different
+approach to configuration file parsing. Instead of needing to know about an
+undocumented attribute that pep8 looks for, <strong class="program">Flake8</strong> 3 now accepts a parameter
+to <code class="docutils literal"><span class="pre">add_option</span></code>, specifically <code class="docutils literal"><span class="pre">parse_from_config</span></code> which is a boolean
+value.</p>
+<p><strong class="program">Flake8</strong> does this by creating its own abstractions on top of <a class="reference external" href="https://docs.python.org/3.4/library/optparse.html#module-optparse" title="(in Python v3.4)"><code class="xref py py-mod docutils literal"><span class="pre">optparse</span></code></a>.
+The first abstraction is the <a class="reference internal" href="#flake8.options.manager.Option" title="flake8.options.manager.Option"><code class="xref py py-class docutils literal"><span class="pre">flake8.options.manager.Option</span></code></a> class. The
+second is the <a class="reference internal" href="#flake8.options.manager.OptionManager" title="flake8.options.manager.OptionManager"><code class="xref py py-class docutils literal"><span class="pre">flake8.options.manager.OptionManager</span></code></a>. In fact, we add
+three new parameters:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">parse_from_config</span></code></li>
+<li><code class="docutils literal"><span class="pre">comma_separated_list</span></code></li>
+<li><code class="docutils literal"><span class="pre">normalize_paths</span></code></li>
+</ul>
+<p>The last two are not specifically for configuration file handling, but they
+do improve that dramatically. We found that there were options that, when
+specified in a configuration file, often necessitated being spit
+multiple lines and those options were almost always comma-separated. For
+example, let&#8217;s consider a user&#8217;s list of ignored error codes for a project:</p>
+<div class="highlight-ini"><div class="highlight"><pre><span></span><span class="k">[flake8]</span>
+<span class="na">ignore</span> <span class="o">=</span><span class="s"></span>
+<span class="s">    # Reasoning</span>
+<span class="s">    E111,</span>
+<span class="s">    # Reasoning</span>
+<span class="s">    E711,</span>
+<span class="s">    # Reasoning</span>
+<span class="s">    E712,</span>
+<span class="s">    # Reasoning</span>
+<span class="s">    E121,</span>
+<span class="s">    # Reasoning</span>
+<span class="s">    E122,</span>
+<span class="s">    # Reasoning</span>
+<span class="s">    E123,</span>
+<span class="s">    # Reasoning</span>
+<span class="s">    E131,</span>
+<span class="s">    # Reasoning</span>
+<span class="s">    E251</span>
+</pre></div>
+</div>
+<p>It makes sense here to allow users to specify the value this way, but, the
+standard libary&#8217;s <a class="reference external" href="https://docs.python.org/3.4/library/configparser.html#configparser.RawConfigParser" title="(in Python v3.4)"><code class="xref py py-class docutils literal"><span class="pre">configparser.RawConfigParser</span></code></a> class does returns a
+string that looks like</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">E111,  </span><span class="se">\n</span><span class="s2">E711,  </span><span class="se">\n</span><span class="s2">E712,  </span><span class="se">\n</span><span class="s2">E121,  </span><span class="se">\n</span><span class="s2">E122,  </span><span class="se">\n</span><span class="s2">E123,  </span><span class="se">\n</span><span class="s2">E131,  </span><span class="se">\n</span><span class="s2">E251  &quot;</span>
+</pre></div>
+</div>
+<p>This means that a typical call to <a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str.split" title="(in Python v3.4)"><code class="xref py py-meth docutils literal"><span class="pre">str.split()</span></code></a> with <code class="docutils literal"><span class="pre">','</span></code> will not be
+sufficient here. Telling <strong class="program">Flake8</strong> that something is a comma-separated list
+(e.g., <code class="docutils literal"><span class="pre">comma_separated_list=True</span></code>) will handle this for you. <strong class="program">Flake8</strong> will
+return:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="p">[</span><span class="s2">&quot;E111&quot;</span><span class="p">,</span> <span class="s2">&quot;E711&quot;</span><span class="p">,</span> <span class="s2">&quot;E712&quot;</span><span class="p">,</span> <span class="s2">&quot;E121&quot;</span><span class="p">,</span> <span class="s2">&quot;E122&quot;</span><span class="p">,</span> <span class="s2">&quot;E123&quot;</span><span class="p">,</span> <span class="s2">&quot;E131&quot;</span><span class="p">,</span> <span class="s2">&quot;E251&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Next let&#8217;s look at how users might like to specify their <code class="docutils literal"><span class="pre">exclude</span></code> list.
+Presently OpenStack&#8217;s Nova project has this line in their <a class="reference external" href="https://github.com/openstack/nova/blob/3eb190c4cfc0eefddac6c2cc1b94a699fb1687f8/tox.ini#L155">tox.ini</a>:</p>
+<div class="highlight-ini"><div class="highlight"><pre><span></span><span class="na">exclude</span> <span class="o">=</span> <span class="s">.venv,.git,.tox,dist,doc,*openstack/common/*,*lib/python*,*egg,build,tools/xenserver*,releasenotes</span>
+</pre></div>
+</div>
+<p>We think we can all agree that this would be easier to read like this:</p>
+<div class="highlight-ini"><div class="highlight"><pre><span></span><span class="na">exclude</span> <span class="o">=</span><span class="s"></span>
+<span class="s">    .venv,</span>
+<span class="s">    .git,</span>
+<span class="s">    .tox,</span>
+<span class="s">    dist,</span>
+<span class="s">    doc,</span>
+<span class="s">    *openstack/common/*,</span>
+<span class="s">    *lib/python*,</span>
+<span class="s">    *egg,</span>
+<span class="s">    build,</span>
+<span class="s">    tools/xenserver*,</span>
+<span class="s">    releasenotes</span>
+</pre></div>
+</div>
+<p>In this case, since these are actually intended to be paths, we would specify
+both <code class="docutils literal"><span class="pre">comma_separated_list=True</span></code> and <code class="docutils literal"><span class="pre">normalize_paths=True</span></code> because we
+want the paths to be provided to us with some consistency (either all absolute
+paths or not).</p>
+<p>Now let&#8217;s look at how this will actually be used. Most plugin developers
+will receive an instance of <a class="reference internal" href="#flake8.options.manager.OptionManager" title="flake8.options.manager.OptionManager"><code class="xref py py-class docutils literal"><span class="pre">OptionManager</span></code></a> so
+to ease the transition we kept the same API as the
+<a class="reference external" href="https://docs.python.org/3.4/library/optparse.html#optparse.OptionParser" title="(in Python v3.4)"><code class="xref py py-class docutils literal"><span class="pre">optparse.OptionParser</span></code></a> object. The only difference is that
+<a class="reference internal" href="#flake8.options.manager.OptionManager.add_option" title="flake8.options.manager.OptionManager.add_option"><code class="xref py py-meth docutils literal"><span class="pre">add_option()</span></code></a> accepts the three
+extra arguments we highlighted above.</p>
+</div>
+<div class="section" id="configuration-file-management">
+<h2>Configuration File Management<a class="headerlink" href="#configuration-file-management" title="Permalink to this headline">¶</a></h2>
+<p>In <strong class="program">Flake8</strong> 2, configuration file discovery and management was handled by
+pep8.  In pep8&#8217;s 1.6 release series, it drastically broke how discovery and
+merging worked (as a result of trying to improve it). To avoid a dependency
+breaking <strong class="program">Flake8</strong> again in the future, we have created our own discovery and
+management.
+As part of managing this ourselves, we decided to change management/discovery
+for 3.0.0. We have done the following:</p>
+<ul class="simple">
+<li>User files (files stored in a user&#8217;s home directory or in the XDG directory
+inside their home directory) are the first files read. For example, if the
+user has a <code class="docutils literal"><span class="pre">~/.flake8</span></code> file, we will read that first.</li>
+<li>Project files (files stored in the current directory) are read next and
+merged on top of the user file. In other words, configuration in project
+files takes precedence over configuration in user files.</li>
+<li><strong>New in 3.0.0</strong> The user can specify <code class="docutils literal"><span class="pre">--append-config</span> <span class="pre">&lt;path-to-file&gt;</span></code>
+repeatedly to include extra configuration files that should be read and
+take precedence over user and project files.</li>
+<li><strong>New in 3.0.0</strong> The user can specify <code class="docutils literal"><span class="pre">--config</span> <span class="pre">&lt;path-to-file&gt;</span></code> to so this
+file is the only configuration file used. This is a change from <strong class="program">Flake8</strong> 2
+where pep8 would simply merge this configuration file into the configuration
+generated by user and project files (where this takes precedence).</li>
+<li><strong>New in 3.0.0</strong> The user can specify <code class="docutils literal"><span class="pre">--isolated</span></code> to disable
+configuration via discovered configuration files.</li>
+</ul>
+<p>To facilitate the configuration file management, we&#8217;ve taken a different
+approach to discovery and management of files than pep8. In pep8 1.5, 1.6, and
+1.7 configuration discovery and management was centralized in <a class="reference external" href="https://github.com/PyCQA/pep8/blob/b8088a2b6bc5b76bece174efad877f764529bc74/pep8.py#L1981..L2047">66 lines of
+very terse python</a> which was confusing and not very explicit. The terseness
+of this function (<strong class="program">Flake8</strong>&#8216;s authors believe) caused the confusion and
+problems with pep8&#8217;s 1.6 series. As such, <strong class="program">Flake8</strong> has separated out
+discovery, management, and merging into a module to make reasoning about each
+of these pieces easier and more explicit (as well as easier to test).</p>
+<p>Configuration file discovery is managed by the
+<a class="reference internal" href="#flake8.options.config.ConfigFileFinder" title="flake8.options.config.ConfigFileFinder"><code class="xref py py-class docutils literal"><span class="pre">ConfigFileFinder</span></code></a> object. This object needs to
+know information about the program&#8217;s name, any extra arguments passed to it,
+and any configuration files that should be appended to the list of discovered
+files. It provides methods for finding the files and similiar methods for
+parsing those fles. For example, it provides
+<a class="reference internal" href="#flake8.options.config.ConfigFileFinder.local_config_files" title="flake8.options.config.ConfigFileFinder.local_config_files"><code class="xref py py-meth docutils literal"><span class="pre">local_config_files()</span></code></a> to find
+known local config files (and append the extra configuration files) and it
+also provides <a class="reference internal" href="#flake8.options.config.ConfigFileFinder.local_configs" title="flake8.options.config.ConfigFileFinder.local_configs"><code class="xref py py-meth docutils literal"><span class="pre">local_configs()</span></code></a>
+to parse those configuration files.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><code class="docutils literal"><span class="pre">local_config_files</span></code> also filters out non-existent files.</p>
+</div>
+<p>Configuration file merging and managemnt is controlled by the
+<a class="reference internal" href="#flake8.options.config.MergedConfigParser" title="flake8.options.config.MergedConfigParser"><code class="xref py py-class docutils literal"><span class="pre">MergedConfigParser</span></code></a>. This requires the instance
+of <a class="reference internal" href="#flake8.options.manager.OptionManager" title="flake8.options.manager.OptionManager"><code class="xref py py-class docutils literal"><span class="pre">OptionManager</span></code></a> that the program is using,
+the list of appended config files, and the list of extra arguments. This
+object is currently the sole user of the
+<a class="reference internal" href="#flake8.options.config.ConfigFileFinder" title="flake8.options.config.ConfigFileFinder"><code class="xref py py-class docutils literal"><span class="pre">ConfigFileFinder</span></code></a> object. It appropriately
+initializes the object and uses it in each of</p>
+<ul class="simple">
+<li><a class="reference internal" href="#flake8.options.config.MergedConfigParser.parse_cli_config" title="flake8.options.config.MergedConfigParser.parse_cli_config"><code class="xref py py-meth docutils literal"><span class="pre">parse_cli_config()</span></code></a></li>
+<li><a class="reference internal" href="#flake8.options.config.MergedConfigParser.parse_local_config" title="flake8.options.config.MergedConfigParser.parse_local_config"><code class="xref py py-meth docutils literal"><span class="pre">parse_local_config()</span></code></a></li>
+<li><a class="reference internal" href="#flake8.options.config.MergedConfigParser.parse_user_config" title="flake8.options.config.MergedConfigParser.parse_user_config"><code class="xref py py-meth docutils literal"><span class="pre">parse_user_config()</span></code></a></li>
+</ul>
+<p>Finally,
+<a class="reference internal" href="#flake8.options.config.MergedConfigParser.merge_user_and_local_config" title="flake8.options.config.MergedConfigParser.merge_user_and_local_config"><code class="xref py py-meth docutils literal"><span class="pre">merge_user_and_local_config()</span></code></a>
+takes the user and local configuration files that are parsed by
+<a class="reference internal" href="#flake8.options.config.MergedConfigParser.parse_local_config" title="flake8.options.config.MergedConfigParser.parse_local_config"><code class="xref py py-meth docutils literal"><span class="pre">parse_local_config()</span></code></a> and
+<a class="reference internal" href="#flake8.options.config.MergedConfigParser.parse_user_config" title="flake8.options.config.MergedConfigParser.parse_user_config"><code class="xref py py-meth docutils literal"><span class="pre">parse_user_config()</span></code></a>. The
+main usage of the <code class="docutils literal"><span class="pre">MergedConfigParser</span></code> is in
+<a class="reference internal" href="#flake8.options.aggregator.aggregate_options" title="flake8.options.aggregator.aggregate_options"><code class="xref py py-func docutils literal"><span class="pre">aggregate_options()</span></code></a>.</p>
+</div>
+<div class="section" id="aggregating-configuration-file-and-command-line-arguments">
+<h2>Aggregating Configuration File and Command Line Arguments<a class="headerlink" href="#aggregating-configuration-file-and-command-line-arguments" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference internal" href="#flake8.options.aggregator.aggregate_options" title="flake8.options.aggregator.aggregate_options"><code class="xref py py-func docutils literal"><span class="pre">aggregate_options()</span></code></a> accepts an instance of
+<code class="xref py py-class docutils literal"><span class="pre">OptionManager</span></code> and does the work to parse the
+command-line arguments passed by the user necessary for creating an instance
+of <a class="reference internal" href="#flake8.options.config.MergedConfigParser" title="flake8.options.config.MergedConfigParser"><code class="xref py py-class docutils literal"><span class="pre">MergedConfigParser</span></code></a>.</p>
+<p>After parsing the configuration file, we determine the default ignore list. We
+use the defaults from the OptionManager and update those with the parsed
+configuration files. Finally we parse the user-provided options one last time
+using the option defaults and configuration file values as defaults. The
+parser merges on the command-line specified arguments for us so we have our
+final, definitive, aggregated options.</p>
+</div>
+<div class="section" id="api-documentation">
+<h2>API Documentation<a class="headerlink" href="#api-documentation" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="flake8.options.aggregator.aggregate_options">
+<code class="descclassname">flake8.options.aggregator.</code><code class="descname">aggregate_options</code><span class="sig-paren">(</span><em>manager</em>, <em>arglist=None</em>, <em>values=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/aggregator.html#aggregate_options"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.aggregator.aggregate_options" title="Permalink to this definition">¶</a></dt>
+<dd><p>Aggregate and merge CLI and config file options.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>manager</strong> (<em>flake8.option.manager.OptionManager</em>) &#8211; The instance of the OptionManager that we&#8217;re presently using.</li>
+<li><strong>arglist</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#list" title="(in Python v3.4)"><em>list</em></a>) &#8211; The list of arguments to pass to <code class="docutils literal"><span class="pre">manager.parse_args</span></code>. In most cases
+this will be None so <code class="docutils literal"><span class="pre">parse_args</span></code> uses <code class="docutils literal"><span class="pre">sys.argv</span></code>. This is mostly
+available to make testing easier.</li>
+<li><strong>values</strong> (<em>optparse.Values</em>) &#8211; Previously parsed set of parsed options.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">Tuple of the parsed options and extra arguments returned by
+<code class="docutils literal"><span class="pre">manager.parse_args</span></code>.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">tuple(optparse.Values, list)</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="flake8.options.manager.Option">
+<em class="property">class </em><code class="descclassname">flake8.options.manager.</code><code class="descname">Option</code><span class="sig-paren">(</span><em>short_option_name=None</em>, <em>long_option_name=None</em>, <em>action=None</em>, <em>default=None</em>, <em>type=None</em>, <em>dest=None</em>, <em>nargs=None</em>, <em>const=None</em>, <em>choices=None</em>, <em>callback=None</em>, <em>callback_args=None</em>, <em>callback_kwargs=None</em>, <em>help=None</em>, <em>metavar=None</em>, <em>parse_from_config=False</em>, <em>comma_separated_list=False</em>, <em>normalize_paths=False</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#Option"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.Option" title="Permalink to this definition">¶</a></dt>
+<dd><p>Our wrapper around an optparse.Option object to add features.</p>
+<dl class="method">
+<dt id="flake8.options.manager.Option.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>short_option_name=None</em>, <em>long_option_name=None</em>, <em>action=None</em>, <em>default=None</em>, <em>type=None</em>, <em>dest=None</em>, <em>nargs=None</em>, <em>const=None</em>, <em>choices=None</em>, <em>callback=None</em>, <em>callback_args=None</em>, <em>callback_kwargs=None</em>, <em>help=None</em>, <em>metavar=None</em>, <em>parse_from_config=False</em>, <em>comma_separated_list=False</em>, <em>normalize_paths=False</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#Option.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.Option.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize an Option instance wrapping optparse.Option.</p>
+<p>The following are all passed directly through to optparse.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>short_option_name</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; The short name of the option (e.g., <code class="docutils literal"><span class="pre">-x</span></code>). This will be the
+first argument passed to <code class="xref py py-class docutils literal"><span class="pre">Option</span></code>.</li>
+<li><strong>long_option_name</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; The long name of the option (e.g., <code class="docutils literal"><span class="pre">--xtra-long-option</span></code>). This
+will be the second argument passed to <code class="xref py py-class docutils literal"><span class="pre">Option</span></code>.</li>
+<li><strong>action</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Any action allowed by <a class="reference external" href="https://docs.python.org/3.4/library/optparse.html#module-optparse" title="(in Python v3.4)"><code class="xref py py-mod docutils literal"><span class="pre">optparse</span></code></a>.</li>
+<li><strong>default</strong> &#8211; Default value of the option.</li>
+<li><strong>type</strong> &#8211; Any type allowed by <a class="reference external" href="https://docs.python.org/3.4/library/optparse.html#module-optparse" title="(in Python v3.4)"><code class="xref py py-mod docutils literal"><span class="pre">optparse</span></code></a>.</li>
+<li><strong>dest</strong> &#8211; Attribute name to store parsed option value as.</li>
+<li><strong>nargs</strong> &#8211; Number of arguments to parse for this option.</li>
+<li><strong>const</strong> &#8211; Constant value to store on a common destination. Usually used in
+conjuntion with <code class="docutils literal"><span class="pre">action=&quot;store_const&quot;</span></code>.</li>
+<li><strong>choices</strong> (<em>iterable</em>) &#8211; Possible values for the option.</li>
+<li><strong>callback</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/functions.html#callable" title="(in Python v3.4)"><em>callable</em></a>) &#8211; Callback used if the action is <code class="docutils literal"><span class="pre">&quot;callback&quot;</span></code>.</li>
+<li><strong>callback_args</strong> (<em>iterable</em>) &#8211; Additional positional arguments to the callback callable.</li>
+<li><strong>callback_kwargs</strong> (<em>dictionary</em>) &#8211; Keyword arguments to the callback callable.</li>
+<li><strong>help</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Help text displayed in the usage information.</li>
+<li><strong>metavar</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Name to use instead of the long option name for help text.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The following parameters are for Flake8&#8217;s option handling alone.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>parse_from_config</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/functions.html#bool" title="(in Python v3.4)"><em>bool</em></a>) &#8211; Whether or not this option should be parsed out of config files.</li>
+<li><strong>comma_separated_list</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/functions.html#bool" title="(in Python v3.4)"><em>bool</em></a>) &#8211; Whether the option is a comma separated list when parsing from a
+config file.</li>
+<li><strong>normalize_paths</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/functions.html#bool" title="(in Python v3.4)"><em>bool</em></a>) &#8211; Whether the option is expecting a path or list of paths and should
+attempt to normalize the paths to absolute paths.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.Option.normalize">
+<code class="descname">normalize</code><span class="sig-paren">(</span><em>value</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#Option.normalize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.Option.normalize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Normalize the value based on the option configuration.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.Option.to_optparse">
+<code class="descname">to_optparse</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#Option.to_optparse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.Option.to_optparse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a Flake8 Option to an optparse Option.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="flake8.options.manager.OptionManager">
+<em class="property">class </em><code class="descclassname">flake8.options.manager.</code><code class="descname">OptionManager</code><span class="sig-paren">(</span><em>prog=None</em>, <em>version=None</em>, <em>usage='%prog [options] file file ...'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager" title="Permalink to this definition">¶</a></dt>
+<dd><p>Manage Options and OptionParser while adding post-processing.</p>
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>prog=None</em>, <em>version=None</em>, <em>usage='%prog [options] file file ...'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize an instance of an OptionManager.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>prog</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Name of the actual program (e.g., flake8).</li>
+<li><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Version string for the program.</li>
+<li><strong>usage</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Basic usage string used by the OptionParser.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.manager.OptionManager.__weakref__">
+<code class="descname">__weakref__</code><a class="headerlink" href="#flake8.options.manager.OptionManager.__weakref__" title="Permalink to this definition">¶</a></dt>
+<dd><p>list of weak references to the object (if defined)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.add_option">
+<code class="descname">add_option</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.add_option"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.add_option" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create and register a new option.</p>
+<p>See parameters for <a class="reference internal" href="#flake8.options.manager.Option" title="flake8.options.manager.Option"><code class="xref py py-class docutils literal"><span class="pre">Option</span></code></a> for
+acceptable arguments to this method.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><code class="docutils literal"><span class="pre">short_option_name</span></code> and <code class="docutils literal"><span class="pre">long_option_name</span></code> may be specified
+positionally as they are with optparse normally.</p>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.extend_default_ignore">
+<code class="descname">extend_default_ignore</code><span class="sig-paren">(</span><em>error_codes</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.extend_default_ignore"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.extend_default_ignore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extend the default ignore list with the error codes provided.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>error_codes</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#list" title="(in Python v3.4)"><em>list</em></a>) &#8211; List of strings that are the error/warning codes with which to
+extend the default ignore list.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="staticmethod">
+<dt id="flake8.options.manager.OptionManager.format_plugin">
+<em class="property">static </em><code class="descname">format_plugin</code><span class="sig-paren">(</span><em>plugin_tuple</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.format_plugin"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.format_plugin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a plugin tuple into a dictionary mapping name to value.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.generate_epilog">
+<code class="descname">generate_epilog</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.generate_epilog"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.generate_epilog" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an epilog with the version and name of each of plugin.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.generate_versions">
+<code class="descname">generate_versions</code><span class="sig-paren">(</span><em>format_str='%(name)s: %(version)s'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.generate_versions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.generate_versions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a comma-separated list of versions of plugins.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.parse_args">
+<code class="descname">parse_args</code><span class="sig-paren">(</span><em>args=None</em>, <em>values=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.parse_args"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.parse_args" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simple proxy to calling the OptionParser&#8217;s parse_args method.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.register_plugin">
+<code class="descname">register_plugin</code><span class="sig-paren">(</span><em>name</em>, <em>version</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.register_plugin"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.register_plugin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Register a plugin relying on the OptionManager.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; The name of the checker itself. This will be the <code class="docutils literal"><span class="pre">name</span></code>
+attribute of the class or function loaded from the entry-point.</li>
+<li><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; The version of the checker that we&#8217;re using.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.remove_from_default_ignore">
+<code class="descname">remove_from_default_ignore</code><span class="sig-paren">(</span><em>error_codes</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.remove_from_default_ignore"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.remove_from_default_ignore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove specified error codes from the default ignore list.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>error_codes</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#list" title="(in Python v3.4)"><em>list</em></a>) &#8211; List of strings that are the error/warning codes to attempt to
+remove from the extended default ignore list.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.manager.OptionManager.update_version_string">
+<code class="descname">update_version_string</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/manager.html#OptionManager.update_version_string"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.manager.OptionManager.update_version_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the flake8 version string.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="flake8.options.config.ConfigFileFinder">
+<em class="property">class </em><code class="descclassname">flake8.options.config.</code><code class="descname">ConfigFileFinder</code><span class="sig-paren">(</span><em>program_name</em>, <em>args</em>, <em>extra_config_files</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#ConfigFileFinder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.ConfigFileFinder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Encapsulate the logic for finding and reading config files.</p>
+<dl class="method">
+<dt id="flake8.options.config.ConfigFileFinder.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>program_name</em>, <em>args</em>, <em>extra_config_files</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#ConfigFileFinder.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.ConfigFileFinder.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize object to find config files.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>program_name</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Name of the current program (e.g., flake8).</li>
+<li><strong>args</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#list" title="(in Python v3.4)"><em>list</em></a>) &#8211; The extra arguments passed on the command-line.</li>
+<li><strong>extra_config_files</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#list" title="(in Python v3.4)"><em>list</em></a>) &#8211; Extra configuration files specified by the user to read.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.ConfigFileFinder.__weakref__">
+<code class="descname">__weakref__</code><a class="headerlink" href="#flake8.options.config.ConfigFileFinder.__weakref__" title="Permalink to this definition">¶</a></dt>
+<dd><p>list of weak references to the object (if defined)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.ConfigFileFinder.cli_config">
+<code class="descname">cli_config</code><span class="sig-paren">(</span><em>files</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#ConfigFileFinder.cli_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.ConfigFileFinder.cli_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read and parse the config file specified on the command-line.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.ConfigFileFinder.generate_possible_local_files">
+<code class="descname">generate_possible_local_files</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#ConfigFileFinder.generate_possible_local_files"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.ConfigFileFinder.generate_possible_local_files" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find and generate all local config files.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.ConfigFileFinder.local_config_files">
+<code class="descname">local_config_files</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#ConfigFileFinder.local_config_files"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.ConfigFileFinder.local_config_files" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find all local config files which actually exist.</p>
+<p>Filter results from
+<code class="xref py py-meth docutils literal"><span class="pre">generate_possible_local_files()</span></code> based
+on whether the filename exists or not.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">List of files that exist that are local project config files with
+extra config files appended to that list (which also exist).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">[str]</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.ConfigFileFinder.local_configs">
+<code class="descname">local_configs</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#ConfigFileFinder.local_configs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.ConfigFileFinder.local_configs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse all local config files into one config object.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.ConfigFileFinder.user_config">
+<code class="descname">user_config</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#ConfigFileFinder.user_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.ConfigFileFinder.user_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse the user config file into a config object.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.ConfigFileFinder.user_config_file">
+<code class="descname">user_config_file</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#ConfigFileFinder.user_config_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.ConfigFileFinder.user_config_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the user-level config file.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="flake8.options.config.MergedConfigParser">
+<em class="property">class </em><code class="descclassname">flake8.options.config.</code><code class="descname">MergedConfigParser</code><span class="sig-paren">(</span><em>option_manager</em>, <em>extra_config_files=None</em>, <em>args=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#MergedConfigParser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.MergedConfigParser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Encapsulate merging different types of configuration files.</p>
+<p>This parses out the options registered that were specified in the
+configuration files, handles extra configuration files, and returns
+dictionaries with the parsed values.</p>
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.GETBOOL_ACTIONS">
+<code class="descname">GETBOOL_ACTIONS</code><em class="property"> = {'store_false', 'store_true'}</em><a class="headerlink" href="#flake8.options.config.MergedConfigParser.GETBOOL_ACTIONS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set of actions that should use the
+<code class="xref py py-meth docutils literal"><span class="pre">getbool()</span></code> method.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.GETINT_TYPES">
+<code class="descname">GETINT_TYPES</code><em class="property"> = {'count', 'int'}</em><a class="headerlink" href="#flake8.options.config.MergedConfigParser.GETINT_TYPES" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set of types that should use the
+<code class="xref py py-meth docutils literal"><span class="pre">getint()</span></code> method.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.MergedConfigParser.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>option_manager</em>, <em>extra_config_files=None</em>, <em>args=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#MergedConfigParser.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.MergedConfigParser.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize the MergedConfigParser instance.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>option_manager</strong> (<em>flake8.option.manager.OptionManager</em>) &#8211; Initialized OptionManager.</li>
+<li><strong>extra_config_files</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#list" title="(in Python v3.4)"><em>list</em></a>) &#8211; List of extra config files to parse.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name" colspan="2">Params list args:</th></tr>
+<tr class="field-even field"><td>&nbsp;</td><td class="field-body"><p class="first last">The extra parsed arguments from the command-line.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.__weakref__">
+<code class="descname">__weakref__</code><a class="headerlink" href="#flake8.options.config.MergedConfigParser.__weakref__" title="Permalink to this definition">¶</a></dt>
+<dd><p>list of weak references to the object (if defined)</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.args">
+<code class="descname">args</code><em class="property"> = None</em><a class="headerlink" href="#flake8.options.config.MergedConfigParser.args" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parsed extra arguments</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.config_finder">
+<code class="descname">config_finder</code><em class="property"> = None</em><a class="headerlink" href="#flake8.options.config.MergedConfigParser.config_finder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Our instance of our <code class="xref py py-class docutils literal"><span class="pre">ConfigFileFinder</span></code></p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.config_options">
+<code class="descname">config_options</code><em class="property"> = None</em><a class="headerlink" href="#flake8.options.config.MergedConfigParser.config_options" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mapping of configuration option names to
+<a class="reference internal" href="#flake8.options.manager.Option" title="flake8.options.manager.Option"><code class="xref py py-class docutils literal"><span class="pre">Option</span></code></a> instances</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.extra_config_files">
+<code class="descname">extra_config_files</code><em class="property"> = None</em><a class="headerlink" href="#flake8.options.config.MergedConfigParser.extra_config_files" title="Permalink to this definition">¶</a></dt>
+<dd><p>List of extra config files</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.MergedConfigParser.is_configured_by">
+<code class="descname">is_configured_by</code><span class="sig-paren">(</span><em>config</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#MergedConfigParser.is_configured_by"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.MergedConfigParser.is_configured_by" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the specified config parser has an appropriate section.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.MergedConfigParser.merge_user_and_local_config">
+<code class="descname">merge_user_and_local_config</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#MergedConfigParser.merge_user_and_local_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.MergedConfigParser.merge_user_and_local_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Merge the parsed user and local configuration files.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Dictionary of the parsed and merged configuration options.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#dict" title="(in Python v3.4)">dict</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.option_manager">
+<code class="descname">option_manager</code><em class="property"> = None</em><a class="headerlink" href="#flake8.options.config.MergedConfigParser.option_manager" title="Permalink to this definition">¶</a></dt>
+<dd><p>Our instance of flake8.options.manager.OptionManager</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.MergedConfigParser.parse">
+<code class="descname">parse</code><span class="sig-paren">(</span><em>cli_config=None</em>, <em>isolated=False</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#MergedConfigParser.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.MergedConfigParser.parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse and return the local and user config files.</p>
+<p>First this copies over the parsed local configuration and then
+iterates over the options in the user configuration and sets them if
+they were not set by the local configuration file.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>cli_config</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Value of &#8211;config when specified at the command-line. Overrides
+all other config files.</li>
+<li><strong>isolated</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/functions.html#bool" title="(in Python v3.4)"><em>bool</em></a>) &#8211; Determines if we should parse configuration files at all or not.
+If running in isolated mode, we ignore all configuration files</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">Dictionary of parsed configuration options</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#dict" title="(in Python v3.4)">dict</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.MergedConfigParser.parse_cli_config">
+<code class="descname">parse_cli_config</code><span class="sig-paren">(</span><em>config_path</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#MergedConfigParser.parse_cli_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.MergedConfigParser.parse_cli_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse and return the file specified by &#8211;config.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.MergedConfigParser.parse_local_config">
+<code class="descname">parse_local_config</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#MergedConfigParser.parse_local_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.MergedConfigParser.parse_local_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse and return the local configuration files.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.options.config.MergedConfigParser.parse_user_config">
+<code class="descname">parse_user_config</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/options/config.html#MergedConfigParser.parse_user_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.options.config.MergedConfigParser.parse_user_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse and return the user configuration files.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.options.config.MergedConfigParser.program_name">
+<code class="descname">program_name</code><em class="property"> = None</em><a class="headerlink" href="#flake8.options.config.MergedConfigParser.program_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>The prog value for the cli parser</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="plugin_handling.html" class="btn btn-neutral float-right" title="Plugin Handling" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="formatters.html" class="btn btn-neutral" title="Built-in Formatters" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

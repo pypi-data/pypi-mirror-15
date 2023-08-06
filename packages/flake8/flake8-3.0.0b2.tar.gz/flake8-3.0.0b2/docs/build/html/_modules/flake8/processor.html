@@ -1,0 +1,633 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>flake8.processor &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../../index.html"/>
+        <link rel="up" title="Module code" href="../index.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      
+    <li>flake8.processor</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for flake8.processor</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Module containing our file processor that tokenizes a file for checks.&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">contextlib</span>
+<span class="kn">import</span> <span class="nn">io</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">tokenize</span>
+
+<span class="kn">import</span> <span class="nn">flake8</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">defaults</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">exceptions</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">utils</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+<span class="n">PyCF_ONLY_AST</span> <span class="o">=</span> <span class="mi">1024</span>
+<span class="n">NEWLINE</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="n">tokenize</span><span class="o">.</span><span class="n">NL</span><span class="p">,</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">NEWLINE</span><span class="p">])</span>
+<span class="c1"># Work around Python &lt; 2.6 behaviour, which does not generate NL after</span>
+<span class="c1"># a comment which is on a line by itself.</span>
+<span class="n">COMMENT_WITH_NL</span> <span class="o">=</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">generate_tokens</span><span class="p">([</span><span class="s1">&#39;#</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">)</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">None</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;#</span><span class="se">\n</span><span class="s1">&#39;</span>
+
+<span class="n">SKIP_TOKENS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="n">tokenize</span><span class="o">.</span><span class="n">NL</span><span class="p">,</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">NEWLINE</span><span class="p">,</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">INDENT</span><span class="p">,</span>
+                         <span class="n">tokenize</span><span class="o">.</span><span class="n">DEDENT</span><span class="p">])</span>
+
+
+<div class="viewcode-block" id="FileProcessor"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor">[docs]</a><span class="k">class</span> <span class="nc">FileProcessor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Processes a file and holdes state.</span>
+
+<span class="sd">    This processes a file by generating tokens, logical and physical lines,</span>
+<span class="sd">    and AST trees. This also provides a way of passing state about the file</span>
+<span class="sd">    to checks expecting that state. Any public attribute on this object can</span>
+<span class="sd">    be requested by a plugin. The known public attributes are:</span>
+
+<span class="sd">    - :attr:`blank_before`</span>
+<span class="sd">    - :attr:`blank_lines`</span>
+<span class="sd">    - :attr:`checker_state`</span>
+<span class="sd">    - :attr:`indect_char`</span>
+<span class="sd">    - :attr:`indent_level`</span>
+<span class="sd">    - :attr:`line_number`</span>
+<span class="sd">    - :attr:`logical_line`</span>
+<span class="sd">    - :attr:`max_line_length`</span>
+<span class="sd">    - :attr:`multiline`</span>
+<span class="sd">    - :attr:`noqa`</span>
+<span class="sd">    - :attr:`previous_indent_level`</span>
+<span class="sd">    - :attr:`previous_logical`</span>
+<span class="sd">    - :attr:`tokens`</span>
+<span class="sd">    - :attr:`total_lines`</span>
+<span class="sd">    - :attr:`verbose`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">NOQA_FILE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">r&#39;\s*# flake8[:=]\s*noqa&#39;</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">I</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">lines</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialice our file processor.</span>
+
+<span class="sd">        :param str filename:</span>
+<span class="sd">            Name of the file to process</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filename</span> <span class="o">=</span> <span class="n">filename</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lines</span> <span class="o">=</span> <span class="n">lines</span>
+        <span class="k">if</span> <span class="n">lines</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lines</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_lines</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">strip_utf_bom</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span>
+
+        <span class="c1"># Defaults for public attributes</span>
+        <span class="c1">#: Number of preceding blank lines</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">blank_before</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1">#: Number of blank lines</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">blank_lines</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1">#: Checker states for each plugin?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_checker_states</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1">#: Current checker state</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">checker_state</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: User provided option for hang closing</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hang_closing</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">hang_closing</span>
+        <span class="c1">#: Character used for indentation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent_char</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: Current level of indentation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent_level</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1">#: Line number in the file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">line_number</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1">#: Current logical line</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logical_line</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="c1">#: Maximum line length as configured by the user</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_line_length</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">max_line_length</span>
+        <span class="c1">#: Whether the current physical line is multiline</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">multiline</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="c1">#: Whether or not we&#39;re observing NoQA</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">noqa</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="c1">#: Previous level of indentation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">previous_indent_level</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1">#: Previous logical line</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">previous_logical</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="c1">#: Current set of tokens</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1">#: Total number of lines in the file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_lines</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">)</span>
+        <span class="c1">#: Verbosity level of Flake8</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span>
+        <span class="c1">#: Statistics dictionary</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">statistics</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;logical lines&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="nd">@contextlib.contextmanager</span>
+<div class="viewcode-block" id="FileProcessor.inside_multiline"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.inside_multiline">[docs]</a>    <span class="k">def</span> <span class="nf">inside_multiline</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">line_number</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Context-manager to toggle the multiline attribute.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">line_number</span> <span class="o">=</span> <span class="n">line_number</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">multiline</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">yield</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">multiline</span> <span class="o">=</span> <span class="bp">False</span></div>
+
+<div class="viewcode-block" id="FileProcessor.reset_blank_before"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.reset_blank_before">[docs]</a>    <span class="k">def</span> <span class="nf">reset_blank_before</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Reset the blank_before attribute to zero.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">blank_before</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="FileProcessor.delete_first_token"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.delete_first_token">[docs]</a>    <span class="k">def</span> <span class="nf">delete_first_token</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Delete the first token in the list of tokens.&quot;&quot;&quot;</span>
+        <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="FileProcessor.visited_new_blank_line"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.visited_new_blank_line">[docs]</a>    <span class="k">def</span> <span class="nf">visited_new_blank_line</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Note that we visited a new blank line.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">blank_lines</span> <span class="o">+=</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="FileProcessor.update_state"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.update_state">[docs]</a>    <span class="k">def</span> <span class="nf">update_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mapping</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Update the indent level based on the logical line mapping.&quot;&quot;&quot;</span>
+        <span class="p">(</span><span class="n">start_row</span><span class="p">,</span> <span class="n">start_col</span><span class="p">)</span> <span class="o">=</span> <span class="n">mapping</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">start_line</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="n">start_row</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent_level</span> <span class="o">=</span> <span class="n">expand_indent</span><span class="p">(</span><span class="n">start_line</span><span class="p">[:</span><span class="n">start_col</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">blank_before</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">blank_lines</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">blank_before</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">blank_lines</span></div>
+
+<div class="viewcode-block" id="FileProcessor.update_checker_state_for"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.update_checker_state_for">[docs]</a>    <span class="k">def</span> <span class="nf">update_checker_state_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plugin</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Update the checker_state attribute for the plugin.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s1">&#39;checker_state&#39;</span> <span class="ow">in</span> <span class="n">plugin</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">checker_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_checker_states</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                <span class="n">plugin</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="p">{}</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="FileProcessor.next_logical_line"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.next_logical_line">[docs]</a>    <span class="k">def</span> <span class="nf">next_logical_line</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Record the previous logical line.</span>
+
+<span class="sd">        This also resets the tokens list and the blank_lines count.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">logical_line</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">previous_indent_level</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent_level</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">previous_logical</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logical_line</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">blank_lines</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+<div class="viewcode-block" id="FileProcessor.build_logical_line_tokens"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.build_logical_line_tokens">[docs]</a>    <span class="k">def</span> <span class="nf">build_logical_line_tokens</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Build the mapping, comments, and logical line lists.&quot;&quot;&quot;</span>
+        <span class="n">logical</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">comments</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">length</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">previous_row</span> <span class="o">=</span> <span class="n">previous_column</span> <span class="o">=</span> <span class="n">mapping</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">for</span> <span class="n">token_type</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token_type</span> <span class="ow">in</span> <span class="n">SKIP_TOKENS</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">mapping</span><span class="p">:</span>
+                <span class="n">mapping</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="n">start</span><span class="p">)]</span>
+            <span class="k">if</span> <span class="n">token_type</span> <span class="o">==</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">COMMENT</span><span class="p">:</span>
+                <span class="n">comments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">token_type</span> <span class="o">==</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">STRING</span><span class="p">:</span>
+                <span class="n">text</span> <span class="o">=</span> <span class="n">mutate_string</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">previous_row</span><span class="p">:</span>
+                <span class="p">(</span><span class="n">start_row</span><span class="p">,</span> <span class="n">start_column</span><span class="p">)</span> <span class="o">=</span> <span class="n">start</span>
+                <span class="k">if</span> <span class="n">previous_row</span> <span class="o">!=</span> <span class="n">start_row</span><span class="p">:</span>
+                    <span class="n">row_index</span> <span class="o">=</span> <span class="n">previous_row</span> <span class="o">-</span> <span class="mi">1</span>
+                    <span class="n">column_index</span> <span class="o">=</span> <span class="n">previous_column</span> <span class="o">-</span> <span class="mi">1</span>
+                    <span class="n">previous_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="n">row_index</span><span class="p">][</span><span class="n">column_index</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">previous_text</span> <span class="o">==</span> <span class="s1">&#39;,&#39;</span> <span class="ow">or</span>
+                            <span class="p">(</span><span class="n">previous_text</span> <span class="ow">not</span> <span class="ow">in</span> <span class="s1">&#39;{[(&#39;</span> <span class="ow">and</span>
+                             <span class="n">text</span> <span class="ow">not</span> <span class="ow">in</span> <span class="s1">&#39;}])&#39;</span><span class="p">)):</span>
+                        <span class="n">text</span> <span class="o">=</span> <span class="s1">&#39; &#39;</span> <span class="o">+</span> <span class="n">text</span>
+                <span class="k">elif</span> <span class="n">previous_column</span> <span class="o">!=</span> <span class="n">start_column</span><span class="p">:</span>
+                    <span class="n">text</span> <span class="o">=</span> <span class="n">line</span><span class="p">[</span><span class="n">previous_column</span><span class="p">:</span><span class="n">start_column</span><span class="p">]</span> <span class="o">+</span> <span class="n">text</span>
+            <span class="n">logical</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+            <span class="n">length</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+            <span class="n">mapping</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">length</span><span class="p">,</span> <span class="n">end</span><span class="p">))</span>
+            <span class="p">(</span><span class="n">previous_row</span><span class="p">,</span> <span class="n">previous_column</span><span class="p">)</span> <span class="o">=</span> <span class="n">end</span>
+        <span class="k">return</span> <span class="n">comments</span><span class="p">,</span> <span class="n">logical</span><span class="p">,</span> <span class="n">mapping</span></div>
+
+<div class="viewcode-block" id="FileProcessor.build_ast"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.build_ast">[docs]</a>    <span class="k">def</span> <span class="nf">build_ast</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Build an abstract syntax tree from the list of lines.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">compile</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">),</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;exec&#39;</span><span class="p">,</span> <span class="n">PyCF_ONLY_AST</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="FileProcessor.build_logical_line"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.build_logical_line">[docs]</a>    <span class="k">def</span> <span class="nf">build_logical_line</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Build a logical line from the current tokens list.&quot;&quot;&quot;</span>
+        <span class="n">comments</span><span class="p">,</span> <span class="n">logical</span><span class="p">,</span> <span class="n">mapping_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">build_logical_line_tokens</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logical_line</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">logical</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">statistics</span><span class="p">[</span><span class="s1">&#39;logical lines&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">comments</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">logical_line</span><span class="p">,</span> <span class="n">mapping_list</span></div>
+
+<div class="viewcode-block" id="FileProcessor.split_line"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.split_line">[docs]</a>    <span class="k">def</span> <span class="nf">split_line</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Split a physical line&#39;s line based on new-lines.</span>
+
+<span class="sd">        This also auto-increments the line number for the caller.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">token</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+            <span class="k">yield</span> <span class="n">line</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">line_number</span> <span class="o">+=</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="FileProcessor.keyword_arguments_for"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.keyword_arguments_for">[docs]</a>    <span class="k">def</span> <span class="nf">keyword_arguments_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">arguments</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generate the keyword arguments for a list of parameters.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">arguments</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">arguments</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">parameters</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">arguments</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">arguments</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">AttributeError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">LOG</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
+                <span class="k">raise</span>
+        <span class="k">return</span> <span class="n">arguments</span></div>
+
+<div class="viewcode-block" id="FileProcessor.check_physical_error"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.check_physical_error">[docs]</a>    <span class="k">def</span> <span class="nf">check_physical_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error_code</span><span class="p">,</span> <span class="n">line</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Update attributes based on error code and line.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">error_code</span> <span class="o">==</span> <span class="s1">&#39;E101&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">indent_char</span> <span class="o">=</span> <span class="n">line</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="FileProcessor.generate_tokens"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.generate_tokens">[docs]</a>    <span class="k">def</span> <span class="nf">generate_tokens</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Tokenize the file and yield the tokens.</span>
+
+<span class="sd">        :raises flake8.exceptions.InvalidSyntax:</span>
+<span class="sd">            If a :class:`tokenize.TokenError` is raised while generating</span>
+<span class="sd">            tokens.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">generate_tokens</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">next_line</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">token</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_lines</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+                <span class="k">yield</span> <span class="n">token</span>
+        <span class="c1"># NOTE(sigmavirus24): pycodestyle was catching both a SyntaxError</span>
+        <span class="c1"># and a tokenize.TokenError. In looking a the source on Python 2 and</span>
+        <span class="c1"># Python 3, the SyntaxError should never arise from generate_tokens.</span>
+        <span class="c1"># If we were using tokenize.tokenize, we would have to catch that. Of</span>
+        <span class="c1"># course, I&#39;m going to be unsurprised to be proven wrong at a later</span>
+        <span class="c1"># date.</span>
+        <span class="k">except</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">TokenError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">InvalidSyntax</span><span class="p">(</span><span class="n">exc</span><span class="o">.</span><span class="n">message</span><span class="p">,</span> <span class="n">exception</span><span class="o">=</span><span class="n">exc</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="FileProcessor.line_for"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.line_for">[docs]</a>    <span class="k">def</span> <span class="nf">line_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">line_number</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve the physical line at the specified line number.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="n">line_number</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="FileProcessor.next_line"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.next_line">[docs]</a>    <span class="k">def</span> <span class="nf">next_line</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Get the next line from the list.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">line_number</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_lines</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">line</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">line_number</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">line_number</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent_char</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">line</span><span class="p">[:</span><span class="mi">1</span><span class="p">]</span> <span class="ow">in</span> <span class="n">defaults</span><span class="o">.</span><span class="n">WHITESPACE</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">indent_char</span> <span class="o">=</span> <span class="n">line</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">line</span></div>
+
+<div class="viewcode-block" id="FileProcessor.read_lines"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.read_lines">[docs]</a>    <span class="k">def</span> <span class="nf">read_lines</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; List[str]</span>
+        <span class="sd">&quot;&quot;&quot;Read the lines for this file checker.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span> <span class="o">==</span> <span class="s1">&#39;-&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;stdin&#39;</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_lines_from_stdin</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_lines_from_filename</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">_readlines_py2</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; List[str]</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;rU&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fd</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">fd</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_readlines_py3</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; List[str]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fd</span><span class="p">:</span>
+                <span class="p">(</span><span class="n">coding</span><span class="p">,</span> <span class="n">lines</span><span class="p">)</span> <span class="o">=</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">detect_encoding</span><span class="p">(</span><span class="n">fd</span><span class="o">.</span><span class="n">readline</span><span class="p">)</span>
+                <span class="n">textfd</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">TextIOWrapper</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="n">coding</span><span class="p">,</span> <span class="n">line_buffering</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                <span class="k">return</span> <span class="p">([</span><span class="n">l</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">coding</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">]</span> <span class="o">+</span>
+                        <span class="n">textfd</span><span class="o">.</span><span class="n">readlines</span><span class="p">())</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">LookupError</span><span class="p">,</span> <span class="ne">SyntaxError</span><span class="p">,</span> <span class="ne">UnicodeError</span><span class="p">):</span>
+            <span class="c1"># If we can&#39;t detect the codec with tokenize.detect_encoding, or</span>
+            <span class="c1"># the detected encoding is incorrect, just fallback to latin-1.</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s1">&#39;latin-1&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fd</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">fd</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<div class="viewcode-block" id="FileProcessor.read_lines_from_filename"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.read_lines_from_filename">[docs]</a>    <span class="k">def</span> <span class="nf">read_lines_from_filename</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; List[str]</span>
+        <span class="sd">&quot;&quot;&quot;Read the lines for a file.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="n">readlines</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readlines_py2</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="n">readlines</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readlines_py3</span>
+        <span class="k">return</span> <span class="n">readlines</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="FileProcessor.read_lines_from_stdin"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.read_lines_from_stdin">[docs]</a>    <span class="k">def</span> <span class="nf">read_lines_from_stdin</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; List[str]</span>
+        <span class="sd">&quot;&quot;&quot;Read the lines from standard in.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">utils</span><span class="o">.</span><span class="n">stdin_get_value</span><span class="p">()</span><span class="o">.</span><span class="n">splitlines</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="FileProcessor.should_ignore_file"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.should_ignore_file">[docs]</a>    <span class="k">def</span> <span class="nf">should_ignore_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; bool</span>
+        <span class="sd">&quot;&quot;&quot;Check if ``# flake8: noqa`` is in the file to be ignored.</span>
+
+<span class="sd">        :returns:</span>
+<span class="sd">            True if a line matches :attr:`FileProcessor.NOQA_FILE`,</span>
+<span class="sd">            otherwise False</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            bool</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ignore_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">NOQA_FILE</span><span class="o">.</span><span class="n">search</span>
+        <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">ignore_file</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="FileProcessor.strip_utf_bom"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.FileProcessor.strip_utf_bom">[docs]</a>    <span class="k">def</span> <span class="nf">strip_utf_bom</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Strip the UTF bom from the lines of the file.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">:</span>
+            <span class="c1"># If we have nothing to analyze quit early</span>
+            <span class="k">return</span>
+
+        <span class="n">first_byte</span> <span class="o">=</span> <span class="nb">ord</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">first_byte</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mh">0xEF</span><span class="p">,</span> <span class="mh">0xFEFF</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="c1"># If the first byte of the file is a UTF-8 BOM, strip it</span>
+        <span class="k">if</span> <span class="n">first_byte</span> <span class="o">==</span> <span class="mh">0xFEFF</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">][:</span><span class="mi">3</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;</span><span class="se">\xEF\xBB\xBF</span><span class="s1">&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">3</span><span class="p">:]</span></div></div>
+
+
+<span class="k">def</span> <span class="nf">is_eol_token</span><span class="p">(</span><span class="n">token</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check if the token is an end-of-line token.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">NEWLINE</span> <span class="ow">or</span> <span class="n">token</span><span class="p">[</span><span class="mi">4</span><span class="p">][</span><span class="n">token</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="mi">1</span><span class="p">]:]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;</span><span class="se">\\\n</span><span class="s1">&#39;</span>
+
+<span class="k">if</span> <span class="n">COMMENT_WITH_NL</span><span class="p">:</span>  <span class="c1"># If on Python 2.6</span>
+<div class="viewcode-block" id="is_eol_token"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.is_eol_token">[docs]</a>    <span class="k">def</span> <span class="nf">is_eol_token</span><span class="p">(</span><span class="n">token</span><span class="p">,</span> <span class="n">_is_eol_token</span><span class="o">=</span><span class="n">is_eol_token</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check if the token is an end-of-line token.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">_is_eol_token</span><span class="p">(</span><span class="n">token</span><span class="p">)</span> <span class="ow">or</span>
+                <span class="p">(</span><span class="n">token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">COMMENT</span> <span class="ow">and</span> <span class="n">token</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="n">token</span><span class="p">[</span><span class="mi">4</span><span class="p">]))</span></div>
+
+
+<div class="viewcode-block" id="is_multiline_string"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.is_multiline_string">[docs]</a><span class="k">def</span> <span class="nf">is_multiline_string</span><span class="p">(</span><span class="n">token</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check if this is a multiline string.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">STRING</span> <span class="ow">and</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="ow">in</span> <span class="n">token</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="token_is_newline"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.token_is_newline">[docs]</a><span class="k">def</span> <span class="nf">token_is_newline</span><span class="p">(</span><span class="n">token</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check if the token type is a newline token type.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">NEWLINE</span></div>
+
+
+<div class="viewcode-block" id="token_is_comment"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.token_is_comment">[docs]</a><span class="k">def</span> <span class="nf">token_is_comment</span><span class="p">(</span><span class="n">token</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check if the token type is a comment.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">COMMENT_WITH_NL</span> <span class="ow">and</span> <span class="n">token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">COMMENT</span></div>
+
+
+<div class="viewcode-block" id="count_parentheses"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.count_parentheses">[docs]</a><span class="k">def</span> <span class="nf">count_parentheses</span><span class="p">(</span><span class="n">current_parentheses_count</span><span class="p">,</span> <span class="n">token_text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Count the number of parentheses.&quot;&quot;&quot;</span>
+    <span class="n">current_parentheses_count</span> <span class="o">=</span> <span class="n">current_parentheses_count</span> <span class="ow">or</span> <span class="mi">0</span>
+    <span class="k">if</span> <span class="n">token_text</span> <span class="ow">in</span> <span class="s1">&#39;([{&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">current_parentheses_count</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">token_text</span> <span class="ow">in</span> <span class="s1">&#39;}])&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">current_parentheses_count</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="n">current_parentheses_count</span></div>
+
+
+<div class="viewcode-block" id="log_token"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.log_token">[docs]</a><span class="k">def</span> <span class="nf">log_token</span><span class="p">(</span><span class="n">log</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Log a token to a provided logging object.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">token</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">token</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="mi">0</span><span class="p">]:</span>
+        <span class="n">pos</span> <span class="o">=</span> <span class="s1">&#39;[</span><span class="si">%s</span><span class="s1">:</span><span class="si">%s</span><span class="s1">]&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">token</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">token</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">pos</span> <span class="o">=</span> <span class="s1">&#39;l.</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">token</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">flake8</span><span class="o">.</span><span class="n">_EXTRA_VERBOSE</span><span class="p">,</span> <span class="s1">&#39;l.</span><span class="si">%s</span><span class="se">\t</span><span class="si">%s</span><span class="se">\t</span><span class="si">%s</span><span class="se">\t</span><span class="si">%r</span><span class="s1">&#39;</span> <span class="o">%</span>
+            <span class="p">(</span><span class="n">token</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">pos</span><span class="p">,</span> <span class="n">tokenize</span><span class="o">.</span><span class="n">tok_name</span><span class="p">[</span><span class="n">token</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span>
+                <span class="n">token</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span></div>
+
+
+<span class="c1"># NOTE(sigmavirus24): This was taken wholesale from</span>
+<span class="c1"># https://github.com/PyCQA/pycodestyle</span>
+<div class="viewcode-block" id="expand_indent"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.expand_indent">[docs]</a><span class="k">def</span> <span class="nf">expand_indent</span><span class="p">(</span><span class="n">line</span><span class="p">):</span>
+    <span class="sd">r&quot;&quot;&quot;Return the amount of indentation.</span>
+
+<span class="sd">    Tabs are expanded to the next multiple of 8.</span>
+
+<span class="sd">    &gt;&gt;&gt; expand_indent(&#39;    &#39;)</span>
+<span class="sd">    4</span>
+<span class="sd">    &gt;&gt;&gt; expand_indent(&#39;\t&#39;)</span>
+<span class="sd">    8</span>
+<span class="sd">    &gt;&gt;&gt; expand_indent(&#39;       \t&#39;)</span>
+<span class="sd">    8</span>
+<span class="sd">    &gt;&gt;&gt; expand_indent(&#39;        \t&#39;)</span>
+<span class="sd">    16</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">lstrip</span><span class="p">())</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">char</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">char</span> <span class="o">==</span> <span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">result</span> <span class="o">//</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">+</span> <span class="mi">8</span>
+        <span class="k">elif</span> <span class="n">char</span> <span class="o">==</span> <span class="s1">&#39; &#39;</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">break</span>
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+<span class="c1"># NOTE(sigmavirus24): This was taken wholesale from</span>
+<span class="c1"># https://github.com/PyCQA/pycodestyle. The in-line comments were edited to be</span>
+<span class="c1"># more descriptive.</span>
+<div class="viewcode-block" id="mutate_string"><a class="viewcode-back" href="../../internal/checker.html#flake8.processor.mutate_string">[docs]</a><span class="k">def</span> <span class="nf">mutate_string</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Replace contents with &#39;xxx&#39; to prevent syntax matching.</span>
+
+<span class="sd">    &gt;&gt;&gt; mute_string(&#39;&quot;abc&quot;&#39;)</span>
+<span class="sd">    &#39;&quot;xxx&quot;&#39;</span>
+<span class="sd">    &gt;&gt;&gt; mute_string(&quot;&#39;&#39;&#39;abc&#39;&#39;&#39;&quot;)</span>
+<span class="sd">    &quot;&#39;&#39;&#39;xxx&#39;&#39;&#39;&quot;</span>
+<span class="sd">    &gt;&gt;&gt; mute_string(&quot;r&#39;abc&#39;&quot;)</span>
+<span class="sd">    &quot;r&#39;xxx&#39;&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># NOTE(sigmavirus24): If there are string modifiers (e.g., b, u, r)</span>
+    <span class="c1"># use the last &quot;character&quot; to determine if we&#39;re using single or double</span>
+    <span class="c1"># quotes and then find the first instance of it</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">text</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="c1"># Check for triple-quoted strings</span>
+    <span class="k">if</span> <span class="n">text</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">:]</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;&quot;&quot;&quot;&#39;</span><span class="p">,</span> <span class="s2">&quot;&#39;&#39;&#39;&quot;</span><span class="p">):</span>
+        <span class="n">start</span> <span class="o">+=</span> <span class="mi">2</span>
+        <span class="n">end</span> <span class="o">-=</span> <span class="mi">2</span>
+    <span class="k">return</span> <span class="n">text</span><span class="p">[:</span><span class="n">start</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;x&#39;</span> <span class="o">*</span> <span class="p">(</span><span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">+</span> <span class="n">text</span><span class="p">[</span><span class="n">end</span><span class="p">:]</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

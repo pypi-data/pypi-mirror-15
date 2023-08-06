@@ -1,0 +1,484 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>flake8.options.config &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+    <li>flake8.options.config</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for flake8.options.config</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Config handling logic for Flake8.&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">configparser</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os.path</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ConfigFileFinder&#39;</span><span class="p">,</span> <span class="s1">&#39;MergedConfigParser&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ConfigFileFinder"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.ConfigFileFinder">[docs]</a><span class="k">class</span> <span class="nc">ConfigFileFinder</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Encapsulate the logic for finding and reading config files.&quot;&quot;&quot;</span>
+
+    <span class="n">PROJECT_FILENAMES</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;setup.cfg&#39;</span><span class="p">,</span> <span class="s1">&#39;tox.ini&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ConfigFileFinder.__init__"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.ConfigFileFinder.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">program_name</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">extra_config_files</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize object to find config files.</span>
+
+<span class="sd">        :param str program_name:</span>
+<span class="sd">            Name of the current program (e.g., flake8).</span>
+<span class="sd">        :param list args:</span>
+<span class="sd">            The extra arguments passed on the command-line.</span>
+<span class="sd">        :param list extra_config_files:</span>
+<span class="sd">            Extra configuration files specified by the user to read.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># The values of --append-config from the CLI</span>
+        <span class="n">extra_config_files</span> <span class="o">=</span> <span class="n">extra_config_files</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extra_config_files</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="c1"># Ensure the paths are absolute paths for local_config_files</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">extra_config_files</span>
+        <span class="p">]</span>
+
+        <span class="c1"># Platform specific settings</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_windows</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s1">&#39;win32&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">xdg_home</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;XDG_CONFIG_HOME&#39;</span><span class="p">,</span>
+                                       <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="s1">&#39;~/.config&#39;</span><span class="p">))</span>
+
+        <span class="c1"># Look for &#39;.&lt;program_name&gt;&#39; files</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">program_config</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">program_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span> <span class="o">=</span> <span class="n">program_name</span>
+
+        <span class="c1"># List of filenames to find in the local/project directory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project_filenames</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">program_config</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">PROJECT_FILENAMES</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">local_directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">curdir</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="p">:</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;.&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tail</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">commonprefix</span><span class="p">(</span><span class="n">args</span><span class="p">))</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_read_config</span><span class="p">(</span><span class="n">files</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">configparser</span><span class="o">.</span><span class="n">RawConfigParser</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">found_files</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">files</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">configparser</span><span class="o">.</span><span class="n">ParsingError</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;There was an error trying to parse a config &quot;</span>
+                          <span class="s2">&quot;file. The files we were attempting to parse &quot;</span>
+                          <span class="s2">&quot;were: </span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">files</span><span class="p">)</span>
+            <span class="n">found_files</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">found_files</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ConfigFileFinder.cli_config"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.ConfigFileFinder.cli_config">[docs]</a>    <span class="k">def</span> <span class="nf">cli_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">files</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Read and parse the config file specified on the command-line.&quot;&quot;&quot;</span>
+        <span class="n">config</span><span class="p">,</span> <span class="n">found_files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_config</span><span class="p">(</span><span class="n">files</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">found_files</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Found cli configuration files: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">found_files</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config</span></div>
+
+<div class="viewcode-block" id="ConfigFileFinder.generate_possible_local_files"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.ConfigFileFinder.generate_possible_local_files">[docs]</a>    <span class="k">def</span> <span class="nf">generate_possible_local_files</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Find and generate all local config files.&quot;&quot;&quot;</span>
+        <span class="n">tail</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tail</span>
+        <span class="n">parent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span>
+        <span class="n">local_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">local_directory</span>
+        <span class="k">while</span> <span class="n">tail</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">project_filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">project_filenames</span><span class="p">:</span>
+                <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span>
+                                                        <span class="n">project_filename</span><span class="p">))</span>
+                <span class="k">yield</span> <span class="n">filename</span>
+            <span class="k">if</span> <span class="n">parent</span> <span class="o">==</span> <span class="n">local_dir</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">tail</span><span class="p">)</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ConfigFileFinder.local_config_files"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.ConfigFileFinder.local_config_files">[docs]</a>    <span class="k">def</span> <span class="nf">local_config_files</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Find all local config files which actually exist.</span>
+
+<span class="sd">        Filter results from</span>
+<span class="sd">        :meth:`~ConfigFileFinder.generate_possible_local_files` based</span>
+<span class="sd">        on whether the filename exists or not.</span>
+
+<span class="sd">        :returns:</span>
+<span class="sd">            List of files that exist that are local project config files with</span>
+<span class="sd">            extra config files appended to that list (which also exist).</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            [str]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">exists</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="n">filename</span>
+            <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_possible_local_files</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extra_config_files</span> <span class="k">if</span> <span class="n">exists</span><span class="p">(</span><span class="n">f</span><span class="p">)]</span></div>
+
+<div class="viewcode-block" id="ConfigFileFinder.local_configs"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.ConfigFileFinder.local_configs">[docs]</a>    <span class="k">def</span> <span class="nf">local_configs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse all local config files into one config object.&quot;&quot;&quot;</span>
+        <span class="n">config</span><span class="p">,</span> <span class="n">found_files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_config</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">local_config_files</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">found_files</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Found local configuration files: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">found_files</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config</span></div>
+
+<div class="viewcode-block" id="ConfigFileFinder.user_config_file"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.ConfigFileFinder.user_config_file">[docs]</a>    <span class="k">def</span> <span class="nf">user_config_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Find the user-level config file.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_windows</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="s1">&#39;~</span><span class="se">\\</span><span class="s1">&#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">program_config</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xdg_home</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ConfigFileFinder.user_config"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.ConfigFileFinder.user_config">[docs]</a>    <span class="k">def</span> <span class="nf">user_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse the user config file into a config object.&quot;&quot;&quot;</span>
+        <span class="n">config</span><span class="p">,</span> <span class="n">found_files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_config</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">user_config_file</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">found_files</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Found user configuration files: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">found_files</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config</span></div></div>
+
+
+<div class="viewcode-block" id="MergedConfigParser"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.MergedConfigParser">[docs]</a><span class="k">class</span> <span class="nc">MergedConfigParser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Encapsulate merging different types of configuration files.</span>
+
+<span class="sd">    This parses out the options registered that were specified in the</span>
+<span class="sd">    configuration files, handles extra configuration files, and returns</span>
+<span class="sd">    dictionaries with the parsed values.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1">#: Set of types that should use the</span>
+    <span class="c1">#: :meth:`~configparser.RawConfigParser.getint` method.</span>
+    <span class="n">GETINT_TYPES</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="s1">&#39;int&#39;</span><span class="p">,</span> <span class="s1">&#39;count&#39;</span><span class="p">])</span>
+    <span class="c1">#: Set of actions that should use the</span>
+    <span class="c1">#: :meth:`~configparser.RawConfigParser.getbool` method.</span>
+    <span class="n">GETBOOL_ACTIONS</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="s1">&#39;store_true&#39;</span><span class="p">,</span> <span class="s1">&#39;store_false&#39;</span><span class="p">])</span>
+
+<div class="viewcode-block" id="MergedConfigParser.__init__"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.MergedConfigParser.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">option_manager</span><span class="p">,</span> <span class="n">extra_config_files</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the MergedConfigParser instance.</span>
+
+<span class="sd">        :param flake8.option.manager.OptionManager option_manager:</span>
+<span class="sd">            Initialized OptionManager.</span>
+<span class="sd">        :param list extra_config_files:</span>
+<span class="sd">            List of extra config files to parse.</span>
+<span class="sd">        :params list args:</span>
+<span class="sd">            The extra parsed arguments from the command-line.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1">#: Our instance of flake8.options.manager.OptionManager</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span> <span class="o">=</span> <span class="n">option_manager</span>
+        <span class="c1">#: The prog value for the cli parser</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span> <span class="o">=</span> <span class="n">option_manager</span><span class="o">.</span><span class="n">program_name</span>
+        <span class="c1">#: Parsed extra arguments</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="c1">#: Mapping of configuration option names to</span>
+        <span class="c1">#: :class:`~flake8.options.manager.Option` instances</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config_options</span> <span class="o">=</span> <span class="n">option_manager</span><span class="o">.</span><span class="n">config_options_dict</span>
+        <span class="c1">#: List of extra config files</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extra_config_files</span> <span class="o">=</span> <span class="n">extra_config_files</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="c1">#: Our instance of our :class:`~ConfigFileFinder`</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config_finder</span> <span class="o">=</span> <span class="n">ConfigFileFinder</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">,</span>
+                                              <span class="bp">self</span><span class="o">.</span><span class="n">extra_config_files</span><span class="p">)</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_normalize_value</span><span class="p">(</span><span class="n">option</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">final_value</span> <span class="o">=</span> <span class="n">option</span><span class="o">.</span><span class="n">normalize</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%r</span><span class="s1"> has been normalized to </span><span class="si">%r</span><span class="s1"> for option &quot;</span><span class="si">%s</span><span class="s1">&quot;&#39;</span><span class="p">,</span>
+                  <span class="n">value</span><span class="p">,</span> <span class="n">final_value</span><span class="p">,</span> <span class="n">option</span><span class="o">.</span><span class="n">config_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">final_value</span>
+
+    <span class="k">def</span> <span class="nf">_parse_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config_parser</span><span class="p">):</span>
+        <span class="n">config_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">option_name</span> <span class="ow">in</span> <span class="n">config_parser</span><span class="o">.</span><span class="n">options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">option_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_options</span><span class="p">:</span>
+                <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Option &quot;</span><span class="si">%s</span><span class="s1">&quot; is not registered. Ignoring.&#39;</span><span class="p">,</span>
+                          <span class="n">option_name</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">option</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_options</span><span class="p">[</span><span class="n">option_name</span><span class="p">]</span>
+
+            <span class="c1"># Use the appropriate method to parse the config value</span>
+            <span class="n">method</span> <span class="o">=</span> <span class="n">config_parser</span><span class="o">.</span><span class="n">get</span>
+            <span class="k">if</span> <span class="n">option</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">GETINT_TYPES</span><span class="p">:</span>
+                <span class="n">method</span> <span class="o">=</span> <span class="n">config_parser</span><span class="o">.</span><span class="n">getint</span>
+            <span class="k">elif</span> <span class="n">option</span><span class="o">.</span><span class="n">action</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">GETBOOL_ACTIONS</span><span class="p">:</span>
+                <span class="n">method</span> <span class="o">=</span> <span class="n">config_parser</span><span class="o">.</span><span class="n">getboolean</span>
+
+            <span class="n">value</span> <span class="o">=</span> <span class="n">method</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">,</span> <span class="n">option_name</span><span class="p">)</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Option &quot;</span><span class="si">%s</span><span class="s1">&quot; returned value: </span><span class="si">%r</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">option_name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+            <span class="n">final_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_value</span><span class="p">(</span><span class="n">option</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="n">config_dict</span><span class="p">[</span><span class="n">option_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">final_value</span>
+
+        <span class="k">return</span> <span class="n">config_dict</span>
+
+<div class="viewcode-block" id="MergedConfigParser.is_configured_by"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.MergedConfigParser.is_configured_by">[docs]</a>    <span class="k">def</span> <span class="nf">is_configured_by</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check if the specified config parser has an appropriate section.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">config</span><span class="o">.</span><span class="n">has_section</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MergedConfigParser.parse_local_config"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.MergedConfigParser.parse_local_config">[docs]</a>    <span class="k">def</span> <span class="nf">parse_local_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse and return the local configuration files.&quot;&quot;&quot;</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_finder</span><span class="o">.</span><span class="n">local_configs</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured_by</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Local configuration files have no </span><span class="si">%s</span><span class="s1"> section&#39;</span><span class="p">,</span>
+                      <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span>
+
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Parsing local configuration files.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_config</span><span class="p">(</span><span class="n">config</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MergedConfigParser.parse_user_config"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.MergedConfigParser.parse_user_config">[docs]</a>    <span class="k">def</span> <span class="nf">parse_user_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse and return the user configuration files.&quot;&quot;&quot;</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_finder</span><span class="o">.</span><span class="n">user_config</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured_by</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;User configuration files have no </span><span class="si">%s</span><span class="s1"> section&#39;</span><span class="p">,</span>
+                      <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span>
+
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Parsing user configuration files.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_config</span><span class="p">(</span><span class="n">config</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MergedConfigParser.parse_cli_config"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.MergedConfigParser.parse_cli_config">[docs]</a>    <span class="k">def</span> <span class="nf">parse_cli_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config_path</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse and return the file specified by --config.&quot;&quot;&quot;</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_finder</span><span class="o">.</span><span class="n">cli_config</span><span class="p">(</span><span class="n">config_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured_by</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;CLI configuration files have no </span><span class="si">%s</span><span class="s1"> section&#39;</span><span class="p">,</span>
+                      <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span>
+
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Parsing CLI configuration files.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_config</span><span class="p">(</span><span class="n">config</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MergedConfigParser.merge_user_and_local_config"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.MergedConfigParser.merge_user_and_local_config">[docs]</a>    <span class="k">def</span> <span class="nf">merge_user_and_local_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Merge the parsed user and local configuration files.</span>
+
+<span class="sd">        :returns:</span>
+<span class="sd">            Dictionary of the parsed and merged configuration options.</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            dict</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">user_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_user_config</span><span class="p">()</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_local_config</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">option</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">user_config</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">config</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">option</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">config</span></div>
+
+<div class="viewcode-block" id="MergedConfigParser.parse"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.config.MergedConfigParser.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cli_config</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">isolated</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse and return the local and user config files.</span>
+
+<span class="sd">        First this copies over the parsed local configuration and then</span>
+<span class="sd">        iterates over the options in the user configuration and sets them if</span>
+<span class="sd">        they were not set by the local configuration file.</span>
+
+<span class="sd">        :param str cli_config:</span>
+<span class="sd">            Value of --config when specified at the command-line. Overrides</span>
+<span class="sd">            all other config files.</span>
+<span class="sd">        :param bool isolated:</span>
+<span class="sd">            Determines if we should parse configuration files at all or not.</span>
+<span class="sd">            If running in isolated mode, we ignore all configuration files</span>
+<span class="sd">        :returns:</span>
+<span class="sd">            Dictionary of parsed configuration options</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            dict</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">isolated</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Refusing to parse configuration files due to user-&#39;</span>
+                      <span class="s1">&#39;requested isolation&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="n">cli_config</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Ignoring user and locally found configuration files. &#39;</span>
+                      <span class="s1">&#39;Reading only configuration from &quot;</span><span class="si">%s</span><span class="s1">&quot; specified via &#39;</span>
+                      <span class="s1">&#39;--config by the user&#39;</span><span class="p">,</span> <span class="n">cli_config</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_cli_config</span><span class="p">(</span><span class="n">cli_config</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">merge_user_and_local_config</span><span class="p">()</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

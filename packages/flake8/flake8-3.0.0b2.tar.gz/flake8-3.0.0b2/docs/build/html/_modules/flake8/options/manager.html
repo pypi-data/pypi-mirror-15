@@ -1,0 +1,459 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>flake8.options.manager &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+    <li>flake8.options.manager</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for flake8.options.manager</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Option handling and Option management logic.&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">optparse</span>  <span class="c1"># pylint: disable=deprecated-module</span>
+
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">utils</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Option"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.Option">[docs]</a><span class="k">class</span> <span class="nc">Option</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Our wrapper around an optparse.Option object to add features.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="Option.__init__"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.Option.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">short_option_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">long_option_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="c1"># Options below here are taken from the optparse.Option class</span>
+                 <span class="n">action</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">nargs</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">const</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">callback</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">callback_args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">callback_kwargs</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">metavar</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="c1"># Options below here are specific to Flake8</span>
+                 <span class="n">parse_from_config</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">comma_separated_list</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">normalize_paths</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize an Option instance wrapping optparse.Option.</span>
+
+<span class="sd">        The following are all passed directly through to optparse.</span>
+
+<span class="sd">        :param str short_option_name:</span>
+<span class="sd">            The short name of the option (e.g., ``-x``). This will be the</span>
+<span class="sd">            first argument passed to :class:`~optparse.Option`.</span>
+<span class="sd">        :param str long_option_name:</span>
+<span class="sd">            The long name of the option (e.g., ``--xtra-long-option``). This</span>
+<span class="sd">            will be the second argument passed to :class:`~optparse.Option`.</span>
+<span class="sd">        :param str action:</span>
+<span class="sd">            Any action allowed by :mod:`optparse`.</span>
+<span class="sd">        :param default:</span>
+<span class="sd">            Default value of the option.</span>
+<span class="sd">        :param type:</span>
+<span class="sd">            Any type allowed by :mod:`optparse`.</span>
+<span class="sd">        :param dest:</span>
+<span class="sd">            Attribute name to store parsed option value as.</span>
+<span class="sd">        :param nargs:</span>
+<span class="sd">            Number of arguments to parse for this option.</span>
+<span class="sd">        :param const:</span>
+<span class="sd">            Constant value to store on a common destination. Usually used in</span>
+<span class="sd">            conjuntion with ``action=&quot;store_const&quot;``.</span>
+<span class="sd">        :param iterable choices:</span>
+<span class="sd">            Possible values for the option.</span>
+<span class="sd">        :param callable callback:</span>
+<span class="sd">            Callback used if the action is ``&quot;callback&quot;``.</span>
+<span class="sd">        :param iterable callback_args:</span>
+<span class="sd">            Additional positional arguments to the callback callable.</span>
+<span class="sd">        :param dictionary callback_kwargs:</span>
+<span class="sd">            Keyword arguments to the callback callable.</span>
+<span class="sd">        :param str help:</span>
+<span class="sd">            Help text displayed in the usage information.</span>
+<span class="sd">        :param str metavar:</span>
+<span class="sd">            Name to use instead of the long option name for help text.</span>
+
+<span class="sd">        The following parameters are for Flake8&#39;s option handling alone.</span>
+
+<span class="sd">        :param bool parse_from_config:</span>
+<span class="sd">            Whether or not this option should be parsed out of config files.</span>
+<span class="sd">        :param bool comma_separated_list:</span>
+<span class="sd">            Whether the option is a comma separated list when parsing from a</span>
+<span class="sd">            config file.</span>
+<span class="sd">        :param bool normalize_paths:</span>
+<span class="sd">            Whether the option is expecting a path or list of paths and should</span>
+<span class="sd">            attempt to normalize the paths to absolute paths.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">short_option_name</span> <span class="o">=</span> <span class="n">short_option_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">long_option_name</span> <span class="o">=</span> <span class="n">long_option_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">option_args</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="p">(</span><span class="n">short_option_name</span><span class="p">,</span> <span class="n">long_option_name</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+        <span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">option_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
+            <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="n">default</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">type</span><span class="p">,</span>
+            <span class="s1">&#39;dest&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_dest</span><span class="p">(</span><span class="n">dest</span><span class="p">),</span>
+            <span class="s1">&#39;nargs&#39;</span><span class="p">:</span> <span class="n">nargs</span><span class="p">,</span>
+            <span class="s1">&#39;const&#39;</span><span class="p">:</span> <span class="n">const</span><span class="p">,</span>
+            <span class="s1">&#39;choices&#39;</span><span class="p">:</span> <span class="n">choices</span><span class="p">,</span>
+            <span class="s1">&#39;callback&#39;</span><span class="p">:</span> <span class="n">callback</span><span class="p">,</span>
+            <span class="s1">&#39;callback_args&#39;</span><span class="p">:</span> <span class="n">callback_args</span><span class="p">,</span>
+            <span class="s1">&#39;callback_kwargs&#39;</span><span class="p">:</span> <span class="n">callback_kwargs</span><span class="p">,</span>
+            <span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="n">help</span><span class="p">,</span>
+            <span class="s1">&#39;metavar&#39;</span><span class="p">:</span> <span class="n">metavar</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="c1"># Set attributes for our option arguments</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">option_kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+        <span class="c1"># Set our custom attributes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parse_from_config</span> <span class="o">=</span> <span class="n">parse_from_config</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">comma_separated_list</span> <span class="o">=</span> <span class="n">comma_separated_list</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">normalize_paths</span> <span class="o">=</span> <span class="n">normalize_paths</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">config_name</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">parse_from_config</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">long_option_name</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;When specifying parse_from_config=True, &#39;</span>
+                                 <span class="s1">&#39;a long_option_name must also be specified.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config_name</span> <span class="o">=</span> <span class="n">long_option_name</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_opt</span> <span class="o">=</span> <span class="bp">None</span></div>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Simple representation of an Option class.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="s1">&#39;Option({0}, {1}, action={action}, default={default}, &#39;</span>
+            <span class="s1">&#39;dest={dest}, type={type}, callback={callback}, help={help},&#39;</span>
+            <span class="s1">&#39; callback={callback}, callback_args={callback_args}, &#39;</span>
+            <span class="s1">&#39;callback_kwargs={callback_kwargs}, metavar={metavar})&#39;</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">short_option_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">long_option_name</span><span class="p">,</span>
+                 <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">option_kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_make_dest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dest</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">dest</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">dest</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">long_option_name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">long_option_name</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">short_option_name</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Option.normalize"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.Option.normalize">[docs]</a>    <span class="k">def</span> <span class="nf">normalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Normalize the value based on the option configuration.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">normalize_paths</span><span class="p">:</span>
+            <span class="c1"># Decide whether to parse a list of paths or a single path</span>
+            <span class="n">normalize</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">normalize_path</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">comma_separated_list</span><span class="p">:</span>
+                <span class="n">normalize</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">normalize_paths</span>
+            <span class="k">return</span> <span class="n">normalize</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">comma_separated_list</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">utils</span><span class="o">.</span><span class="n">parse_comma_separated_list</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="Option.to_optparse"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.Option.to_optparse">[docs]</a>    <span class="k">def</span> <span class="nf">to_optparse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Convert a Flake8 Option to an optparse Option.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_opt</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_opt</span> <span class="o">=</span> <span class="n">optparse</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">option_args</span><span class="p">,</span>
+                                        <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">option_kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_opt</span></div></div>
+
+
+<div class="viewcode-block" id="OptionManager"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager">[docs]</a><span class="k">class</span> <span class="nc">OptionManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Manage Options and OptionParser while adding post-processing.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="OptionManager.__init__"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prog</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">usage</span><span class="o">=</span><span class="s1">&#39;%prog [options] file file ...&#39;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize an instance of an OptionManager.</span>
+
+<span class="sd">        :param str prog:</span>
+<span class="sd">            Name of the actual program (e.g., flake8).</span>
+<span class="sd">        :param str version:</span>
+<span class="sd">            Version string for the program.</span>
+<span class="sd">        :param str usage:</span>
+<span class="sd">            Basic usage string used by the OptionParser.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">optparse</span><span class="o">.</span><span class="n">OptionParser</span><span class="p">(</span><span class="n">prog</span><span class="o">=</span><span class="n">prog</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">,</span>
+                                            <span class="n">usage</span><span class="o">=</span><span class="n">usage</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config_options_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span> <span class="o">=</span> <span class="n">prog</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="n">version</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">registered_plugins</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extended_default_ignore</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="OptionManager.format_plugin"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.format_plugin">[docs]</a>    <span class="k">def</span> <span class="nf">format_plugin</span><span class="p">(</span><span class="n">plugin_tuple</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Convert a plugin tuple into a dictionary mapping name to value.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">([</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;version&quot;</span><span class="p">],</span> <span class="n">plugin_tuple</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="OptionManager.add_option"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.add_option">[docs]</a>    <span class="k">def</span> <span class="nf">add_option</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create and register a new option.</span>
+
+<span class="sd">        See parameters for :class:`~flake8.options.manager.Option` for</span>
+<span class="sd">        acceptable arguments to this method.</span>
+
+<span class="sd">        .. note::</span>
+
+<span class="sd">            ``short_option_name`` and ``long_option_name`` may be specified</span>
+<span class="sd">            positionally as they are with optparse normally.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;--&#39;</span><span class="p">):</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">option</span> <span class="o">=</span> <span class="n">Option</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="n">option</span><span class="o">.</span><span class="n">to_optparse</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">option</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">option</span><span class="o">.</span><span class="n">parse_from_config</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config_options_dict</span><span class="p">[</span><span class="n">option</span><span class="o">.</span><span class="n">config_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">option</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Registered option &quot;</span><span class="si">%s</span><span class="s1">&quot;.&#39;</span><span class="p">,</span> <span class="n">option</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OptionManager.remove_from_default_ignore"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.remove_from_default_ignore">[docs]</a>    <span class="k">def</span> <span class="nf">remove_from_default_ignore</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error_codes</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Remove specified error codes from the default ignore list.</span>
+
+<span class="sd">        :param list error_codes:</span>
+<span class="sd">            List of strings that are the error/warning codes to attempt to</span>
+<span class="sd">            remove from the extended default ignore list.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Removing </span><span class="si">%r</span><span class="s1"> from the default ignore list&#39;</span><span class="p">,</span> <span class="n">error_codes</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">error_code</span> <span class="ow">in</span> <span class="n">error_codes</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">extend_default_ignore</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">error_code</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Attempted to remove </span><span class="si">%s</span><span class="s1"> from default ignore&#39;</span>
+                          <span class="s1">&#39; but it was not a member of the list.&#39;</span><span class="p">,</span> <span class="n">error_code</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OptionManager.extend_default_ignore"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.extend_default_ignore">[docs]</a>    <span class="k">def</span> <span class="nf">extend_default_ignore</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error_codes</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Extend the default ignore list with the error codes provided.</span>
+
+<span class="sd">        :param list error_codes:</span>
+<span class="sd">            List of strings that are the error/warning codes with which to</span>
+<span class="sd">            extend the default ignore list.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Extending default ignore list with </span><span class="si">%r</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">error_codes</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extended_default_ignore</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">error_codes</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OptionManager.generate_versions"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.generate_versions">[docs]</a>    <span class="k">def</span> <span class="nf">generate_versions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">format_str</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">%(name)s</span><span class="s1">: </span><span class="si">%(version)s</span><span class="s1">&#39;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generate a comma-separated list of versions of plugins.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">format_str</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">format_plugin</span><span class="p">(</span><span class="n">plugin</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">plugin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">registered_plugins</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OptionManager.update_version_string"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.update_version_string">[docs]</a>    <span class="k">def</span> <span class="nf">update_version_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Update the flake8 version string.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span> <span class="o">+</span> <span class="s1">&#39; (&#39;</span> <span class="o">+</span>
+                               <span class="bp">self</span><span class="o">.</span><span class="n">generate_versions</span><span class="p">()</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OptionManager.generate_epilog"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.generate_epilog">[docs]</a>    <span class="k">def</span> <span class="nf">generate_epilog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create an epilog with the version and name of each of plugin.&quot;&quot;&quot;</span>
+        <span class="n">plugin_version_format</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%(name)s</span><span class="s1">: </span><span class="si">%(version)s</span><span class="s1">&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">epilog</span> <span class="o">=</span> <span class="s1">&#39;Installed plugins: &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_versions</span><span class="p">(</span>
+            <span class="n">plugin_version_format</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OptionManager.parse_args"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.parse_args">[docs]</a>    <span class="k">def</span> <span class="nf">parse_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Simple proxy to calling the OptionParser&#39;s parse_args method.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generate_epilog</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update_version_string</span><span class="p">()</span>
+        <span class="n">options</span><span class="p">,</span> <span class="n">xargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">option</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">:</span>
+            <span class="n">old_value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">option</span><span class="o">.</span><span class="n">dest</span><span class="p">)</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">option</span><span class="o">.</span><span class="n">dest</span><span class="p">,</span> <span class="n">option</span><span class="o">.</span><span class="n">normalize</span><span class="p">(</span><span class="n">old_value</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">options</span><span class="p">,</span> <span class="n">xargs</span></div>
+
+<div class="viewcode-block" id="OptionManager.register_plugin"><a class="viewcode-back" href="../../../internal/option_handling.html#flake8.options.manager.OptionManager.register_plugin">[docs]</a>    <span class="k">def</span> <span class="nf">register_plugin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">version</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Register a plugin relying on the OptionManager.</span>
+
+<span class="sd">        :param str name:</span>
+<span class="sd">            The name of the checker itself. This will be the ``name``</span>
+<span class="sd">            attribute of the class or function loaded from the entry-point.</span>
+<span class="sd">        :param str version:</span>
+<span class="sd">            The version of the checker that we&#39;re using.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">registered_plugins</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">name</span><span class="p">,</span> <span class="n">version</span><span class="p">))</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

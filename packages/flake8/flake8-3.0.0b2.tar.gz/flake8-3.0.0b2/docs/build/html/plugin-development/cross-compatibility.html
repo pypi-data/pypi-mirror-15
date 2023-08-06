@@ -1,0 +1,362 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Writing Plugins For Flake8 2 and 3 &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../index.html"/>
+        <link rel="up" title="Writing Plugins for Flake8" href="index.html"/>
+        <link rel="next" title="Exploring Flake8’s Internals" href="../internal/index.html"/>
+        <link rel="prev" title="Developing a Formatting Plugin for Flake8" href="formatters.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/index.html">Using Flake8</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Writing Plugins for Flake8</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#getting-started">Getting Started</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="registering-plugins.html">Registering a Plugin with Flake8</a></li>
+<li class="toctree-l3"><a class="reference internal" href="plugin-parameters.html">Receiving Information For A Check Plugin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="formatters.html">Developing a Formatting Plugin for Flake8</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Writing Plugins For Flake8 2 and 3</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#parsing-options-from-configuration-files">Parsing Options from Configuration Files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#parsing-comma-separated-lists">Parsing Comma-Separated Lists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#normalizing-values-that-are-paths">Normalizing Values that Are Paths</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#option-handling-on-flake8-2-and-3">Option Handling on Flake8 2 and 3</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">Writing Plugins for Flake8</a> &raquo;</li>
+      
+    <li>Writing Plugins For Flake8 2 and 3</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/plugin-development/cross-compatibility.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="writing-plugins-for-flake8-2-and-3">
+<h1>Writing Plugins For Flake8 2 and 3<a class="headerlink" href="#writing-plugins-for-flake8-2-and-3" title="Permalink to this headline">¶</a></h1>
+<p>Plugins have existed for <strong class="program">Flake8</strong> 2.x for a few years. There are a number of
+these on PyPI already. While it did not seem reasonable for <strong class="program">Flake8</strong> to attempt
+to provide a backwards compatible shim for them, we did decide to try to
+document the easiest way to write a plugin that&#8217;s compatible across both
+versions.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">If your plugin does not register options, it <em>should</em> Just Work.</p>
+</div>
+<p>The <strong>only</strong> breaking change in <strong class="program">Flake8</strong> 3.0 is the fact that we no longer
+check the option parser for a list of strings to parse from a config file. On
+<strong class="program">Flake8</strong> 2.x, to have an option parsed from the configuration files that
+<strong class="program">Flake8</strong> finds and parses you would have to do something like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;-X&#39;</span><span class="p">,</span> <span class="s1">&#39;--example-flag&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                  <span class="n">help</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">config_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;example-flag&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For <strong class="program">Flake8</strong> 3.0, we have added <em>three</em> arguments to the
+<a class="reference internal" href="../internal/option_handling.html#flake8.options.manager.OptionManager.add_option" title="flake8.options.manager.OptionManager.add_option"><code class="xref py py-meth docutils literal"><span class="pre">add_option()</span></code></a> method you will call
+on the parser you receive:</p>
+<ul>
+<li><p class="first"><code class="docutils literal"><span class="pre">parse_from_config</span></code> which expects <code class="docutils literal"><span class="pre">True</span></code> or <code class="docutils literal"><span class="pre">False</span></code></p>
+<p>When <code class="docutils literal"><span class="pre">True</span></code>, <strong class="program">Flake8</strong> will parse the option from the config files <strong class="program">Flake8</strong>
+finds.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">comma_separated_list</span></code> which expects <code class="docutils literal"><span class="pre">True</span></code> or <code class="docutils literal"><span class="pre">False</span></code></p>
+<p>When <code class="docutils literal"><span class="pre">True</span></code>, <strong class="program">Flake8</strong> will split the string intelligently and handle
+extra whitespace. The parsed value will be a list.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">normalize_paths</span></code> which expects <code class="docutils literal"><span class="pre">True</span></code> or <code class="docutils literal"><span class="pre">False</span></code></p>
+<p>When <code class="docutils literal"><span class="pre">True</span></code>, <strong class="program">Flake8</strong> will:</p>
+<ul class="simple">
+<li>remove trailing path separators (i.e., <code class="docutils literal"><span class="pre">os.path.sep</span></code>)</li>
+<li>return the absolute path for values that have the separator in them</li>
+</ul>
+</li>
+</ul>
+<p>All three of these options can be combined or used separately.</p>
+<div class="section" id="parsing-options-from-configuration-files">
+<h2>Parsing Options from Configuration Files<a class="headerlink" href="#parsing-options-from-configuration-files" title="Permalink to this headline">¶</a></h2>
+<p>The example from <strong class="program">Flake8</strong> 2.x now looks like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;-X&#39;</span><span class="p">,</span> <span class="s1">&#39;--example-flag&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                  <span class="n">parse_from_config</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                  <span class="n">help</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="parsing-comma-separated-lists">
+<h2>Parsing Comma-Separated Lists<a class="headerlink" href="#parsing-comma-separated-lists" title="Permalink to this headline">¶</a></h2>
+<p>Now let&#8217;s imagine that the option we want to add is expecting a comma-separatd
+list of values from the user (e.g., <code class="docutils literal"><span class="pre">--select</span> <span class="pre">E123,W503,F405</span></code>). <strong class="program">Flake8</strong> 2.x
+often forced users to parse these lists themselves since pep8 special-cased
+certain flags and left others on their own. <strong class="program">Flake8</strong> 3.0 adds
+<code class="docutils literal"><span class="pre">comma_separated_list</span></code> so that the parsed option is already a list for
+plugin authors. When combined with <code class="docutils literal"><span class="pre">parse_from_config</span></code> this means that users
+can also do something like:</p>
+<div class="highlight-ini"><div class="highlight"><pre><span></span><span class="na">example-flag</span> <span class="o">=</span><span class="s"></span>
+<span class="s">    first,</span>
+<span class="s">    second,</span>
+<span class="s">    third,</span>
+<span class="s">    fourth,</span>
+<span class="s">    fifth</span>
+</pre></div>
+</div>
+<p>And <strong class="program">Flake8</strong> will just return the list:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="p">[</span><span class="s2">&quot;first&quot;</span><span class="p">,</span> <span class="s2">&quot;second&quot;</span><span class="p">,</span> <span class="s2">&quot;third&quot;</span><span class="p">,</span> <span class="s2">&quot;fourth&quot;</span><span class="p">,</span> <span class="s2">&quot;fifth&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="normalizing-values-that-are-paths">
+<h2>Normalizing Values that Are Paths<a class="headerlink" href="#normalizing-values-that-are-paths" title="Permalink to this headline">¶</a></h2>
+<p>Finally, let&#8217;s imagine that our new option wants a path or list of paths. To
+ensure that these paths are semi-normalized (the way <strong class="program">Flake8</strong> 2.x used to
+work) we need only pass <code class="docutils literal"><span class="pre">normalize_paths=True</span></code>. If you have specified
+<code class="docutils literal"><span class="pre">comma_separated_list=True</span></code> then this will parse the value as a list of
+paths that have been normalized. Otherwise, this will parse the value
+as a single path.</p>
+</div>
+<div class="section" id="option-handling-on-flake8-2-and-3">
+<h2>Option Handling on Flake8 2 and 3<a class="headerlink" href="#option-handling-on-flake8-2-and-3" title="Permalink to this headline">¶</a></h2>
+<p>So, in conclusion, we can now write our plugin that relies on registering
+options with <strong class="program">Flake8</strong> and have it work on <strong class="program">Flake8</strong> 2.x and 3.x.</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">optparse</span>
+
+<span class="n">option_args</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;-X&#39;</span><span class="p">,</span> <span class="s1">&#39;--example-flag&#39;</span><span class="p">)</span>
+<span class="n">option_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;parse_from_config&#39;</span><span class="p">:</span> <span class="bp">True</span><span class="p">,</span>
+    <span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;...&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="c1"># Flake8 3.x registration</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="o">*</span><span class="n">option_args</span><span class="p">,</span> <span class="o">**</span><span class="n">option_kwargs</span><span class="p">)</span>
+<span class="k">except</span> <span class="p">(</span><span class="n">optparse</span><span class="o">.</span><span class="n">OptionError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+    <span class="c1"># Flake8 2.x registration</span>
+    <span class="n">parse_from_config</span> <span class="o">=</span> <span class="n">option_kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;parse_from_config&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="o">*</span><span class="n">option_args</span><span class="p">,</span> <span class="o">**</span><span class="n">option_kwargs</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">parse_from_config</span><span class="p">:</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">config_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">option_args</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Or, you can write a tiny helper function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">optparse</span>
+
+<span class="k">def</span> <span class="nf">register_opt</span><span class="p">(</span><span class="n">parser</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Flake8 3.x registration</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="n">optparse</span><span class="o">.</span><span class="n">OptionError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+        <span class="c1"># Flake8 2.x registration</span>
+        <span class="n">parse_from_config</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;parse_from_config&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;comma_separated_list&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;normalize_paths&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">parse_from_config</span><span class="p">:</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">config_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="nd">@classmethod</span>
+<span class="k">def</span> <span class="nf">register_options</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">parser</span><span class="p">):</span>
+    <span class="n">register_opt</span><span class="p">(</span><span class="n">parser</span><span class="p">,</span> <span class="s1">&#39;-X&#39;</span><span class="p">,</span> <span class="s1">&#39;--example-flag&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                 <span class="n">parse_from_config</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The transition period is admittedly not fantastic, but we believe that this
+is a worthwhile change for plugin developers going forward. We also hope to
+help with the transition phase for as many plugins as we can manage.</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../internal/index.html" class="btn btn-neutral float-right" title="Exploring Flake8’s Internals" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="formatters.html" class="btn btn-neutral" title="Developing a Formatting Plugin for Flake8" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

@@ -1,0 +1,786 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>How Checks are Run &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../index.html"/>
+        <link rel="up" title="Exploring Flake8’s Internals" href="index.html"/>
+        <link rel="next" title="Command Line Interface" href="cli.html"/>
+        <link rel="prev" title="What Happens When You Run Flake8" href="start-to-finish.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Exploring Flake8&#8217;s Internals</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="contributing.html">Contributing to Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html">Writing Documentation for Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releases.html">Releasing Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="start-to-finish.html">What Happens When You Run Flake8</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">How Checks are Run</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#processing-files">Processing Files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#api-reference">API Reference</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#utility-functions">Utility Functions</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cli.html">Command Line Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="formatters.html">Built-in Formatters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="option_handling.html">Option and Configuration Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plugin_handling.html">Plugin Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html">Utility Functions</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">Exploring Flake8&#8217;s Internals</a> &raquo;</li>
+      
+    <li>How Checks are Run</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/internal/checker.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="how-checks-are-run">
+<h1>How Checks are Run<a class="headerlink" href="#how-checks-are-run" title="Permalink to this headline">¶</a></h1>
+<p>In <strong class="program">Flake8</strong> 2.x, <strong class="program">Flake8</strong> delegated check running to pep8. In 3.0 <strong class="program">Flake8</strong>
+takes on that responsibility. This has allowed for simpler
+handling of the <code class="docutils literal"><span class="pre">--jobs</span></code> parameter (using <a class="reference external" href="https://docs.python.org/3.4/library/multiprocessing.html#module-multiprocessing" title="(in Python v3.4)"><code class="xref py py-mod docutils literal"><span class="pre">multiprocessing</span></code></a>) and
+simplified our fallback if something goes awry with concurency.
+At the lowest level we have a <a class="reference internal" href="#flake8.checker.FileChecker" title="flake8.checker.FileChecker"><code class="xref py py-class docutils literal"><span class="pre">FileChecker</span></code></a>. Instances of <a class="reference internal" href="#flake8.checker.FileChecker" title="flake8.checker.FileChecker"><code class="xref py py-class docutils literal"><span class="pre">FileChecker</span></code></a> are
+created for <em>each</em> file to be analyzed by <strong class="program">Flake8</strong>. Each instance, has a copy
+of all of the plugins registered with setuptools in the <code class="docutils literal"><span class="pre">flake8.extension</span></code>
+entry-point group.</p>
+<p>The <a class="reference internal" href="#flake8.checker.FileChecker" title="flake8.checker.FileChecker"><code class="xref py py-class docutils literal"><span class="pre">FileChecker</span></code></a> instances are managed by an instance of <a class="reference internal" href="#flake8.checker.Manager" title="flake8.checker.Manager"><code class="xref py py-class docutils literal"><span class="pre">Manager</span></code></a>. The
+<a class="reference internal" href="#flake8.checker.Manager" title="flake8.checker.Manager"><code class="xref py py-class docutils literal"><span class="pre">Manager</span></code></a> instance handles creating sub-processes with
+<a class="reference external" href="https://docs.python.org/3.4/library/multiprocessing.html#module-multiprocessing" title="(in Python v3.4)"><code class="xref py py-mod docutils literal"><span class="pre">multiprocessing</span></code></a> module and falling back to running checks in serial if
+an operating system level error arises. When creating <a class="reference internal" href="#flake8.checker.FileChecker" title="flake8.checker.FileChecker"><code class="xref py py-class docutils literal"><span class="pre">FileChecker</span></code></a> instances,
+the <a class="reference internal" href="#flake8.checker.Manager" title="flake8.checker.Manager"><code class="xref py py-class docutils literal"><span class="pre">Manager</span></code></a> is responsible for determining if a particular file has been
+excluded.</p>
+<div class="section" id="processing-files">
+<h2>Processing Files<a class="headerlink" href="#processing-files" title="Permalink to this headline">¶</a></h2>
+<p>Unfortunately, since <strong class="program">Flake8</strong> took over check running from pep8/pycodestyle,
+it also had to take over parsing and processing files for the checkers
+to use. Since it couldn&#8217;t reuse pycodestyle&#8217;s functionality (since it did not
+separate cleanly the processing from check running) that function was isolated
+into the <a class="reference internal" href="#flake8.processor.FileProcessor" title="flake8.processor.FileProcessor"><code class="xref py py-class docutils literal"><span class="pre">FileProcessor</span></code></a> class. We moved
+several helper functions into the <code class="xref py py-mod docutils literal"><span class="pre">flake8.processor</span></code> module (see also
+<a class="reference internal" href="#processor-utility-functions"><span class="std std-ref">Processor Utility Functions</span></a>).</p>
+</div>
+<div class="section" id="api-reference">
+<h2>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="flake8.checker.FileChecker">
+<em class="property">class </em><code class="descclassname">flake8.checker.</code><code class="descname">FileChecker</code><span class="sig-paren">(</span><em>filename</em>, <em>checks</em>, <em>style_guide</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Manage running checks for a file and aggregate the results.</p>
+<dl class="method">
+<dt id="flake8.checker.FileChecker.check_physical_eol">
+<code class="descname">check_physical_eol</code><span class="sig-paren">(</span><em>token</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.check_physical_eol"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.check_physical_eol" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run physical checks if and only if it is at the end of the line.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.handle_comment">
+<code class="descname">handle_comment</code><span class="sig-paren">(</span><em>token</em>, <em>token_text</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.handle_comment"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.handle_comment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle the logic when encountering a comment token.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.handle_newline">
+<code class="descname">handle_newline</code><span class="sig-paren">(</span><em>token_type</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.handle_newline"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.handle_newline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle the logic when encountering a newline token.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.process_tokens">
+<code class="descname">process_tokens</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.process_tokens"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.process_tokens" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process tokens and trigger checks.</p>
+<p>This can raise a <code class="xref py py-class docutils literal"><span class="pre">flake8.exceptions.InvalidSyntax</span></code> exception.
+Instead of using this directly, you should use
+<a class="reference internal" href="#flake8.checker.FileChecker.run_checks" title="flake8.checker.FileChecker.run_checks"><code class="xref py py-meth docutils literal"><span class="pre">flake8.checker.FileChecker.run_checks()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.report">
+<code class="descname">report</code><span class="sig-paren">(</span><em>error_code</em>, <em>line_number</em>, <em>column</em>, <em>text</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.report"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.report" title="Permalink to this definition">¶</a></dt>
+<dd><p>Report an error by storing it in the results list.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.run_ast_checks">
+<code class="descname">run_ast_checks</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.run_ast_checks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.run_ast_checks" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run all checks expecting an abstract syntax tree.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.run_check">
+<code class="descname">run_check</code><span class="sig-paren">(</span><em>plugin</em>, <em>**arguments</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.run_check"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.run_check" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the check in a single plugin.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.run_checks">
+<code class="descname">run_checks</code><span class="sig-paren">(</span><em>results_queue</em>, <em>statistics_queue</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.run_checks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.run_checks" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run checks against the file.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.run_logical_checks">
+<code class="descname">run_logical_checks</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.run_logical_checks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.run_logical_checks" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run all checks expecting a logical line.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.FileChecker.run_physical_checks">
+<code class="descname">run_physical_checks</code><span class="sig-paren">(</span><em>physical_line</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#FileChecker.run_physical_checks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.FileChecker.run_physical_checks" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run all checks for a given physical line.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="flake8.checker.Manager">
+<em class="property">class </em><code class="descclassname">flake8.checker.</code><code class="descname">Manager</code><span class="sig-paren">(</span><em>style_guide</em>, <em>arguments</em>, <em>checker_plugins</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager" title="Permalink to this definition">¶</a></dt>
+<dd><p>Manage the parallelism and checker instances for each plugin and file.</p>
+<p>This class will be responsible for the following:</p>
+<ul class="simple">
+<li>Determining the parallelism of Flake8, e.g.:<ul>
+<li>Do we use <a class="reference external" href="https://docs.python.org/3.4/library/multiprocessing.html#module-multiprocessing" title="(in Python v3.4)"><code class="xref py py-mod docutils literal"><span class="pre">multiprocessing</span></code></a> or is it unavailable?</li>
+<li>Do we automatically decide on the number of jobs to use or did the
+user provide that?</li>
+</ul>
+</li>
+<li>Falling back to a serial way of processing files if we run into an
+OSError related to <a class="reference external" href="https://docs.python.org/3.4/library/multiprocessing.html#module-multiprocessing" title="(in Python v3.4)"><code class="xref py py-mod docutils literal"><span class="pre">multiprocessing</span></code></a></li>
+<li>Organizing the results of each checker so we can group the output
+together and make our output deterministic.</li>
+</ul>
+<dl class="method">
+<dt id="flake8.checker.Manager.is_path_excluded">
+<code class="descname">is_path_excluded</code><span class="sig-paren">(</span><em>path</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager.is_path_excluded"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager.is_path_excluded" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if a path is excluded.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; Path to check against the exclude patterns.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">True if there are exclude patterns and the path matches,
+otherwise False.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3.4/library/functions.html#bool" title="(in Python v3.4)">bool</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.Manager.make_checkers">
+<code class="descname">make_checkers</code><span class="sig-paren">(</span><em>paths=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager.make_checkers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager.make_checkers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create checkers for each file.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.Manager.report">
+<code class="descname">report</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager.report"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager.report" title="Permalink to this definition">¶</a></dt>
+<dd><p>Report all of the errors found in the managed file checkers.</p>
+<p>This iterates over each of the checkers and reports the errors sorted
+by line number.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A tuple of the total results found and the results reported.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">tuple(int, int)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.Manager.run">
+<code class="descname">run</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run all the checkers.</p>
+<p>This will intelligently decide whether to run the checks in parallel
+or whether to run them in serial.</p>
+<p>If running the checks in parallel causes a problem (e.g.,
+<a class="reference external" href="https://gitlab.com/pycqa/flake8/issues/74">https://gitlab.com/pycqa/flake8/issues/74</a>) this also implements
+fallback to serial processing.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.Manager.run_parallel">
+<code class="descname">run_parallel</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager.run_parallel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager.run_parallel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the checkers in parallel.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.Manager.run_serial">
+<code class="descname">run_serial</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager.run_serial"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager.run_serial" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the checkers in serial.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.Manager.start">
+<code class="descname">start</code><span class="sig-paren">(</span><em>paths=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start checking files.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>paths</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#list" title="(in Python v3.4)"><em>list</em></a>) &#8211; Path names to check. This is passed directly to
+<code class="xref py py-meth docutils literal"><span class="pre">make_checkers()</span></code>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.checker.Manager.stop">
+<code class="descname">stop</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/checker.html#Manager.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.checker.Manager.stop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Stop checking files.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="flake8.processor.FileProcessor">
+<em class="property">class </em><code class="descclassname">flake8.processor.</code><code class="descname">FileProcessor</code><span class="sig-paren">(</span><em>filename</em>, <em>options</em>, <em>lines=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Processes a file and holdes state.</p>
+<p>This processes a file by generating tokens, logical and physical lines,
+and AST trees. This also provides a way of passing state about the file
+to checks expecting that state. Any public attribute on this object can
+be requested by a plugin. The known public attributes are:</p>
+<ul class="simple">
+<li><code class="xref py py-attr docutils literal"><span class="pre">blank_before</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">blank_lines</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">checker_state</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">indect_char</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">indent_level</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">line_number</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">logical_line</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">max_line_length</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">multiline</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">noqa</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">previous_indent_level</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">previous_logical</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">tokens</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">total_lines</span></code></li>
+<li><code class="xref py py-attr docutils literal"><span class="pre">verbose</span></code></li>
+</ul>
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.blank_before">
+<code class="descname">blank_before</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.blank_before" title="Permalink to this definition">¶</a></dt>
+<dd><p>Number of preceding blank lines</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.blank_lines">
+<code class="descname">blank_lines</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.blank_lines" title="Permalink to this definition">¶</a></dt>
+<dd><p>Number of blank lines</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.build_ast">
+<code class="descname">build_ast</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.build_ast"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.build_ast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Build an abstract syntax tree from the list of lines.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.build_logical_line">
+<code class="descname">build_logical_line</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.build_logical_line"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.build_logical_line" title="Permalink to this definition">¶</a></dt>
+<dd><p>Build a logical line from the current tokens list.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.build_logical_line_tokens">
+<code class="descname">build_logical_line_tokens</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.build_logical_line_tokens"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.build_logical_line_tokens" title="Permalink to this definition">¶</a></dt>
+<dd><p>Build the mapping, comments, and logical line lists.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.check_physical_error">
+<code class="descname">check_physical_error</code><span class="sig-paren">(</span><em>error_code</em>, <em>line</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.check_physical_error"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.check_physical_error" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update attributes based on error code and line.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.checker_state">
+<code class="descname">checker_state</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.checker_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Current checker state</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.delete_first_token">
+<code class="descname">delete_first_token</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.delete_first_token"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.delete_first_token" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete the first token in the list of tokens.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.generate_tokens">
+<code class="descname">generate_tokens</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.generate_tokens"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.generate_tokens" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tokenize the file and yield the tokens.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Raises:</th><td class="field-body"><strong>flake8.exceptions.InvalidSyntax</strong> &#8211; If a <a class="reference external" href="https://docs.python.org/3.4/library/tokenize.html#tokenize.TokenError" title="(in Python v3.4)"><code class="xref py py-class docutils literal"><span class="pre">tokenize.TokenError</span></code></a> is raised while generating
+tokens.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.hang_closing">
+<code class="descname">hang_closing</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.hang_closing" title="Permalink to this definition">¶</a></dt>
+<dd><p>User provided option for hang closing</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.indent_char">
+<code class="descname">indent_char</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.indent_char" title="Permalink to this definition">¶</a></dt>
+<dd><p>Character used for indentation</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.indent_level">
+<code class="descname">indent_level</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.indent_level" title="Permalink to this definition">¶</a></dt>
+<dd><p>Current level of indentation</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.inside_multiline">
+<code class="descname">inside_multiline</code><span class="sig-paren">(</span><em>line_number</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.inside_multiline"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.inside_multiline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Context-manager to toggle the multiline attribute.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.keyword_arguments_for">
+<code class="descname">keyword_arguments_for</code><span class="sig-paren">(</span><em>parameters</em>, <em>arguments=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.keyword_arguments_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.keyword_arguments_for" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate the keyword arguments for a list of parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.line_for">
+<code class="descname">line_for</code><span class="sig-paren">(</span><em>line_number</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.line_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.line_for" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve the physical line at the specified line number.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.line_number">
+<code class="descname">line_number</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.line_number" title="Permalink to this definition">¶</a></dt>
+<dd><p>Line number in the file</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.logical_line">
+<code class="descname">logical_line</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.logical_line" title="Permalink to this definition">¶</a></dt>
+<dd><p>Current logical line</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.max_line_length">
+<code class="descname">max_line_length</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.max_line_length" title="Permalink to this definition">¶</a></dt>
+<dd><p>Maximum line length as configured by the user</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.multiline">
+<code class="descname">multiline</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.multiline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Whether the current physical line is multiline</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.next_line">
+<code class="descname">next_line</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.next_line"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.next_line" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the next line from the list.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.next_logical_line">
+<code class="descname">next_logical_line</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.next_logical_line"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.next_logical_line" title="Permalink to this definition">¶</a></dt>
+<dd><p>Record the previous logical line.</p>
+<p>This also resets the tokens list and the blank_lines count.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.noqa">
+<code class="descname">noqa</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.noqa" title="Permalink to this definition">¶</a></dt>
+<dd><p>Whether or not we&#8217;re observing NoQA</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.previous_indent_level">
+<code class="descname">previous_indent_level</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.previous_indent_level" title="Permalink to this definition">¶</a></dt>
+<dd><p>Previous level of indentation</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.previous_logical">
+<code class="descname">previous_logical</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.previous_logical" title="Permalink to this definition">¶</a></dt>
+<dd><p>Previous logical line</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.read_lines">
+<code class="descname">read_lines</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.read_lines"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.read_lines" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read the lines for this file checker.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.read_lines_from_filename">
+<code class="descname">read_lines_from_filename</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.read_lines_from_filename"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.read_lines_from_filename" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read the lines for a file.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.read_lines_from_stdin">
+<code class="descname">read_lines_from_stdin</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.read_lines_from_stdin"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.read_lines_from_stdin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read the lines from standard in.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.reset_blank_before">
+<code class="descname">reset_blank_before</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.reset_blank_before"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.reset_blank_before" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reset the blank_before attribute to zero.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.should_ignore_file">
+<code class="descname">should_ignore_file</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.should_ignore_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.should_ignore_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if <code class="docutils literal"><span class="pre">#</span> <span class="pre">flake8:</span> <span class="pre">noqa</span></code> is in the file to be ignored.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">True if a line matches <code class="xref py py-attr docutils literal"><span class="pre">FileProcessor.NOQA_FILE</span></code>,
+otherwise False</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3.4/library/functions.html#bool" title="(in Python v3.4)">bool</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.split_line">
+<code class="descname">split_line</code><span class="sig-paren">(</span><em>token</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.split_line"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.split_line" title="Permalink to this definition">¶</a></dt>
+<dd><p>Split a physical line&#8217;s line based on new-lines.</p>
+<p>This also auto-increments the line number for the caller.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.statistics">
+<code class="descname">statistics</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.statistics" title="Permalink to this definition">¶</a></dt>
+<dd><p>Statistics dictionary</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.strip_utf_bom">
+<code class="descname">strip_utf_bom</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.strip_utf_bom"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.strip_utf_bom" title="Permalink to this definition">¶</a></dt>
+<dd><p>Strip the UTF bom from the lines of the file.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.tokens">
+<code class="descname">tokens</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.tokens" title="Permalink to this definition">¶</a></dt>
+<dd><p>Current set of tokens</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.total_lines">
+<code class="descname">total_lines</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.total_lines" title="Permalink to this definition">¶</a></dt>
+<dd><p>Total number of lines in the file</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.update_checker_state_for">
+<code class="descname">update_checker_state_for</code><span class="sig-paren">(</span><em>plugin</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.update_checker_state_for"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.update_checker_state_for" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the checker_state attribute for the plugin.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.update_state">
+<code class="descname">update_state</code><span class="sig-paren">(</span><em>mapping</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.update_state"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.update_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the indent level based on the logical line mapping.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="flake8.processor.FileProcessor.verbose">
+<code class="descname">verbose</code><em class="property"> = None</em><a class="headerlink" href="#flake8.processor.FileProcessor.verbose" title="Permalink to this definition">¶</a></dt>
+<dd><p>Verbosity level of Flake8</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.processor.FileProcessor.visited_new_blank_line">
+<code class="descname">visited_new_blank_line</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#FileProcessor.visited_new_blank_line"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.FileProcessor.visited_new_blank_line" title="Permalink to this definition">¶</a></dt>
+<dd><p>Note that we visited a new blank line.</p>
+</dd></dl>
+
+</dd></dl>
+
+<div class="section" id="utility-functions">
+<span id="processor-utility-functions"></span><h3>Utility Functions<a class="headerlink" href="#utility-functions" title="Permalink to this headline">¶</a></h3>
+<dl class="function">
+<dt id="flake8.processor.count_parentheses">
+<code class="descclassname">flake8.processor.</code><code class="descname">count_parentheses</code><span class="sig-paren">(</span><em>current_parentheses_count</em>, <em>token_text</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#count_parentheses"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.count_parentheses" title="Permalink to this definition">¶</a></dt>
+<dd><p>Count the number of parentheses.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="flake8.processor.expand_indent">
+<code class="descclassname">flake8.processor.</code><code class="descname">expand_indent</code><span class="sig-paren">(</span><em>line</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#expand_indent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.expand_indent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the amount of indentation.</p>
+<p>Tabs are expanded to the next multiple of 8.</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">expand_indent</span><span class="p">(</span><span class="s1">&#39;    &#39;</span><span class="p">)</span>
+<span class="go">4</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">expand_indent</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="go">8</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">expand_indent</span><span class="p">(</span><span class="s1">&#39;       </span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="go">8</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">expand_indent</span><span class="p">(</span><span class="s1">&#39;        </span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="go">16</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="flake8.processor.is_eol_token">
+<code class="descclassname">flake8.processor.</code><code class="descname">is_eol_token</code><span class="sig-paren">(</span><em>token</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#is_eol_token"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.is_eol_token" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the token is an end-of-line token.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="flake8.processor.is_multiline_string">
+<code class="descclassname">flake8.processor.</code><code class="descname">is_multiline_string</code><span class="sig-paren">(</span><em>token</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#is_multiline_string"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.is_multiline_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if this is a multiline string.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="flake8.processor.log_token">
+<code class="descclassname">flake8.processor.</code><code class="descname">log_token</code><span class="sig-paren">(</span><em>log</em>, <em>token</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#log_token"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.log_token" title="Permalink to this definition">¶</a></dt>
+<dd><p>Log a token to a provided logging object.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="flake8.processor.mutate_string">
+<code class="descclassname">flake8.processor.</code><code class="descname">mutate_string</code><span class="sig-paren">(</span><em>text</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#mutate_string"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.mutate_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Replace contents with &#8216;xxx&#8217; to prevent syntax matching.</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">mute_string</span><span class="p">(</span><span class="s1">&#39;&quot;abc&quot;&#39;</span><span class="p">)</span>
+<span class="go">&#39;&quot;xxx&quot;&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mute_string</span><span class="p">(</span><span class="s2">&quot;&#39;&#39;&#39;abc&#39;&#39;&#39;&quot;</span><span class="p">)</span>
+<span class="go">&quot;&#39;&#39;&#39;xxx&#39;&#39;&#39;&quot;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mute_string</span><span class="p">(</span><span class="s2">&quot;r&#39;abc&#39;&quot;</span><span class="p">)</span>
+<span class="go">&quot;r&#39;xxx&#39;&quot;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="flake8.processor.token_is_comment">
+<code class="descclassname">flake8.processor.</code><code class="descname">token_is_comment</code><span class="sig-paren">(</span><em>token</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#token_is_comment"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.token_is_comment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the token type is a comment.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="flake8.processor.token_is_newline">
+<code class="descclassname">flake8.processor.</code><code class="descname">token_is_newline</code><span class="sig-paren">(</span><em>token</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/processor.html#token_is_newline"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.processor.token_is_newline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the token type is a newline token type.</p>
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="cli.html" class="btn btn-neutral float-right" title="Command Line Interface" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="start-to-finish.html" class="btn btn-neutral" title="What Happens When You Run Flake8" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

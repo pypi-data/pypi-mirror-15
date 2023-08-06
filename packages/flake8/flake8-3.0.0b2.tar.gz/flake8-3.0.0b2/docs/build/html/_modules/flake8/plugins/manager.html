@@ -1,0 +1,661 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>flake8.plugins.manager &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+    <li>flake8.plugins.manager</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for flake8.plugins.manager</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Plugin loading and management logic and classes.&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">import</span> <span class="nn">pkg_resources</span>
+
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">exceptions</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">flake8.plugins</span> <span class="kn">import</span> <span class="n">notifier</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s1">&#39;Checkers&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Listeners&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Plugin&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;PluginManager&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;ReportFormatters&#39;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">NO_GROUP_FOUND</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="Plugin"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin">[docs]</a><span class="k">class</span> <span class="nc">Plugin</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Wrap an EntryPoint from setuptools and other logic.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="Plugin.__init__"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">entry_point</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;&quot;Initialize our Plugin.</span>
+
+<span class="sd">        :param str name:</span>
+<span class="sd">            Name of the entry-point as it was registered with setuptools.</span>
+<span class="sd">        :param entry_point:</span>
+<span class="sd">            EntryPoint returned by setuptools.</span>
+<span class="sd">        :type entry_point:</span>
+<span class="sd">            setuptools.EntryPoint</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">entry_point</span> <span class="o">=</span> <span class="n">entry_point</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_plugin</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parameters</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_group</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_plugin_name</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_version</span> <span class="o">=</span> <span class="bp">None</span></div>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Provide an easy to read description of the current plugin.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="s1">&#39;Plugin(name=&quot;{0}&quot;, entry_point=&quot;{1}&quot;)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">entry_point</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="Plugin.is_in_a_group"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.is_in_a_group">[docs]</a>    <span class="k">def</span> <span class="nf">is_in_a_group</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determine if this plugin is in a group.</span>
+
+<span class="sd">        :returns:</span>
+<span class="sd">            True if the plugin is in a group, otherwise False.</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            bool</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span></div>
+
+<div class="viewcode-block" id="Plugin.group"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.group">[docs]</a>    <span class="k">def</span> <span class="nf">group</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Find and parse the group the plugin is in.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_group</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_group</span> <span class="o">=</span> <span class="n">name</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_group</span> <span class="o">=</span> <span class="n">NO_GROUP_FOUND</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_group</span> <span class="ow">is</span> <span class="n">NO_GROUP_FOUND</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_group</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;List of arguments that need to be passed to the plugin.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parameters</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_parameters</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">parameters_for</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parameters</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">plugin</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;The loaded (and cached) plugin associated with the entry-point.</span>
+
+<span class="sd">        This property implicitly loads the plugin and then caches it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_plugin</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plugin</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">version</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return the version of the plugin.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_version</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_in_a_group</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_version</span> <span class="o">=</span> <span class="n">version_for</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_version</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugin</span><span class="o">.</span><span class="n">version</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_version</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return the name of the plugin.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plugin_name</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_in_a_group</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_plugin_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_plugin_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugin</span><span class="o">.</span><span class="n">name</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plugin_name</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">off_by_default</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return whether the plugin is ignored by default.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plugin</span><span class="p">,</span> <span class="s1">&#39;off_by_default&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Plugin.execute"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.execute">[docs]</a>    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">r&quot;&quot;&quot;Call the plugin with \*args and \*\*kwargs.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugin</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>  <span class="c1"># pylint: disable=not-callable</span></div>
+
+    <span class="k">def</span> <span class="nf">_load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">verify_requirements</span><span class="p">):</span>
+        <span class="c1"># Avoid relying on hasattr() here.</span>
+        <span class="n">resolve</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">entry_point</span><span class="p">,</span> <span class="s1">&#39;resolve&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">require</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">entry_point</span><span class="p">,</span> <span class="s1">&#39;require&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">resolve</span> <span class="ow">and</span> <span class="n">require</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">verify_requirements</span><span class="p">:</span>
+                <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Verifying plugin &quot;</span><span class="si">%s</span><span class="s1">&quot;</span><span class="se">\&#39;</span><span class="s1">s requirements.&#39;</span><span class="p">,</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                <span class="n">require</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_plugin</span> <span class="o">=</span> <span class="n">resolve</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_plugin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">entry_point</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>
+                <span class="n">require</span><span class="o">=</span><span class="n">verify_requirements</span>
+            <span class="p">)</span>
+
+<div class="viewcode-block" id="Plugin.load_plugin"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.load_plugin">[docs]</a>    <span class="k">def</span> <span class="nf">load_plugin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">verify_requirements</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve the plugin for this entry-point.</span>
+
+<span class="sd">        This loads the plugin, stores it on the instance and then returns it.</span>
+<span class="sd">        It does not reload it after the first time, it merely returns the</span>
+<span class="sd">        cached plugin.</span>
+
+<span class="sd">        :param bool verify_requirements:</span>
+<span class="sd">            Whether or not to make setuptools verify that the requirements for</span>
+<span class="sd">            the plugin are satisfied.</span>
+<span class="sd">        :returns:</span>
+<span class="sd">            Nothing</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plugin</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Loading plugin &quot;</span><span class="si">%s</span><span class="s1">&quot; from entry-point.&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_load</span><span class="p">(</span><span class="n">verify_requirements</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">load_exception</span><span class="p">:</span>
+                <span class="n">LOG</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="n">load_exception</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                <span class="n">failed_to_load</span> <span class="o">=</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">FailedToLoadPlugin</span><span class="p">(</span>
+                    <span class="n">plugin</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+                    <span class="n">exception</span><span class="o">=</span><span class="n">load_exception</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">LOG</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">failed_to_load</span><span class="p">))</span>
+                <span class="k">raise</span> <span class="n">failed_to_load</span></div>
+
+<div class="viewcode-block" id="Plugin.enable"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.enable">[docs]</a>    <span class="k">def</span> <span class="nf">enable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Remove plugin name from the default ignore list.&quot;&quot;&quot;</span>
+        <span class="n">optmanager</span><span class="o">.</span><span class="n">remove_from_default_ignore</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="Plugin.disable"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.disable">[docs]</a>    <span class="k">def</span> <span class="nf">disable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Add the plugin name to the default ignore list.&quot;&quot;&quot;</span>
+        <span class="n">optmanager</span><span class="o">.</span><span class="n">extend_default_ignore</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="Plugin.provide_options"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.provide_options">[docs]</a>    <span class="k">def</span> <span class="nf">provide_options</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Pass the parsed options and extra arguments to the plugin.&quot;&quot;&quot;</span>
+        <span class="n">parse_options</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plugin</span><span class="p">,</span> <span class="s1">&#39;parse_options&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">parse_options</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Providing options to plugin &quot;</span><span class="si">%s</span><span class="s1">&quot;.&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">parse_options</span><span class="p">(</span><span class="n">optmanager</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+                <span class="n">parse_options</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">enable_extensions</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">enable</span><span class="p">(</span><span class="n">optmanager</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Plugin.register_options"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Plugin.register_options">[docs]</a>    <span class="k">def</span> <span class="nf">register_options</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Register the plugin&#39;s command-line options on the OptionManager.</span>
+
+<span class="sd">        :param optmanager:</span>
+<span class="sd">            Instantiated OptionManager to register options on.</span>
+<span class="sd">        :type optmanager:</span>
+<span class="sd">            flake8.options.manager.OptionManager</span>
+<span class="sd">        :returns:</span>
+<span class="sd">            Nothing</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">add_options</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plugin</span><span class="p">,</span> <span class="s1">&#39;add_options&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">add_options</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s1">&#39;Registering options from plugin &quot;</span><span class="si">%s</span><span class="s1">&quot; on OptionManager </span><span class="si">%r</span><span class="s1">&#39;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">optmanager</span>
+            <span class="p">)</span>
+            <span class="n">add_options</span><span class="p">(</span><span class="n">optmanager</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">off_by_default</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">disable</span><span class="p">(</span><span class="n">optmanager</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="PluginManager"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginManager">[docs]</a><span class="k">class</span> <span class="nc">PluginManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>  <span class="c1"># pylint: disable=too-few-public-methods</span>
+    <span class="sd">&quot;&quot;&quot;Find and manage plugins consistently.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PluginManager.__init__"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginManager.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">namespace</span><span class="p">,</span> <span class="n">verify_requirements</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the manager.</span>
+
+<span class="sd">        :param str namespace:</span>
+<span class="sd">            Namespace of the plugins to manage, e.g., &#39;flake8.extension&#39;.</span>
+<span class="sd">        :param bool verify_requirements:</span>
+<span class="sd">            Whether or not to make setuptools verify that the requirements for</span>
+<span class="sd">            the plugin are satisfied.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">namespace</span> <span class="o">=</span> <span class="n">namespace</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_requirements</span> <span class="o">=</span> <span class="n">verify_requirements</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">names</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_all_plugins</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">_load_all_plugins</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Loading entry-points for &quot;</span><span class="si">%s</span><span class="s1">&quot;.&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">namespace</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">entry_point</span> <span class="ow">in</span> <span class="n">pkg_resources</span><span class="o">.</span><span class="n">iter_entry_points</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">namespace</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">entry_point</span><span class="o">.</span><span class="n">name</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">Plugin</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">entry_point</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Loaded </span><span class="si">%r</span><span class="s1"> for plugin &quot;</span><span class="si">%s</span><span class="s1">&quot;.&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">name</span><span class="p">)</span>
+
+<div class="viewcode-block" id="PluginManager.map"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginManager.map">[docs]</a>    <span class="k">def</span> <span class="nf">map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">r&quot;&quot;&quot;Call ``func`` with the plugin and \*args and \**kwargs after.</span>
+
+<span class="sd">        This yields the return value from ``func`` for each plugin.</span>
+
+<span class="sd">        :param collections.Callable func:</span>
+<span class="sd">            Function to call with each plugin. Signature should at least be:</span>
+
+<span class="sd">            .. code-block:: python</span>
+
+<span class="sd">                def myfunc(plugin):</span>
+<span class="sd">                     pass</span>
+
+<span class="sd">            Any extra positional or keyword arguments specified with map will</span>
+<span class="sd">            be passed along to this function after the plugin. The plugin</span>
+<span class="sd">            passed is a :class:`~flake8.plugins.manager.Plugin`.</span>
+<span class="sd">        :param args:</span>
+<span class="sd">            Positional arguments to pass to ``func`` after each plugin.</span>
+<span class="sd">        :param kwargs:</span>
+<span class="sd">            Keyword arguments to pass to ``func`` after each plugin.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">func</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plugins</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="PluginManager.versions"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginManager.versions">[docs]</a>    <span class="k">def</span> <span class="nf">versions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># () -&gt; (str, str)</span>
+        <span class="sd">&quot;&quot;&quot;Generate the versions of plugins.</span>
+
+<span class="sd">        :returns:</span>
+<span class="sd">            Tuples of the plugin_name and version</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            tuple</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">plugins_seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">entry_point_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">:</span>
+            <span class="n">plugin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span><span class="p">[</span><span class="n">entry_point_name</span><span class="p">]</span>
+            <span class="n">plugin_name</span> <span class="o">=</span> <span class="n">plugin</span><span class="o">.</span><span class="n">plugin_name</span>
+            <span class="k">if</span> <span class="n">plugin</span><span class="o">.</span><span class="n">plugin_name</span> <span class="ow">in</span> <span class="n">plugins_seen</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">plugins_seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">plugin_name</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="n">plugin_name</span><span class="p">,</span> <span class="n">plugin</span><span class="o">.</span><span class="n">version</span><span class="p">)</span></div></div>
+
+
+<span class="k">def</span> <span class="nf">version_for</span><span class="p">(</span><span class="n">plugin</span><span class="p">):</span>
+    <span class="c1"># (Plugin) -&gt; Union[str, NoneType]</span>
+    <span class="sd">&quot;&quot;&quot;Determine the version of a plugin by it&#39;s module.</span>
+
+<span class="sd">    :param plugin:</span>
+<span class="sd">        The loaded plugin</span>
+<span class="sd">    :type plugin:</span>
+<span class="sd">        Plugin</span>
+<span class="sd">    :returns:</span>
+<span class="sd">        version string for the module</span>
+<span class="sd">    :rtype:</span>
+<span class="sd">        str</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">module_name</span> <span class="o">=</span> <span class="n">plugin</span><span class="o">.</span><span class="n">plugin</span><span class="o">.</span><span class="n">__module__</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">module</span> <span class="o">=</span> <span class="nb">__import__</span><span class="p">(</span><span class="n">module_name</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="s1">&#39;__version__&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="PluginTypeManager"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginTypeManager">[docs]</a><span class="k">class</span> <span class="nc">PluginTypeManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Parent class for most of the specific plugin types.&quot;&quot;&quot;</span>
+
+    <span class="n">namespace</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the plugin type&#39;s manager.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">PluginManager</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">namespace</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plugins_loaded</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check if the entry-point name is in this plugin type manager.&quot;&quot;&quot;</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Checking for &quot;</span><span class="si">%s</span><span class="s1">&quot; in plugin type manager.&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve a plugin by its name.&quot;&quot;&quot;</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Retrieving plugin for &quot;</span><span class="si">%s</span><span class="s1">&quot;.&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+
+<div class="viewcode-block" id="PluginTypeManager.get"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginTypeManager.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve the plugin referred to by ``name`` or return the default.</span>
+
+<span class="sd">        :param str name:</span>
+<span class="sd">            Name of the plugin to retrieve.</span>
+<span class="sd">        :param default:</span>
+<span class="sd">            Default value to return.</span>
+<span class="sd">        :returns:</span>
+<span class="sd">            Plugin object referred to by name, if it exists.</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            :class:`Plugin`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">default</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">names</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Proxy attribute to underlying manager.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">names</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">plugins</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Proxy attribute to underlying manager.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">plugins</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_generate_call_function</span><span class="p">(</span><span class="n">method_name</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">generated_function</span><span class="p">(</span><span class="n">plugin</span><span class="p">):</span>
+            <span class="sd">&quot;&quot;&quot;Function that attempts to call a specific method on a plugin.&quot;&quot;&quot;</span>
+            <span class="n">method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">method_name</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">method</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span>
+                    <span class="nb">isinstance</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">Callable</span><span class="p">)):</span>
+                <span class="k">return</span> <span class="n">method</span><span class="p">(</span><span class="n">optmanager</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">generated_function</span>
+
+<div class="viewcode-block" id="PluginTypeManager.load_plugins"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginTypeManager.load_plugins">[docs]</a>    <span class="k">def</span> <span class="nf">load_plugins</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Load all plugins of this type that are managed by this manager.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugins_loaded</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="k">def</span> <span class="nf">load_plugin</span><span class="p">(</span><span class="n">plugin</span><span class="p">):</span>
+            <span class="sd">&quot;&quot;&quot;Call each plugin&#39;s load_plugin method.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="n">plugin</span><span class="o">.</span><span class="n">load_plugin</span><span class="p">()</span>
+
+        <span class="n">plugins</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">load_plugin</span><span class="p">))</span>
+        <span class="c1"># Do not set plugins_loaded if we run into an exception</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plugins_loaded</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="n">plugins</span></div>
+
+<div class="viewcode-block" id="PluginTypeManager.register_plugin_versions"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginTypeManager.register_plugin_versions">[docs]</a>    <span class="k">def</span> <span class="nf">register_plugin_versions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Register the plugins and their versions with the OptionManager.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_plugins</span><span class="p">()</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">plugin_name</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">versions</span><span class="p">():</span>
+            <span class="n">optmanager</span><span class="o">.</span><span class="n">register_plugin</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">plugin_name</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="PluginTypeManager.register_options"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginTypeManager.register_options">[docs]</a>    <span class="k">def</span> <span class="nf">register_options</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Register all of the checkers&#39; options to the OptionManager.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_plugins</span><span class="p">()</span>
+        <span class="n">call_register_options</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_call_function</span><span class="p">(</span>
+            <span class="s1">&#39;register_options&#39;</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">call_register_options</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="PluginTypeManager.provide_options"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.PluginTypeManager.provide_options">[docs]</a>    <span class="k">def</span> <span class="nf">provide_options</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Provide parsed options and extra arguments to the plugins.&quot;&quot;&quot;</span>
+        <span class="n">call_provide_options</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_call_function</span><span class="p">(</span>
+            <span class="s1">&#39;provide_options&#39;</span><span class="p">,</span> <span class="n">optmanager</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">call_provide_options</span><span class="p">))</span></div></div>
+
+
+<span class="k">class</span> <span class="nc">NotifierBuilderMixin</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>  <span class="c1"># pylint: disable=too-few-public-methods</span>
+    <span class="sd">&quot;&quot;&quot;Mixin class that builds a Notifier from a PluginManager.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">build_notifier</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Build a Notifier for our Listeners.</span>
+
+<span class="sd">        :returns:</span>
+<span class="sd">            Object to notify our listeners of certain error codes and</span>
+<span class="sd">            warnings.</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            :class:`~flake8.notifier.Notifier`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">notifier_trie</span> <span class="o">=</span> <span class="n">notifier</span><span class="o">.</span><span class="n">Notifier</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">:</span>
+            <span class="n">notifier_trie</span><span class="o">.</span><span class="n">register_listener</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">notifier_trie</span>
+
+
+<div class="viewcode-block" id="Checkers"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Checkers">[docs]</a><span class="k">class</span> <span class="nc">Checkers</span><span class="p">(</span><span class="n">PluginTypeManager</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;All of the checkers registered through entry-ponits.&quot;&quot;&quot;</span>
+
+    <span class="n">namespace</span> <span class="o">=</span> <span class="s1">&#39;flake8.extension&#39;</span>
+
+<div class="viewcode-block" id="Checkers.checks_expecting"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Checkers.checks_expecting">[docs]</a>    <span class="k">def</span> <span class="nf">checks_expecting</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">argument_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve checks that expect an argument with the specified name.</span>
+
+<span class="sd">        Find all checker plugins that are expecting a specific argument.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">plugin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">argument_name</span> <span class="o">==</span> <span class="n">plugin</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+                <span class="k">yield</span> <span class="n">plugin</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">ast_plugins</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;List of plugins that expect the AST tree.&quot;&quot;&quot;</span>
+        <span class="n">plugins</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_ast_plugins&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">plugins</span><span class="p">:</span>
+            <span class="n">plugins</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checks_expecting</span><span class="p">(</span><span class="s1">&#39;tree&#39;</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ast_plugins</span> <span class="o">=</span> <span class="n">plugins</span>
+        <span class="k">return</span> <span class="n">plugins</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">logical_line_plugins</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;List of plugins that expect the logical lines.&quot;&quot;&quot;</span>
+        <span class="n">plugins</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_logical_line_plugins&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">plugins</span><span class="p">:</span>
+            <span class="n">plugins</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checks_expecting</span><span class="p">(</span><span class="s1">&#39;logical_line&#39;</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logical_line_plugins</span> <span class="o">=</span> <span class="n">plugins</span>
+        <span class="k">return</span> <span class="n">plugins</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">physical_line_plugins</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;List of plugins that expect the physical lines.&quot;&quot;&quot;</span>
+        <span class="n">plugins</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_physical_line_plugins&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">plugins</span><span class="p">:</span>
+            <span class="n">plugins</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checks_expecting</span><span class="p">(</span><span class="s1">&#39;physical_line&#39;</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_physical_line_plugins</span> <span class="o">=</span> <span class="n">plugins</span>
+        <span class="k">return</span> <span class="n">plugins</span></div>
+
+
+<div class="viewcode-block" id="Listeners"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.Listeners">[docs]</a><span class="k">class</span> <span class="nc">Listeners</span><span class="p">(</span><span class="n">PluginTypeManager</span><span class="p">,</span> <span class="n">NotifierBuilderMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;All of the listeners registered through entry-points.&quot;&quot;&quot;</span>
+
+    <span class="n">namespace</span> <span class="o">=</span> <span class="s1">&#39;flake8.listen&#39;</span></div>
+
+
+<div class="viewcode-block" id="ReportFormatters"><a class="viewcode-back" href="../../../internal/plugin_handling.html#flake8.plugins.manager.ReportFormatters">[docs]</a><span class="k">class</span> <span class="nc">ReportFormatters</span><span class="p">(</span><span class="n">PluginTypeManager</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;All of the report formatters registered through entry-points.&quot;&quot;&quot;</span>
+
+    <span class="n">namespace</span> <span class="o">=</span> <span class="s1">&#39;flake8.report&#39;</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

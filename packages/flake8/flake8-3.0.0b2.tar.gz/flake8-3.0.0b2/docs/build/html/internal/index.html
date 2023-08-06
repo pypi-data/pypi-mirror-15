@@ -1,0 +1,304 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Exploring Flake8’s Internals &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../index.html"/>
+        <link rel="next" title="Contributing to Flake8" href="contributing.html"/>
+        <link rel="prev" title="Writing Plugins For Flake8 2 and 3" href="../plugin-development/cross-compatibility.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Exploring Flake8&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html">Contributing to Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html">Writing Documentation for Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releases.html">Releasing Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="start-to-finish.html">What Happens When You Run Flake8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="checker.html">How Checks are Run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cli.html">Command Line Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="formatters.html">Built-in Formatters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="option_handling.html">Option and Configuration Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plugin_handling.html">Plugin Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html">Utility Functions</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+    <li>Exploring Flake8&#8217;s Internals</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/internal/index.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="exploring-flake8-s-internals">
+<h1>Exploring Flake8&#8217;s Internals<a class="headerlink" href="#exploring-flake8-s-internals" title="Permalink to this headline">¶</a></h1>
+<p>While writing <strong class="program">Flake8</strong> 3.0, the developers attempted to capture some reasoning
+and decision information in internal documentation meant for future developers
+and maintaners. Most of this information is unnecessary for users and plugin
+developers. Some of it, however, is linked to from the plugin development
+documentation.</p>
+<p>Keep in mind that not everything will be here and you may need to help pull
+information out of the developers&#8217; heads and into these documents. Please
+pull gently.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to Flake8</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#code-of-conduct">Code of Conduct</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#setting-up-a-development-environment">Setting Up A Development Environment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#filing-a-bug">Filing a Bug</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#requesting-a-new-feature">Requesting a New Feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#contributing-documentation">Contributing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#contributing-code">Contributing Code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#reviewing-and-triaging-issues-and-merge-requests">Reviewing and Triaging Issues and Merge Requests</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="writing-documentation.html">Writing Documentation for Flake8</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#view-the-docs-locally-before-submitting">View the docs locally before submitting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#run-the-docs-linter-tests-before-submitting">Run the docs linter tests before submitting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#capitalize-flake8-in-prose">Capitalize Flake8 in prose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#use-the-prompt-directive-for-command-line-examples">Use the prompt directive for command-line examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#wrap-lines-around-79-characters">Wrap lines around 79 characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#use-two-new-lines-before-new-sections">Use two new-lines before new sections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#surround-document-titles-with-equal-symbols">Surround document titles with equal symbols</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#use-the-option-template-for-new-options">Use the option template for new options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#use-anchors-for-easy-reference-linking">Use anchors for easy reference linking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing-documentation.html#keep-your-audience-in-mind">Keep your audience in mind</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releasing Flake8</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="releases.html#major-releases">Major Releases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releases.html#minor-releases">Minor Releases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releases.html#patch-releases">Patch Releases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="releases.html#process">Process</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="start-to-finish.html">What Happens When You Run Flake8</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="start-to-finish.html#invocation">Invocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="start-to-finish.html#application-logic">Application Logic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="start-to-finish.html#exiting">Exiting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="checker.html">How Checks are Run</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="checker.html#processing-files">Processing Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="checker.html#api-reference">API Reference</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Interface</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cli.html#api-documentation">API Documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="formatters.html">Built-in Formatters</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="formatters.html#default-formatter">Default Formatter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="formatters.html#pylint-formatter">Pylint Formatter</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="option_handling.html">Option and Configuration Handling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="option_handling.html#option-management">Option Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="option_handling.html#configuration-file-management">Configuration File Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="option_handling.html#aggregating-configuration-file-and-command-line-arguments">Aggregating Configuration File and Command Line Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="option_handling.html#api-documentation">API Documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="plugin_handling.html">Plugin Handling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="plugin_handling.html#plugin-management">Plugin Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plugin_handling.html#notifying-listener-plugins">Notifying Listener Plugins</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plugin_handling.html#default-plugins">Default Plugins</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plugin_handling.html#api-documentation">API Documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="utils.html">Utility Functions</a></li>
+</ul>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="contributing.html" class="btn btn-neutral float-right" title="Contributing to Flake8" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../plugin-development/cross-compatibility.html" class="btn btn-neutral" title="Writing Plugins For Flake8 2 and 3" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

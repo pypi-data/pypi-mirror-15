@@ -1,0 +1,503 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>flake8.main.application &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+    <li>flake8.main.application</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for flake8.main.application</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Module containing the application logic for Flake8.&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">print_function</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">import</span> <span class="nn">flake8</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">checker</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">defaults</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">exceptions</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">style_guide</span>
+<span class="kn">from</span> <span class="nn">flake8</span> <span class="kn">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">flake8.main</span> <span class="kn">import</span> <span class="n">options</span>
+<span class="kn">from</span> <span class="nn">flake8.options</span> <span class="kn">import</span> <span class="n">aggregator</span>
+<span class="kn">from</span> <span class="nn">flake8.options</span> <span class="kn">import</span> <span class="n">manager</span>
+<span class="kn">from</span> <span class="nn">flake8.plugins</span> <span class="kn">import</span> <span class="n">manager</span> <span class="k">as</span> <span class="n">plugin_manager</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Application"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application">[docs]</a><span class="k">class</span> <span class="nc">Application</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Abstract our application into a class.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">program</span><span class="o">=</span><span class="s1">&#39;flake8&#39;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">flake8</span><span class="o">.</span><span class="n">__version__</span><span class="p">):</span>
+        <span class="c1"># type: (str, str) -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Initialize our application.</span>
+
+<span class="sd">        :param str program:</span>
+<span class="sd">            The name of the program/application that we&#39;re executing.</span>
+<span class="sd">        :param str version:</span>
+<span class="sd">            The version of the program/application we&#39;re executing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1">#: The timestamp when the Application instance was instantiated.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="c1">#: The timestamp when the Application finished reported errors.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">end_time</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The name of the program being run</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">program</span> <span class="o">=</span> <span class="n">program</span>
+        <span class="c1">#: The version of the program being run</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="n">version</span>
+        <span class="c1">#: The instance of :class:`flake8.options.manager.OptionManager` used</span>
+        <span class="c1">#: to parse and handle the options and arguments passed by the user</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">OptionManager</span><span class="p">(</span>
+            <span class="n">prog</span><span class="o">=</span><span class="s1">&#39;flake8&#39;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">flake8</span><span class="o">.</span><span class="n">__version__</span>
+        <span class="p">)</span>
+        <span class="n">options</span><span class="o">.</span><span class="n">register_default_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">)</span>
+
+        <span class="c1"># We haven&#39;t found or registered our plugins yet, so let&#39;s defer</span>
+        <span class="c1"># printing the version until we aggregate options from config files</span>
+        <span class="c1"># and the command-line. First, let&#39;s clone our arguments on the CLI,</span>
+        <span class="c1"># then we&#39;ll attempt to remove ``--version`` so that we can avoid</span>
+        <span class="c1"># triggering the &quot;version&quot; action in optparse. If it&#39;s not there, we</span>
+        <span class="c1"># do not need to worry and we can continue. If it is, we successfully</span>
+        <span class="c1"># defer printing the version until just a little bit later.</span>
+        <span class="c1"># Similarly we have to defer printing the help text until later.</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[:]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;--version&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;--help&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;-h&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="n">preliminary_opts</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="o">.</span><span class="n">parse_args</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+        <span class="c1"># Set the verbosity of the program</span>
+        <span class="n">flake8</span><span class="o">.</span><span class="n">configure_logging</span><span class="p">(</span><span class="n">preliminary_opts</span><span class="o">.</span><span class="n">verbose</span><span class="p">,</span>
+                                 <span class="n">preliminary_opts</span><span class="o">.</span><span class="n">output_file</span><span class="p">)</span>
+
+        <span class="c1">#: The instance of :class:`flake8.plugins.manager.Checkers`</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_plugins</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The instance of :class:`flake8.plugins.manager.Listeners`</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">listening_plugins</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The instance of :class:`flake8.plugins.manager.ReportFormatters`</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formatting_plugins</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The user-selected formatter from :attr:`formatting_plugins`</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The :class:`flake8.plugins.notifier.Notifier` for listening plugins</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">listener_trie</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The :class:`flake8.style_guide.StyleGuide` built from the user&#39;s</span>
+        <span class="c1">#: options</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">guide</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The :class:`flake8.checker.Manager` that will handle running all of</span>
+        <span class="c1">#: the checks selected by the user.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c1">#: The user-supplied options parsed into an instance of</span>
+        <span class="c1">#: :class:`optparse.Values`</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The left over arguments that were not parsed by</span>
+        <span class="c1">#: :attr:`option_manager`</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c1">#: The number of errors, warnings, and other messages after running</span>
+        <span class="c1">#: flake8 and taking into account ignored errors and lines.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1">#: The total number of errors before accounting for ignored errors and</span>
+        <span class="c1">#: lines.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_result_count</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="c1">#: Whether the program is processing a diff or not</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">running_against_diff</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="c1">#: The parsed diff information</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parsed_diff</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="Application.exit"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.exit">[docs]</a>    <span class="k">def</span> <span class="nf">exit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Handle finalization and exiting the program.</span>
+
+<span class="sd">        This should be the last thing called on the application instance. It</span>
+<span class="sd">        will check certain options and exit appropriately.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">count</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_count</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">exit_zero</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">SystemExit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Application.find_plugins"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.find_plugins">[docs]</a>    <span class="k">def</span> <span class="nf">find_plugins</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Find and load the plugins for this application.</span>
+
+<span class="sd">        If :attr:`check_plugins`, :attr:`listening_plugins`, or</span>
+<span class="sd">        :attr:`formatting_plugins` are ``None`` then this method will update</span>
+<span class="sd">        them with the appropriate plugin manager instance. Given the expense</span>
+<span class="sd">        of finding plugins (via :mod:`pkg_resources`) we want this to be</span>
+<span class="sd">        idempotent and so only update those attributes if they are ``None``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_plugins</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">check_plugins</span> <span class="o">=</span> <span class="n">plugin_manager</span><span class="o">.</span><span class="n">Checkers</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">listening_plugins</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">listening_plugins</span> <span class="o">=</span> <span class="n">plugin_manager</span><span class="o">.</span><span class="n">Listeners</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatting_plugins</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">formatting_plugins</span> <span class="o">=</span> <span class="n">plugin_manager</span><span class="o">.</span><span class="n">ReportFormatters</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_plugins</span><span class="o">.</span><span class="n">load_plugins</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">listening_plugins</span><span class="o">.</span><span class="n">load_plugins</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formatting_plugins</span><span class="o">.</span><span class="n">load_plugins</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Application.register_plugin_options"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.register_plugin_options">[docs]</a>    <span class="k">def</span> <span class="nf">register_plugin_options</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Register options provided by plugins to our option manager.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_plugins</span><span class="o">.</span><span class="n">register_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_plugins</span><span class="o">.</span><span class="n">register_plugin_versions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">listening_plugins</span><span class="o">.</span><span class="n">register_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formatting_plugins</span><span class="o">.</span><span class="n">register_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Application.parse_configuration_and_cli"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.parse_configuration_and_cli">[docs]</a>    <span class="k">def</span> <span class="nf">parse_configuration_and_cli</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">argv</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="c1"># type: (Union[NoneType, List[str]]) -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Parse configuration files and the CLI options.</span>
+
+<span class="sd">        :param list argv:</span>
+<span class="sd">            Command-line arguments passed in directly.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_options</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">,</span> <span class="n">argv</span>
+            <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">running_against_diff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">diff</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">running_against_diff</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parsed_diff</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">parse_unified_diff</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_plugins</span><span class="o">.</span><span class="n">provide_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span>
+                                           <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">listening_plugins</span><span class="o">.</span><span class="n">provide_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">,</span>
+                                               <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span>
+                                               <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formatting_plugins</span><span class="o">.</span><span class="n">provide_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_manager</span><span class="p">,</span>
+                                                <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span>
+                                                <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Application.make_formatter"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.make_formatter">[docs]</a>    <span class="k">def</span> <span class="nf">make_formatter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Initialize a formatter based on the parsed options.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatting_plugins</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">format</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatting_plugins</span><span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">]</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Application.make_notifier"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.make_notifier">[docs]</a>    <span class="k">def</span> <span class="nf">make_notifier</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Initialize our listener Notifier.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">listener_trie</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">listener_trie</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">listening_plugins</span><span class="o">.</span><span class="n">build_notifier</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Application.make_guide"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.make_guide">[docs]</a>    <span class="k">def</span> <span class="nf">make_guide</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Initialize our StyleGuide.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">guide</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">guide</span> <span class="o">=</span> <span class="n">style_guide</span><span class="o">.</span><span class="n">StyleGuide</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">listener_trie</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">running_against_diff</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">guide</span><span class="o">.</span><span class="n">add_diff_ranges</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parsed_diff</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Application.make_file_checker_manager"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.make_file_checker_manager">[docs]</a>    <span class="k">def</span> <span class="nf">make_file_checker_manager</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Initialize our FileChecker Manager.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span> <span class="o">=</span> <span class="n">checker</span><span class="o">.</span><span class="n">Manager</span><span class="p">(</span>
+                <span class="n">style_guide</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">guide</span><span class="p">,</span>
+                <span class="n">arguments</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">,</span>
+                <span class="n">checker_plugins</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_plugins</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Application.run_checks"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.run_checks">[docs]</a>    <span class="k">def</span> <span class="nf">run_checks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Run the actual checks with the FileChecker Manager.</span>
+
+<span class="sd">        This method encapsulates the logic to make a</span>
+<span class="sd">        :class:`~flake8.checker.Manger` instance run the checks it is</span>
+<span class="sd">        managing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">running_against_diff</span><span class="p">:</span>
+            <span class="n">files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parsed_diff</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span><span class="o">.</span><span class="n">start</span><span class="p">(</span><span class="n">files</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Finished running&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Application.report_benchmarks"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.report_benchmarks">[docs]</a>    <span class="k">def</span> <span class="nf">report_benchmarks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Aggregate, calculate, and report benchmarks for this run.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">benchmark</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">time_elapsed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_time</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span>
+        <span class="n">statistics</span> <span class="o">=</span> <span class="p">[(</span><span class="s1">&#39;seconds elapsed&#39;</span><span class="p">,</span> <span class="n">time_elapsed</span><span class="p">)]</span>
+        <span class="n">add_statistic</span> <span class="o">=</span> <span class="n">statistics</span><span class="o">.</span><span class="n">append</span>
+        <span class="k">for</span> <span class="n">statistic</span> <span class="ow">in</span> <span class="p">(</span><span class="n">defaults</span><span class="o">.</span><span class="n">STATISTIC_NAMES</span> <span class="o">+</span> <span class="p">(</span><span class="s1">&#39;files&#39;</span><span class="p">,)):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span><span class="o">.</span><span class="n">statistics</span><span class="p">[</span><span class="n">statistic</span><span class="p">]</span>
+            <span class="n">total_description</span> <span class="o">=</span> <span class="s1">&#39;total &#39;</span> <span class="o">+</span> <span class="n">statistic</span> <span class="o">+</span> <span class="s1">&#39; processed&#39;</span>
+            <span class="n">add_statistic</span><span class="p">((</span><span class="n">total_description</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+            <span class="n">per_second_description</span> <span class="o">=</span> <span class="n">statistic</span> <span class="o">+</span> <span class="s1">&#39; processed per second&#39;</span>
+            <span class="n">add_statistic</span><span class="p">((</span><span class="n">per_second_description</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span> <span class="o">/</span> <span class="n">time_elapsed</span><span class="p">)))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span><span class="o">.</span><span class="n">show_benchmarks</span><span class="p">(</span><span class="n">statistics</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Application.report_errors"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.report_errors">[docs]</a>    <span class="k">def</span> <span class="nf">report_errors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Report all the errors found by flake8 3.0.</span>
+
+<span class="sd">        This also updates the :attr:`result_count` attribute with the total</span>
+<span class="sd">        number of errors, warnings, and other messages found.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Reporting errors&#39;</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span><span class="o">.</span><span class="n">report</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_result_count</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">result_count</span> <span class="o">=</span> <span class="n">results</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Found a total of </span><span class="si">%d</span><span class="s1"> results and reported </span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">,</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">total_result_count</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">result_count</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Application.initialize"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">argv</span><span class="p">):</span>
+        <span class="c1"># type: () -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the application to be run.</span>
+
+<span class="sd">        This finds the plugins, registers their options, and parses the</span>
+<span class="sd">        command-line arguments.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">find_plugins</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">register_plugin_options</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parse_configuration_and_cli</span><span class="p">(</span><span class="n">argv</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">make_formatter</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">make_notifier</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">make_guide</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">make_file_checker_manager</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">_run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">argv</span><span class="p">):</span>
+        <span class="c1"># type: (Union[NoneType, List[str]]) -&gt; NoneType</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">argv</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_checks</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">report_errors</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">report_benchmarks</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Application.run"><a class="viewcode-back" href="../../../internal/cli.html#flake8.main.application.Application.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">argv</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="c1"># type: (Union[NoneType, List[str]]) -&gt; NoneType</span>
+        <span class="sd">&quot;&quot;&quot;Run our application.</span>
+
+<span class="sd">        This method will also handle KeyboardInterrupt exceptions for the</span>
+<span class="sd">        entirety of the flake8 application. If it sees a KeyboardInterrupt it</span>
+<span class="sd">        will forcibly clean up the :class:`~flake8.checker.Manager`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_run</span><span class="p">(</span><span class="n">argv</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyboardInterrupt</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s1">&#39;... stopped&#39;</span><span class="p">)</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s1">&#39;Caught keyboard interrupt from user&#39;</span><span class="p">)</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file_checker_manager</span><span class="o">.</span><span class="n">_force_cleanup</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EarlyQuit</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s1">&#39;... stopped while processing files&#39;</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

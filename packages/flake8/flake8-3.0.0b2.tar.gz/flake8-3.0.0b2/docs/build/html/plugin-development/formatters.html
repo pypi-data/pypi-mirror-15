@@ -1,0 +1,407 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Developing a Formatting Plugin for Flake8 &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../index.html"/>
+        <link rel="up" title="Writing Plugins for Flake8" href="index.html"/>
+        <link rel="next" title="Writing Plugins For Flake8 2 and 3" href="cross-compatibility.html"/>
+        <link rel="prev" title="Receiving Information For A Check Plugin" href="plugin-parameters.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/index.html">Using Flake8</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Writing Plugins for Flake8</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#getting-started">Getting Started</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="registering-plugins.html">Registering a Plugin with Flake8</a></li>
+<li class="toctree-l3"><a class="reference internal" href="plugin-parameters.html">Receiving Information For A Check Plugin</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Developing a Formatting Plugin for Flake8</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#api-documentation">API Documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cross-compatibility.html">Writing Plugins For Flake8 2 and 3</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">Writing Plugins for Flake8</a> &raquo;</li>
+      
+    <li>Developing a Formatting Plugin for Flake8</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/plugin-development/formatters.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="developing-a-formatting-plugin-for-flake8">
+<span id="formatting-plugins"></span><h1>Developing a Formatting Plugin for Flake8<a class="headerlink" href="#developing-a-formatting-plugin-for-flake8" title="Permalink to this headline">¶</a></h1>
+<p><strong class="program">Flake8</strong> allowed for custom formatting plugins in version
+3.0.0. Let&#8217;s write a plugin together:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">flake8.formatting</span> <span class="kn">import</span> <span class="n">base</span>
+
+
+<span class="k">class</span> <span class="nc">Example</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">BaseFormatter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Flake8&#39;s example formatter.&quot;&quot;&quot;</span>
+
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>We notice, as soon as we start, that we inherit from <strong class="program">Flake8</strong>&#8216;s
+<a class="reference internal" href="#flake8.formatting.base.BaseFormatter" title="flake8.formatting.base.BaseFormatter"><code class="xref py py-class docutils literal"><span class="pre">BaseFormatter</span></code></a> class. If we follow the
+<a class="reference internal" href="registering-plugins.html#register-a-plugin"><span class="std std-ref">instructions to register a plugin</span></a> and try to use
+our example formatter, e.g., <code class="docutils literal"><span class="pre">flake8</span> <span class="pre">--format=example</span></code> then
+<strong class="program">Flake8</strong> will fail because we did not implement the <code class="docutils literal"><span class="pre">format</span></code> method.
+Let&#8217;s do that next.</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Example</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">BaseFormatter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Flake8&#39;s example formatter.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">format</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s1">&#39;Example formatter: {0!r}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>With that we&#8217;re done. Obviously this isn&#8217;t a very useful formatter, but it
+should highlight the simplicitly of creating a formatter with Flake8. If we
+wanted to instead create a formatter that aggregated the results and returned
+XML, JSON, or subunit we could also do that. <strong class="program">Flake8</strong> interacts with the
+formatter in two ways:</p>
+<ol class="arabic simple">
+<li>It creates the formatter and provides it the options parsed from the
+configuration files and command-line</li>
+<li>It uses the instance of the formatter and calls <code class="docutils literal"><span class="pre">handle</span></code> with the error.</li>
+</ol>
+<p>By default <a class="reference internal" href="#flake8.formatting.base.BaseFormatter.handle" title="flake8.formatting.base.BaseFormatter.handle"><code class="xref py py-meth docutils literal"><span class="pre">flake8.formatting.base.BaseFormatter.handle()</span></code></a> simply calls
+the <code class="docutils literal"><span class="pre">format</span></code> method and then <code class="docutils literal"><span class="pre">write</span></code>. Any extra handling you wish to do
+for formatting purposes should override the <code class="docutils literal"><span class="pre">handle</span></code> method.</p>
+<div class="section" id="api-documentation">
+<h2>API Documentation<a class="headerlink" href="#api-documentation" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="flake8.formatting.base.BaseFormatter">
+<em class="property">class </em><code class="descclassname">flake8.formatting.base.</code><code class="descname">BaseFormatter</code><span class="sig-paren">(</span><em>options</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Class defining the formatter interface.</p>
+<dl class="attribute">
+<dt id="BaseFormatter.options">
+<code class="descname">options</code><a class="headerlink" href="#BaseFormatter.options" title="Permalink to this definition">¶</a></dt>
+<dd><p>The options parsed from both configuration files and the command-line.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="BaseFormatter.filename">
+<code class="descname">filename</code><a class="headerlink" href="#BaseFormatter.filename" title="Permalink to this definition">¶</a></dt>
+<dd><p>If specified by the user, the path to store the results of the run.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="BaseFormatter.output_fd">
+<code class="descname">output_fd</code><a class="headerlink" href="#BaseFormatter.output_fd" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialized when the <code class="xref py py-meth docutils literal"><span class="pre">start()</span></code> is called. This will be a file
+object opened for writing.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="BaseFormatter.newline">
+<code class="descname">newline</code><a class="headerlink" href="#BaseFormatter.newline" title="Permalink to this definition">¶</a></dt>
+<dd><p>The string to add to the end of a line. This is only used when the
+output filename has been specified.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.formatting.base.BaseFormatter.after_init">
+<code class="descname">after_init</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter.after_init"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter.after_init" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize the formatter further.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.formatting.base.BaseFormatter.format">
+<code class="descname">format</code><span class="sig-paren">(</span><em>error</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter.format"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter.format" title="Permalink to this definition">¶</a></dt>
+<dd><p>Format an error reported by Flake8.</p>
+<p>This method <strong>must</strong> be implemented by subclasses.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>error</strong> (<em>flake8.style_guide.Error</em>) &#8211; This will be an instance of <code class="xref py py-class docutils literal"><span class="pre">Error</span></code>.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The formatted error string.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)">str</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.formatting.base.BaseFormatter.handle">
+<code class="descname">handle</code><span class="sig-paren">(</span><em>error</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter.handle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter.handle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle an error reported by Flake8.</p>
+<p>This defaults to calling <code class="xref py py-meth docutils literal"><span class="pre">format()</span></code>, <code class="xref py py-meth docutils literal"><span class="pre">show_source()</span></code>, and
+then <code class="xref py py-meth docutils literal"><span class="pre">write()</span></code>. To extend how errors are handled, override this
+method.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>error</strong> (<em>flake8.style_guide.Error</em>) &#8211; This will be an instance of <code class="xref py py-class docutils literal"><span class="pre">Error</span></code>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.formatting.base.BaseFormatter.show_benchmarks">
+<code class="descname">show_benchmarks</code><span class="sig-paren">(</span><em>benchmarks</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter.show_benchmarks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter.show_benchmarks" title="Permalink to this definition">¶</a></dt>
+<dd><p>Format and print the benchmarks.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.formatting.base.BaseFormatter.show_source">
+<code class="descname">show_source</code><span class="sig-paren">(</span><em>error</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter.show_source"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter.show_source" title="Permalink to this definition">¶</a></dt>
+<dd><p>Show the physical line generating the error.</p>
+<p>This also adds an indicator for the particular part of the line that
+is reported as generating the problem.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>error</strong> (<em>flake8.style_guide.Error</em>) &#8211; This will be an instance of <code class="xref py py-class docutils literal"><span class="pre">Error</span></code>.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The formatted error string if the user wants to show the source.
+If the user does not want to show the source, this will return
+<code class="docutils literal"><span class="pre">None</span></code>.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)">str</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.formatting.base.BaseFormatter.start">
+<code class="descname">start</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepare the formatter to receive input.</p>
+<p>This defaults to initializing <a class="reference internal" href="#BaseFormatter.output_fd" title="BaseFormatter.output_fd"><code class="xref py py-attr docutils literal"><span class="pre">output_fd</span></code></a> if <a class="reference internal" href="#BaseFormatter.filename" title="BaseFormatter.filename"><code class="xref py py-attr docutils literal"><span class="pre">filename</span></code></a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.formatting.base.BaseFormatter.stop">
+<code class="descname">stop</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter.stop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clean up after reporting is finished.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="flake8.formatting.base.BaseFormatter.write">
+<code class="descname">write</code><span class="sig-paren">(</span><em>line</em>, <em>source</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/flake8/formatting/base.html#BaseFormatter.write"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#flake8.formatting.base.BaseFormatter.write" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write the line either to the output file or stdout.</p>
+<p>This handles deciding whether to write to a file or print to standard
+out for subclasses. Override this if you want behaviour that differs
+from the default.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>line</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; The formatted string to print or write.</li>
+<li><strong>source</strong> (<a class="reference external" href="https://docs.python.org/3.4/library/stdtypes.html#str" title="(in Python v3.4)"><em>str</em></a>) &#8211; The source code that has been formatted and associated with the
+line of output.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="cross-compatibility.html" class="btn btn-neutral float-right" title="Writing Plugins For Flake8 2 and 3" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="plugin-parameters.html" class="btn btn-neutral" title="Receiving Information For A Check Plugin" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

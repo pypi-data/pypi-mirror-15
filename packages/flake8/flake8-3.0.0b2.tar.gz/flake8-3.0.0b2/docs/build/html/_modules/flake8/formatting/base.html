@@ -1,0 +1,364 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>flake8.formatting.base &mdash; flake8 3.0.0b1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="flake8 3.0.0b1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> flake8
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                3.0.0b1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../glossary.html">Glossary of Terms Used in Flake8 Documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user/index.html">Using Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugin-development/index.html">Writing Plugins for Flake8</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../internal/index.html">Exploring Flake8&#8217;s Internals</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../release-notes/index.html">Release Notes and History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">flake8</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+    <li>flake8.formatting.base</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for flake8.formatting.base</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;The base class and interface for all formatting plugins.&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">print_function</span>
+
+
+<div class="viewcode-block" id="BaseFormatter"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter">[docs]</a><span class="k">class</span> <span class="nc">BaseFormatter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Class defining the formatter interface.</span>
+
+<span class="sd">    .. attribute:: options</span>
+
+<span class="sd">        The options parsed from both configuration files and the command-line.</span>
+
+<span class="sd">    .. attribute:: filename</span>
+
+<span class="sd">        If specified by the user, the path to store the results of the run.</span>
+
+<span class="sd">    .. attribute:: output_fd</span>
+
+<span class="sd">        Initialized when the :meth:`start` is called. This will be a file</span>
+<span class="sd">        object opened for writing.</span>
+
+<span class="sd">    .. attribute:: newline</span>
+
+<span class="sd">        The string to add to the end of a line. This is only used when the</span>
+<span class="sd">        output filename has been specified.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize with the options parsed from config and cli.</span>
+
+<span class="sd">        This also calls a hook, :meth:`after_init`, so subclasses do not need</span>
+<span class="sd">        to call super to call this method.</span>
+
+<span class="sd">        :param optparse.Values options:</span>
+<span class="sd">            User specified configuration parsed from both configuration files</span>
+<span class="sd">            and the command-line interface.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filename</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">output_file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_fd</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">newline</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">after_init</span><span class="p">()</span>
+
+<div class="viewcode-block" id="BaseFormatter.after_init"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter.after_init">[docs]</a>    <span class="k">def</span> <span class="nf">after_init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the formatter further.&quot;&quot;&quot;</span>
+        <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="BaseFormatter.start"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Prepare the formatter to receive input.</span>
+
+<span class="sd">        This defaults to initializing :attr:`output_fd` if :attr:`filename`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_fd</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BaseFormatter.handle"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter.handle">[docs]</a>    <span class="k">def</span> <span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Handle an error reported by Flake8.</span>
+
+<span class="sd">        This defaults to calling :meth:`format`, :meth:`show_source`, and</span>
+<span class="sd">        then :meth:`write`. To extend how errors are handled, override this</span>
+<span class="sd">        method.</span>
+
+<span class="sd">        :param error:</span>
+<span class="sd">            This will be an instance of :class:`~flake8.style_guide.Error`.</span>
+<span class="sd">        :type error:</span>
+<span class="sd">            flake8.style_guide.Error</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">line</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">show_source</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">line</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BaseFormatter.format"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter.format">[docs]</a>    <span class="k">def</span> <span class="nf">format</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Format an error reported by Flake8.</span>
+
+<span class="sd">        This method **must** be implemented by subclasses.</span>
+
+<span class="sd">        :param error:</span>
+<span class="sd">            This will be an instance of :class:`~flake8.style_guide.Error`.</span>
+<span class="sd">        :type error:</span>
+<span class="sd">            flake8.style_guide.Error</span>
+<span class="sd">        :returns:</span>
+<span class="sd">            The formatted error string.</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            str</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;Subclass of BaseFormatter did not implement&#39;</span>
+                                  <span class="s1">&#39; format.&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BaseFormatter.show_benchmarks"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter.show_benchmarks">[docs]</a>    <span class="k">def</span> <span class="nf">show_benchmarks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">benchmarks</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Format and print the benchmarks.&quot;&quot;&quot;</span>
+        <span class="c1"># NOTE(sigmavirus24): The format strings are a little confusing, even</span>
+        <span class="c1"># to me, so here&#39;s a quick explanation:</span>
+        <span class="c1"># We specify the named value first followed by a &#39;:&#39; to indicate we&#39;re</span>
+        <span class="c1"># formatting the value.</span>
+        <span class="c1"># Next we use &#39;&lt;&#39; to indicate we want the value left aligned.</span>
+        <span class="c1"># Then &#39;10&#39; is the width of the area.</span>
+        <span class="c1"># For floats, finally, we only want only want at most 3 digits after</span>
+        <span class="c1"># the decimal point to be displayed. This is the precision and it</span>
+        <span class="c1"># can not be specified for integers which is why we need two separate</span>
+        <span class="c1"># format strings.</span>
+        <span class="n">float_format</span> <span class="o">=</span> <span class="s1">&#39;{value:&lt;10.3} {statistic}&#39;</span><span class="o">.</span><span class="n">format</span>
+        <span class="n">int_format</span> <span class="o">=</span> <span class="s1">&#39;{value:&lt;10} {statistic}&#39;</span><span class="o">.</span><span class="n">format</span>
+        <span class="k">for</span> <span class="n">statistic</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">benchmarks</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                <span class="n">benchmark</span> <span class="o">=</span> <span class="n">int_format</span><span class="p">(</span><span class="n">statistic</span><span class="o">=</span><span class="n">statistic</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">benchmark</span> <span class="o">=</span> <span class="n">float_format</span><span class="p">(</span><span class="n">statistic</span><span class="o">=</span><span class="n">statistic</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_write</span><span class="p">(</span><span class="n">benchmark</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BaseFormatter.show_source"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter.show_source">[docs]</a>    <span class="k">def</span> <span class="nf">show_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Show the physical line generating the error.</span>
+
+<span class="sd">        This also adds an indicator for the particular part of the line that</span>
+<span class="sd">        is reported as generating the problem.</span>
+
+<span class="sd">        :param error:</span>
+<span class="sd">            This will be an instance of :class:`~flake8.style_guide.Error`.</span>
+<span class="sd">        :type error:</span>
+<span class="sd">            flake8.style_guide.Error</span>
+<span class="sd">        :returns:</span>
+<span class="sd">            The formatted error string if the user wants to show the source.</span>
+<span class="sd">            If the user does not want to show the source, this will return</span>
+<span class="sd">            ``None``.</span>
+<span class="sd">        :rtype:</span>
+<span class="sd">            str</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">show_source</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+        <span class="n">pointer</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39; &#39;</span> <span class="o">*</span> <span class="n">error</span><span class="o">.</span><span class="n">column_number</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;^&#39;</span>
+        <span class="c1"># Physical lines have a newline at the end, no need to add an extra</span>
+        <span class="c1"># one</span>
+        <span class="k">return</span> <span class="n">error</span><span class="o">.</span><span class="n">physical_line</span> <span class="o">+</span> <span class="n">pointer</span></div>
+
+    <span class="k">def</span> <span class="nf">_write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Handle logic of whether to use an output file or print().&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_fd</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_fd</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">output</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">newline</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BaseFormatter.write"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter.write">[docs]</a>    <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">line</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Write the line either to the output file or stdout.</span>
+
+<span class="sd">        This handles deciding whether to write to a file or print to standard</span>
+<span class="sd">        out for subclasses. Override this if you want behaviour that differs</span>
+<span class="sd">        from the default.</span>
+
+<span class="sd">        :param str line:</span>
+<span class="sd">            The formatted string to print or write.</span>
+<span class="sd">        :param str source:</span>
+<span class="sd">            The source code that has been formatted and associated with the</span>
+<span class="sd">            line of output.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_write</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">source</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_write</span><span class="p">(</span><span class="n">source</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BaseFormatter.stop"><a class="viewcode-back" href="../../../plugin-development/formatters.html#flake8.formatting.base.BaseFormatter.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Clean up after reporting is finished.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_fd</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_fd</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_fd</span> <span class="o">=</span> <span class="bp">None</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Ian Cordasco.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'3.0.0b1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
