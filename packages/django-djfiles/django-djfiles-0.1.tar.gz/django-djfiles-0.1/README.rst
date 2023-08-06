@@ -1,0 +1,44 @@
+|Coverage Status| |Build Status|
+
+DJFiles
+=======
+
+DJFiles is a simple Django app for manage static files of your project
+in admin panel. This app is useful for projects where there is a content
+manager, which don't have access to server via ssh or don't even know
+what it is =)
+
+Using this app you will be able to save static files through admin
+panel. Files will be saved in /media/ directory of your project. It's
+useful if you are not always have access to server or have a content
+manager who responsible for managing such files.
+
+Requirements
+~~~~~~~~~~~~
+
+-  Python >= 2.7
+-  Django >= 1.8
+
+Installation
+~~~~~~~~~~~~
+
+Add ``djfiles`` to your INSTALLED\_APPS setting like this:
+
+::
+
+    INSTALLED_APPS = [
+        ...
+
+        'djfiles',
+    ]
+
+Apply ``djfiles`` migrations:
+
+.. code:: bash
+
+    $ ./manage.py migrate djfiles
+
+.. |Coverage Status| image:: https://coveralls.io/repos/github/luminousmen/djfiles/badge.svg?branch=master
+   :target: https://coveralls.io/github/luminousmen/djfiles?branch=master
+.. |Build Status| image:: https://travis-ci.org/luminousmen/djfiles.svg?branch=master
+   :target: https://travis-ci.org/luminousmen/djfiles
