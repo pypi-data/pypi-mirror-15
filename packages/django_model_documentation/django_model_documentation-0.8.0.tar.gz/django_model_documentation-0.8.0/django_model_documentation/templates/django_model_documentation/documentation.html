@@ -1,0 +1,140 @@
+{% load i18n model_documentation %}
+<!DOCTYPE html>
+<html>
+{% block license %}
+<!--
+The MIT License (MIT)
+
+Copyright 2015 Umbrella Tech.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+@author 'Kelson da Costa Medeiros <kelsoncm@gmail.com>'
+-->
+{% endblock license %}
+<head>
+    {% block head %}
+    <style>
+        main, .toc, .legends {margin: 20px 50px; }
+        table {border-spacing: 0; border-collapse: collapse; width: 100%; }
+        td, th {border: 1px solid #000; margin: 0; padding: 0 5px; }
+        th {background-color: darkgray; }
+        tbody th {text-align: left; }
+        .legends dt {float: left; clear: left; margin-right: 5px; font-weight: bold; }
+        .legends dd {margin-left: 0px; }
+        main dt {margin: 0px; font-weight: bold; }
+        main dd {margin: 0px; }
+        main details summary, main details[open] summary  {margin-top: 30px; font-size: 24px; font-weight: 700; display: block}
+        .capa {font-family: Times New Roman; font-weight: 700; text-align: center}
+        main ul {list-style: none; display: inline; margin: 0; padding: 0;}
+        main li {display: inline; }
+        main li:not(:last-child):after {content: ', '}
+        @media print {
+            #header, #django-rest-swagger {display: none;}
+            .capa h1 {font-size: 48pt; border-top: 2px solid black; margin: 180pt 10% 0 10%;}
+            .capa h2 {font-size: 36pt; margin: 50pt 10% 0 10%; page-break-after: always;}
+        }
+    </style>
+    {% endblock head %}
+</head>
+<body>
+{% block header %}
+<aside class="legends">
+    <h2>{% trans "Legends" %}</h2>
+    <dl>
+        <dt>{% trans "PK" %}</dt><dd>{% trans "Primary key" %}</dd>
+        <dt>{% trans "UK" %}</dt><dd>{% trans "Unique key" %}</dd>
+        <dt>{% trans "AK" %}</dt><dd>{% trans "Alternative key" %}</dd>
+        <dt>{% trans "FK" %}</dt><dd>{% trans "Foreign key" %}</dd>
+        <dt>{% trans "AI" %}</dt><dd>{% trans "Autoincrement" %}</dd>
+        <dt>{% trans "NB" %}</dt><dd>{% trans "Blank not allowed" %}</dd>
+    </dl>
+</aside>
+{% endblock header %}
+{% block toc %}
+<aside class="toc">
+    <h2>{% trans "Table list" %}</h2>
+    {% block toc_tables %}
+    <table>
+        <thead>
+        <tr><th>{% trans "Table name" %}</th><th>{% trans "Table comment" %}</th></tr>
+        </thead>
+        <tbody>
+        {% for meta in metas %}
+            {% block toc_table %}
+            <tr><th><a href="#{{ meta.db_table }}">{{ meta.db_table }}</a></a></th><td>{% table_comment meta %}</td></tr>
+            {% endblock toc_table %}
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endblock toc_tables %}
+</aside>
+{% endblock toc %}
+{% block main %}
+<main>
+    <h2>{% trans "Table details" %}</h2>
+    {% block table %}
+    <section>
+        {% for meta in metas %}
+        <details open>
+            {% block table_info %}
+            <summary id="{{ meta.db_table }}">{{ meta.db_table }}</summary>
+            <dl>
+                <dt>{% trans "Table comment" %}</dt><dd>{% table_comment meta %}</dd>
+                <dt>{% trans "User knows as" %}</dt><dd>{% table_verbose_name meta %}</dd>
+                {% if meta.ordering %}
+                <dt>{% trans "Usually ordered by" %}</dt>
+                <dd><ul>{% for fieldname in meta.ordering %}<li>{{ fieldname }}</li>{% endfor %}</ul></dd>
+                {% endif %}
+            </dl>
+            {% endblock table_info %}
+            {% block fields %}
+            <table>
+                <thead>
+                <tr>
+                    <th>{% trans "Column" %}</th>
+                    <th>{% trans "Type" %}</th>
+                    <th>{% trans "Default" %}</th>
+                    <th>{% trans "Constraints" %}</th>
+                    <th>{% trans "Comment" %}</th>
+                    <th>{% trans "Knows as" %}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for field in meta.concrete_fields %}
+                    {% block field %}
+                    <tr>
+                        <th>{{ field.get_attname }}</th>
+                        <td>{% field_type field %}</td>
+                        <td>{% field_default field %}</td>
+                        <td>{% field_constraints field %}</td>
+                        <td>{% field_comment meta field %}</td>
+                        <td>{{ field.verbose_name }}</td>
+                    </tr>
+                    {% endblock field %}
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endblock fields %}
+        </details>
+        {% endfor %}
+    </section>
+    {% endblock table %}
+</main>
+{% endblock main %}
+</body></html>
