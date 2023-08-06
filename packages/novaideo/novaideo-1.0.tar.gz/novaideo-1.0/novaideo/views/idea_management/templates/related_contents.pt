@@ -1,0 +1,63 @@
+<h4 tal:condition="message">
+       <strong tal:condition="message[2]=='*' or message[2]=='1'">${message[1]}</strong>
+       ${message[0]}
+</h4>
+
+<ul  i18n:domain="novaideo">
+  <tal:loop repeat="content_dict relatedcontents">
+    <li tal:define="correlation content_dict['correlation']; content content_dict['content']; url content_dict['url']">
+      <div>
+        <h4 class="content-title content-title-sm"><a tal:attributes="href url">${content.title} </a></h4>
+        <div class="object-description object-description-sm">
+          <small><span i18n:translate="">(By</span> <a tal:attributes="href request.resource_url(content.author, '@@index')">${((content.author is current_user) and 'Vous') or getattr(content.author, 'title', content.author.name)}</a><span i18n:translate="">, the </span> <span tal:replace="layout.to_localized_time(content.created_at, date_only=True)"/></small>)</div>
+        
+            <div tal:condition="'correlationaction' in content_dict"  id="correlationaction">
+                <div tal:omit-tag="" tal:define="correlationaction content_dict['correlationaction']">
+                 <a id="${correlationaction['action_id']}-btn" 
+                      class="btn btn-default btn-xs dace-action"
+                      style="max-width: 300px;"
+                      href="${correlationaction['action'].url(correlationaction['context'])}"   
+                      data-toggle="modal"
+                      data-actionid ="${correlationaction['action_id']}" 
+                      data-target="#${correlationaction['action_id']}"
+                      data-updateurl="${correlationaction['actionurl_update']}"
+                      data-toreplay="${'toreplay' in correlationaction}">
+                     <span class="glyphicon glyphicon-comment"></span> ${correlationaction['action'].title}
+                   </a>
+                   <script tal:condition="'toreplay' in correlationaction">       
+                        $(document).ready(function(){
+                             $(${'\'#'+correlationaction['action_id']+'-btn\''}).click();
+                        });
+                   </script>  
+                   <script>
+                        $(document).ready(function(){
+                            $(${'\'#'+correlationaction['action_id']+'-modal\''}).on('hidden.bs.modal', function (e) {
+                               after_execution(${'\"'+correlationaction['actionurl_after']+'\"'})
+                              })
+                        });
+                   </script>
+                <!-- Modal -->
+                   <div class="modal fade" 
+                       id="${correlationaction['action_id']}-modal" 
+                       role="dialog" 
+                       aria-labelledby="myModalLabel" 
+                       aria-hidden="true">
+                      <div class="modal-dialog">
+                        <div class="modal-content">
+                           <div class="modal-header">
+                               <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                               <h4 class="modal-title" id="myModalLabel"> ${correlationaction['action'].title}</h4>
+                           </div>
+                           <div class="modal-body">
+                              ${structure:correlationaction['body']}
+                           </div>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+            </div>
+      </div>
+    </li>
+  </tal:loop>
+</ul>
+
