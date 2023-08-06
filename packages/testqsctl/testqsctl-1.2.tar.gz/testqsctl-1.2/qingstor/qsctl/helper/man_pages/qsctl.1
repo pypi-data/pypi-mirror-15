@@ -1,0 +1,196 @@
+.\" Written by Daniel.
+.
+.TH "QingStor" "1" "May 03, 2016" "Qsctl 0\&.1" "Qsctl Manual"
+.SH NAME
+qsctl \- QingStor advanced command line tool
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.SH SYNOPSIS
+qsctl <command> [<args>] [<options>]
+.SH "COMMON OPTIONS"
+.PP
+\-c, \-\-config
+.RS 4
+Use a specific config file\&.
+.RE
+.PP
+\-h, \-\-help
+.RS 4
+Prints the synopsis and available commands\&.
+.RE
+.PP
+\-v
+.RS 4
+Prints the Qsctl version\&.
+.RE
+.SH DESCRIPTION
+.sp
+Qsctl provides more powerful unix\-like commands. You can manage QingStor
+resources just like files on local machine. Unix\-like commands contains:
+cp, ls, mb, mv, rm, rb, and sync\&. All of them support batch processing\&.
+.sp
+This section also explains some important concepts and notations.
+.SS Path Argument Type
+.sp
+There are two types of path arguments: \fBlocal-path\fP and \fBqs-path\fP\&.
+.sp
+\fBlocal-path\fP: represents the path of a local file or directory.
+.sp
+\fBqs-path\fP: represents the location of a qs key, prefix, or bucket. This
+must be written in the form \fBqs://mybucket/mykey\fP where \fBmybucket\fP is
+the specified qs bucket, \fBmykey\fP is the specified qs key. The path argument
+must begin with \fBqs://\fP in order to denote that the path argument refers to
+qs-path. Prefix is used for batch processing. For example, if you run \fBqsctl
+rm -r qs://mybucket/myprefix\fP, all keys under the specified prefix \fBmyprefix\fP
+in \fBmybucket\fP will be deleted. If prefix is empty(such as \fBqs://mybucket/\fP),
+the batch processing refers to all keys in the given bucket.
+.SS QS-Directory
+.sp
+\fBcp, mv\fP comands with \fB-r\fP option and \fBsync\fP command perform only
+on directories. In Qsctl, prefix ending with '/' will be seen as a
+\fBqs-directory\fP. In these directories operations, if a prefix not ending
+with '/' is given, program will automatically add '/' at the end of the prefix.
+It means, \fBqsctl sync /foo/bar/ qs://mybucket/myprefix\fP will be executed as
+\fBqsctl sync /foo/bar/ qs://mybucket/myprefix/\fP. Noting that qs-path with
+empty prefix is also a qs-directory(for exmaple \fBqs://mybucket\fP and
+\fBqs://mybucket/\fP). It can be seen as the root directory of given bucket.
+.SS Order of Path Arguments
+.sp
+All commands \fIexcepting ls command\fP take one or two positional path arguments.
+The first path argument represents the source.  If there is a second path argument
+it represents the destination. Commands with only one path argument do not have
+a destination because the operation is being performed only on the source.
+.SS Use of Exclude and Include Filters
+.sp
+Currently, there is no support for the use of UNIX style wildcards in path
+arguments(such as on UNIX: \fBcp -r dir1/* dir2/\fP).  However, most commands
+can achieve the desired result by adding \fB\-\-exclude "<value>"\fP and
+\fB\-\-include "<value>"\fP options.  These parameters perform pattern
+matching to either exclude or include particular files or keys.  The following
+pattern symbols are supported.
+.INDENT 0.0
+.INDENT 4
+.INDENT 0.0
+.IP \(bu 2
+\fB*\fP: Matches any characters
+.IP \(bu 2
+\fB?\fP: Matches any single character
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.sp
+For example, suppose you had the following directory structure:
+.INDENT 0.0
+.INDENT 4
+.sp
+.nf
+.ft C
+/tmp/foo/
+  bar/
+  |\-\-\-mykey1
+  |\-\-\-mykey2
+  test1.txt
+  test2.txt
+  test3.jpg
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+In the command \fBqsctl sync /tmp/foo qs://mybucket\fP the source directory is
+\fB/tmp/foo\fP\&.  Any include/exclude filters will be evaluated with the source
+directory prepended.  Below are several examples to demonstrate this.
+.sp
+Given the directory structure above and the command
+\fBqsctl /tmp/foo qs://bucket \-\-recursive \-\-exclude "bar/*"\fP, the files
+\fBbar/mykey1\fP and \fBbar/mykey2\fP will be excluded from the files to upload
+because the exclude filter \fBbar/*\fP will have the source prepended to the
+filter.  This means that:
+.INDENT 0.0
+.INDENT 4
+.sp
+.nf
+.ft C
+/tmp/foo/bar/* \-> /tmp/foo/bar/mykey1  (matches, should exclude)
+/tmp/foo/bar/* \-> /tmp/foo/bar/mykey2  (matches, should exclude)
+/tmp/foo/bar/* \-> /tmp/foo/test1.txt  (does not match, should include)
+/tmp/foo/bar/* \-> /tmp/foo/test2.txt  (does not match, should include)
+/tmp/foo/bar/* \-> /tmp/foo/test3.jpg  (does not match, should include)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Note that, by default, \fIall files are included\fP\&.  This means that
+providing \fBonly\fP an \fB\-\-include\fP filter will not change what
+files are transferred.  \fB\-\-include\fP will only re\-include files that
+have been excluded from an \fB\-\-exclude\fP filter.  If you only want
+to upload files with a particular extension, you need to first exclude
+all files, then re\-include the files with the particular extension.
+This command will upload \fBonly\fP files ending with \fB\&.jpg\fP:
+.INDENT 0.0
+.INDENT 4
+.sp
+.nf
+.ft C
+$ qsctl cp /tmp/foo/ qs://mybucket/ \-\-recursive \-\-exclude "*" \-\-include "*.jpg"
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "Available Commands"
+.sp
+The detailed usages and examples of these commands are in the man page of themselves.
+For example, run \fBman qsctl-ls\fP to see details of command "ls"\&.
+.INDENT 0.0
+.IP \(bu 2
+\fBcp\fP
+.IP \(bu 2
+\fBls\fP
+.IP \(bu 2
+\fBmb\fP
+.IP \(bu 2
+\fBmv\fP
+.IP \(bu 2
+\fBrb\fP
+.IP \(bu 2
+\fBrm\fP
+.IP \(bu 2
+\fBsync\fP
+.UNINDENT
+.SH "REPORTING BUGS"
+.sp
+Report bugs to email <\fBdaniel@yunify\&.com\fR>\&.
+.SH "SEE ALSO"
+.sp
+\fBqsctl-cp\fR(1), \fBqsctl-ls\fR(1), \fBqsctl-mb\fR(1), \fBqsctl-mv\fR(1),
+\fBqsctl-rb\fR(1), \fBqsctl-rm\fR(1), \fBqsctl-sync\fR(1)
+.SH COPYRIGHT
+Copyright (C) 2016 Yunify Inc.
+.\" Written by Daniel.
+.
