@@ -1,0 +1,194 @@
+#!python
+
+import os
+import sys
+import pytaskmaster
+import argparse
+import importlib
+
+_template = """# -*- coding: utf-8 -*-
+import pytaskmaster
+
+# Load config from `master.json`
+config = pytaskmaster.Config()
+config.set_default("VERSION", "1.0")
+config.load()
+
+def task_example(argv):
+    '''It\'s example task'''
+    # save config to `master.json`
+    config.save()
+
+def task_build(argv):
+    '''It\'s example of use generator'''
+    with open("build.txt.in", "w") as file:
+        file.write("VERSION: $VERSION\\n")
+    pytaskmaster.generator("build.txt.in", "build.txt", config)
+"""
+
+_description = """Run task from script file."""
+
+def import_master(master_file):
+    global_vars = {}
+    with open(master_file) as f:
+        code = f.read()
+        exec(code, global_vars)
+    return global_vars
+
+
+class ShowTasksAction(argparse.Action):
+    def __init__(self,
+                 option_strings,
+                 dest,
+                 default=False,
+                 required=False,
+                 help=None):
+        super(ShowTasksAction, self).__init__(
+            option_strings=option_strings,
+            nargs=0,
+            dest=dest,
+            const=True,
+            default=default,
+            required=required,
+            help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        try:
+            master_file = "master.py"
+            if namespace.file is not None:
+                master_file = namespace.file[0].name
+            master = import_master(master_file)
+            pytaskmaster.show_tasks(master)
+        except ImportError:
+            print("Error: `master.py` no such file")
+        parser.exit()
+
+
+class TemplateTasksAction(argparse.Action):
+    def __init__(self,
+                 option_strings,
+                 dest,
+                 default=False,
+                 required=False,
+                 help=None):
+        super(TemplateTasksAction, self).__init__(
+            option_strings=option_strings,
+            nargs=0,
+            dest=dest,
+            const=True,
+            default=default,
+            required=required,
+            help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        replace = os.path.isfile("master.py")
+        write_file = True
+        if replace:
+            write_file = choise("Replace `master.py` in `{}`?".format(os.getcwd()))
+        if write_file:
+            with open("master.py", 'w') as file:
+                file.write(_template)
+        parser.exit()
+
+def get_module(name):
+    major_ver = sys.version_info[0]
+    if major_ver == 2:
+        import imp
+        return imp.load_source(name, os.getcwd())
+    else:
+        import importlib
+        return importlib.import_module(name)
+
+
+def my_input():
+    major_ver = sys.version_info[0]
+    if major_ver == 2:
+        return raw_input()
+    else:
+        return input()
+
+
+def choise(question, default_y=True):
+    choise_str = "(Y/n)"
+    if not default_y:
+        choise_str = "(y/N)"
+    sys.stdout.write('"{}" {}: '.format(question, choise_str))
+    yes = ['y']
+    no = ['n']
+    if default_y:
+        yes.append('')
+    else:
+        no.append('')
+    choice = my_input().lower()
+    if choice in yes:
+        return True
+    elif choice in no:
+        return False
+    else:
+        choise(question, default_y)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=_description)
+    parser.add_argument(
+        '-s',
+        '--show-tasks',
+        help='show all tasks from master file',
+        action=ShowTasksAction
+    )
+    parser.add_argument(
+        '-f',
+        '--file',
+        metavar="FILE",
+        nargs=1,
+        type=argparse.FileType('r'),
+        help='use custom FILE for run tasks'
+    )
+    parser.add_argument(
+        'task',
+        metavar="TASK",
+        nargs='?',
+        type=str,
+        help='task for run'
+    )
+    parser.add_argument(
+        'args',
+        nargs=argparse.REMAINDER,
+        type=str,
+        help='args for task'
+    )
+    parser.add_argument(
+        '-t',
+        '--template',
+        help="create `master.py` from template",
+        action=TemplateTasksAction
+    )
+    parser.add_argument(
+        '-v',
+        '--version',
+        help="output version information",
+        action='store_true'
+    )
+    args = parser.parse_args()
+    if args.version:
+        pytaskmaster.version.print_version()
+        exit(0)
+    if args.task is None:
+        parser.print_help()
+        exit(1)
+    try:
+        master_file = "master.py"
+        if args.file is not None:
+            master_file = args.file[0].name
+        master = import_master(master_file)
+        if not pytaskmaster.run_task(master, args.task, args.args):
+            pytaskmaster.show_tasks(master)
+    except ImportError:
+        print("Error: `master.py` no such file")
+        if choise("Create `master.py` in `{}`?".format(os.getcwd())):
+            with open("master.py", 'w') as file:
+                file.write(_template)
+
+
+if __name__ == "__main__":
+    main()
