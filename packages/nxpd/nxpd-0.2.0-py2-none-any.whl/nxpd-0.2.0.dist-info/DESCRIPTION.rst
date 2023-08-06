@@ -1,0 +1,5 @@
+`nxpd` is a Python package for visualizing NetworkX graphs using `pydot`
+and `graphviz`. Support is also provided for inline displays within IPython
+notebooks.
+
+
