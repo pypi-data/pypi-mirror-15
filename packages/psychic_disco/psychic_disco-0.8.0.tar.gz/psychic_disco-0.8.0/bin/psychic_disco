@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+import os
+import sys
+
+import psychic_disco
+from psychic_disco import cli
+import psychic_disco.api_gateway_config
+from psychic_disco.api_gateway_config import RestApi
+
+from tabulate import tabulate
+
+
+@cli.subcommand
+def show_defined_routes(api_name):
+    psychic_disco.discover_entrypoints(".")
+    routes = []
+    for method in psychic_disco.Api:
+        verb, path = method.split(' ')
+        lf = psychic_disco.Api[method]
+        routes.append([verb, path, lf.proper_name])
+    print tabulate(routes, headers=["verb", "path", "lambda"])
+
+
+@cli.subcommand
+def show_installed_routes(api_name):
+    api = RestApi.find(api_name)
+    routes = []
+    for path in api.resources:
+        resource = api.resources[path]
+        for verb in resource.methods:
+            method = resource.methods[verb]
+            routes.append([verb, path, method.lambda_name])
+    print tabulate(routes, headers=["verb", "path", "lambda"])
+
+
+@cli.subcommand
+def list_entrypoints(module_name):
+    """list all entrypoints for a given module"""
+    psychic_disco.attempt_import(module_name)
+    print [str(ep) for ep in psychic_disco.entry_points()]
+
+
+@cli.subcommand
+def discover_entrypoints():
+    """search repo for possible entrypoints"""
+    psychic_disco.discover_entrypoints(".")
+    print [str(ep) for ep in psychic_disco.entry_points()]
+
+
+@cli.subcommand
+def deploy_lambdas():
+    """Deploy the defined lambda functions"""
+    psychic_disco.discover_entrypoints(".")
+    for ep in psychic_disco.entry_points():
+        ep.deploy()
+
+
+@cli.subcommand
+def bundle():
+    """Bundle application into a Lambda-friendly deployment package"""
+    package = psychic_disco.deployment_package.default()
+    package.deploy()
+
+
+@cli.subcommand
+def installed_lambdas():
+    """List of lambdas currently installed in your AWS account"""
+    print psychic_disco.lambda_function.installed_functions()
+
+
+if __name__ == "__main__":
+    cli.argument('--config', help='config file', default="psychic_disco_config.py")
+    args = cli.parse_args()
+    sys.path.append('.')
+    if os.path.exists(args.config):
+        config_module = psychic_disco.convert_path_to_module(args.config)
+        psychic_disco.attempt_import(config_module)
+    args.func(args)
