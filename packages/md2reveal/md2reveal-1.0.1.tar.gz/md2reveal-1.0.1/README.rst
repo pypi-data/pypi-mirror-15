@@ -1,0 +1,28 @@
+=========
+md2reveal
+=========
+
+This tool converts markdown to reveal.js.
+
+It will turn h1, h2 to reveal section,
+and h3 or greater to reveal vertical section.
+
+Source code is hosted on https://github.com/LKI/md2reveal
+
+Try it!
+
+============
+Installation
+============
+
+Use pip to install md2reveal.
+
+::
+
+    pip install md2reveal
+
+Then you can use md2reveal command
+
+::
+
+    md2reveal hello.md
