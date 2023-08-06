@@ -1,0 +1,68 @@
+{% from "main::text.html" import show_passage, header_passage, default_footer, nav with context %}
+
+{% extends "main::container.html" %}
+
+{% macro tb_macro() %}
+<div id="treebank_container">
+</div>
+{% endmacro %}
+
+{% macro tabs(text, treebank) %}
+  <div style="margin:10px 0;">
+
+      <!-- Nav tabs -->
+      <ul class="nav nav-tabs" role="tablist">
+        <li role="presentation" class="active"><a href="#home" aria-controls="home" role="tab" data-toggle="tab">Text</a></li>
+          <li role="presentation"><a href="#treebank" aria-controls="treebank" role="tab" data-toggle="tab">Treebank</a></li>
+      </ul>
+
+      <!-- Tab panes -->
+      <div class="tab-content">
+        <div role="tabpanel" class="tab-pane active" id="home">
+            {{text}}
+        </div>
+        <div role="tabpanel" class="tab-pane" id="treebank">
+            <div class="__artsa">
+            {{ treebank }}
+            </div>
+        </div>
+      </div>
+    </div>
+{% endmacro %}
+
+{% block article %}
+{% if annotations | annotation_filter("http://data.perseus.org/rdfvocab/treebank", 1) %}
+    {{ show_passage(tabs(text_passage, tb_macro()), navigation=nav(), header=header_passage(), footer=default_footer())  }}
+{%else%}
+    {{ show_passage(text_passage, navigation=nav(), header=header_passage(), footer=default_footer())  }}
+{%endif%}
+{% endblock %}
+
+{% block additionalscript %}
+<script type="text/javascript" src="{{url_for(".r_arethusa_assets", filename="js/arethusa.widget.loader.js")}}"></script>
+<script type="text/javascript">
+$(document).ready(function() {
+    var loaded = false;
+    $(document).on('shown.bs.tab', 'a[data-toggle="tab"]', function (e) {
+        if(!loaded) {
+            if(e.target.hash == "#treebank") {
+                $.get("{{ url_for(".r_arethusa_dependencies") }}", function(deps) {
+                    window.i18npath = "{{url_for(".r_arethusa_assets", filename="i18n/")}}";
+                    window.dagred3path = "vendor/dagre-d3.min.js";
+                    loadArethusaWidget(
+                        "treebank_container",
+                        "{{ url_for(".r_arethusa_assets", filename="js/") }}",
+                        "{{ url_for(".r_arethusa_config") }}",
+                        {
+                            doc : "{{ annotations | annotation_filter("http://data.perseus.org/rdfvocab/treebank", 1) | attr("sha") }}"
+                        },
+                        deps
+                    );
+                    loaded = true;
+                })
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
