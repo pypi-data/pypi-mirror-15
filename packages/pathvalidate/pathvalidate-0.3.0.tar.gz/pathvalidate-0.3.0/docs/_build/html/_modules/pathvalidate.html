@@ -1,0 +1,328 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pathvalidate &mdash; pathvalidate 0.3.0 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="pathvalidate 0.3.0 documentation" href="../index.html"/>
+        <link rel="up" title="Module code" href="index.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> pathvalidate
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <p class="caption"><span class="caption-text">Table of Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../pages/introduction/index.html">1. pathvalidate</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pages/installation.html">2. Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pages/installation.html#dependencies">3. Dependencies</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pages/examples/index.html">4. Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pages/reference/index.html">5. Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pages/genindex.html">6. Indices and tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pages/links.html">7. Links</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">pathvalidate</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">Module code</a> &raquo;</li>
+      
+    <li>pathvalidate</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pathvalidate</h1><div class="highlight"><pre>
+<span></span><span class="c1"># encoding: utf-8</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. codeauthor:: Tsuyoshi Hombashi &lt;gogogo.vm@gmail.com&gt;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">import</span> <span class="nn">dataproperty</span>
+
+
+<span class="n">__INVALID_PATH_CHARS</span> <span class="o">=</span> <span class="s1">&#39;\:*?&quot;&lt;&gt;|&#39;</span>
+<span class="n">__INVALID_VAR_CHARS</span> <span class="o">=</span> <span class="n">__INVALID_PATH_CHARS</span> <span class="o">+</span> <span class="s2">&quot;!#$&amp;&#39;=~^@`[]+-;{},.()%&quot;</span>
+<span class="n">__RESERVED_KEYWORDS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;and&quot;</span><span class="p">,</span> <span class="s2">&quot;del&quot;</span><span class="p">,</span> <span class="s2">&quot;from&quot;</span><span class="p">,</span> <span class="s2">&quot;not&quot;</span><span class="p">,</span> <span class="s2">&quot;while&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;as&quot;</span><span class="p">,</span> <span class="s2">&quot;elif&quot;</span><span class="p">,</span> <span class="s2">&quot;global&quot;</span><span class="p">,</span> <span class="s2">&quot;or&quot;</span><span class="p">,</span> <span class="s2">&quot;with&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;assert&quot;</span><span class="p">,</span> <span class="s2">&quot;else&quot;</span><span class="p">,</span> <span class="s2">&quot;if&quot;</span><span class="p">,</span> <span class="s2">&quot;pass&quot;</span><span class="p">,</span> <span class="s2">&quot;yield&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;break&quot;</span><span class="p">,</span> <span class="s2">&quot;except&quot;</span><span class="p">,</span> <span class="s2">&quot;import&quot;</span><span class="p">,</span> <span class="s2">&quot;print&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;class&quot;</span><span class="p">,</span> <span class="s2">&quot;exec&quot;</span><span class="p">,</span> <span class="s2">&quot;in&quot;</span><span class="p">,</span> <span class="s2">&quot;raise&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;continue&quot;</span><span class="p">,</span> <span class="s2">&quot;finally&quot;</span><span class="p">,</span> <span class="s2">&quot;is&quot;</span><span class="p">,</span> <span class="s2">&quot;return&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;def&quot;</span><span class="p">,</span> <span class="s2">&quot;for&quot;</span><span class="p">,</span> <span class="s2">&quot;lambda&quot;</span><span class="p">,</span> <span class="s2">&quot;try&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+
+<div class="viewcode-block" id="validate_filename"><a class="viewcode-back" href="../pages/reference/index.html#pathvalidate.validate_filename">[docs]</a><span class="k">def</span> <span class="nf">validate_filename</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param str filename: Filename to validate.</span>
+<span class="sd">    :raises ValueError:</span>
+<span class="sd">        If the ``filename`` is empty or includes invalid char(s):</span>
+<span class="sd">        |invalid_path_chars|.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;null name&quot;</span><span class="p">)</span>
+
+    <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">__INVALID_PATH_CHARS</span><span class="p">)),</span> <span class="n">filename</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;invalid char found in the file path: &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">())))</span></div>
+
+
+<div class="viewcode-block" id="validate_python_var_name"><a class="viewcode-back" href="../pages/reference/index.html#pathvalidate.validate_python_var_name">[docs]</a><span class="k">def</span> <span class="nf">validate_python_var_name</span><span class="p">(</span><span class="n">var_name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Replace invalid characters for a python variable name within</span>
+<span class="sd">    the ``var_name`` with the ``replacement_text``.</span>
+<span class="sd">    Invalid characters are as follows: |invalid_var_name_chars|.</span>
+
+<span class="sd">    :param str var_name: Variable name to validate.</span>
+<span class="sd">    :raises ValueError: If</span>
+<span class="sd">        a) the ``var_name`` is empty.</span>
+<span class="sd">        b) includes invalid char(s): |invalid_path_chars|.</span>
+<span class="sd">        c) ``var_name`` is start from digits or symbols (except ``&quot;_&quot;``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">dataproperty</span><span class="o">.</span><span class="n">is_empty_string</span><span class="p">(</span><span class="n">var_name</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;null name&quot;</span><span class="p">)</span>
+
+    <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">__INVALID_VAR_CHARS</span><span class="p">)),</span> <span class="n">var_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;invalid char found in the variable name: &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">())))</span>
+
+    <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s2">&quot;^[0-9</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">__INVALID_VAR_CHARS</span><span class="p">)),</span> <span class="n">var_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;the first char of the variable name is invalid: &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">())))</span>
+
+    <span class="k">if</span> <span class="n">var_name</span> <span class="ow">in</span> <span class="n">__RESERVED_KEYWORDS</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> is a reserved keyword by pyhon&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">var_name</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="sanitize_filename"><a class="viewcode-back" href="../pages/reference/index.html#pathvalidate.sanitize_filename">[docs]</a><span class="k">def</span> <span class="nf">sanitize_filename</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">replacement_text</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Replace invalid characters for a file path within the ``filename``</span>
+<span class="sd">    with the ``replacement_text``. Invalid characters are as follows:</span>
+<span class="sd">    |invalid_path_chars|.</span>
+
+<span class="sd">    :param str filename: Filename to validate.</span>
+<span class="sd">    :param str replacement_text: Replacement text.</span>
+<span class="sd">    :return: A replacement string.</span>
+<span class="sd">    :rtype: str</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">re_replace</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">__INVALID_PATH_CHARS</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">re_replace</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">replacement_text</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="sanitize_python_var_name"><a class="viewcode-back" href="../pages/reference/index.html#pathvalidate.sanitize_python_var_name">[docs]</a><span class="k">def</span> <span class="nf">sanitize_python_var_name</span><span class="p">(</span><span class="n">var_name</span><span class="p">,</span> <span class="n">replacement_text</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Replace invalid characters for a python variable name within</span>
+<span class="sd">    the ``var_name`` with the ``replacement_text``.</span>
+<span class="sd">    Invalid characters are as follows: |invalid_var_name_chars|.</span>
+
+<span class="sd">    :param str filename: Filename to validate.</span>
+<span class="sd">    :param str replacement_text: Replacement text.</span>
+<span class="sd">    :return: A replacement string.</span>
+<span class="sd">    :rtype: str</span>
+<span class="sd">    :raises ValueError: If the replacement string is invalid.</span>
+
+<span class="sd">    .. seealso::</span>
+
+<span class="sd">        :py:func:`.validate_python_var_name`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">var_name</span> <span class="o">=</span> <span class="n">var_name</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">re_replace</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="n">__INVALID_VAR_CHARS</span><span class="p">))</span>
+
+    <span class="n">sanitize_var_name</span> <span class="o">=</span> <span class="n">re_replace</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">replacement_text</span><span class="p">,</span> <span class="n">var_name</span><span class="p">)</span>
+
+    <span class="n">validate_python_var_name</span><span class="p">(</span><span class="n">sanitize_var_name</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">sanitize_var_name</span></div>
+
+
+<span class="k">def</span> <span class="nf">replace_symbol</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">replacement_text</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+    <span class="n">fname</span> <span class="o">=</span> <span class="n">sanitize_filename</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">replacement_text</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fname</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="n">re_replace</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">]&quot;</span> <span class="o">%</span> <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="s2">&quot; ,.%()/&quot;</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">re_replace</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">replacement_text</span><span class="p">,</span> <span class="n">fname</span><span class="p">)</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Tsuyoshi Hombashi.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.3.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
