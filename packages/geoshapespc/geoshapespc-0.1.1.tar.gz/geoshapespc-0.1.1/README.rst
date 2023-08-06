@@ -1,0 +1,25 @@
+geoshapespc
+===========
+
+The Geometric Shapes Point Cloud aims to provide the tools to perform the creation of point clouds around a geometric shape defined by the user's input. The code in this package is able to create both an evenly spaced point cloud and a pseudorandomly placed point cloud.
+This package was created in order to generate rough simulations of LiDAR returns point cloud over a defined and known 3D geometric shape.
+
+This package was developed while in my PhD research in the Department of Geography at University College London, supervised by Dr Mat Disney (Earth Observation/Remote Sensing).
+
+If you have any problem, question or suggestion, please, don't hesitate to contact the author.
+
+Dependencies
+============
+
+* numpy
+* math
+
+Author
+======
+
+* Matheus Boni Vicari (@matt_bv)
+
+Who do I talk to?
+-----------------
+
+* Matheus Boni Vicari (matheus.boni.vicari@gmail.com or matheus.vicari.15@ucl.ac.uk)
