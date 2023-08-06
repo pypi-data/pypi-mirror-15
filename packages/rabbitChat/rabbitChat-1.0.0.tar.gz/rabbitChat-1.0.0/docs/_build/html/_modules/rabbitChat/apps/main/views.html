@@ -1,0 +1,359 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>rabbitChat.apps.main.views &mdash; rabbitChat 1.0.0 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="rabbitChat 1.0.0 documentation" href="../../../../index.html"/>
+        <link rel="up" title="Module code" href="../../../index.html"/> 
+
+  
+  <script src="../../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../../index.html" class="icon icon-home"> rabbitChat
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                1.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../features.html">Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../references.html">rabbitChat</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../../index.html">rabbitChat</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../../index.html">Module code</a> &raquo;</li>
+      
+    <li>rabbitChat.apps.main.views</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for rabbitChat.apps.main.views</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This is the main view module which manages main tornado connections. This module</span>
+<span class="sd">provides request handlers for managing simple HTTP requests as well as Websocket requests.</span>
+
+<span class="sd">Although the websocket requests are actually sockJs requests which follows the sockjs protcol, thus it</span>
+<span class="sd">provide interface to sockjs connection handlers behind the scene.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+
+
+<span class="kn">import</span> <span class="nn">tornado.web</span>
+<span class="kn">import</span> <span class="nn">tornado.escape</span>
+<span class="kn">import</span> <span class="nn">tornado.ioloop</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">base64</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+
+
+<span class="kn">from</span> <span class="nn">sockjs.tornado</span> <span class="kn">import</span> <span class="n">SockJSConnection</span>
+<span class="kn">from</span> <span class="nn">rabbitChat.apps.rabbitmq.pubsub</span> <span class="kn">import</span> <span class="n">RabbitMqClient</span>
+
+
+<span class="n">LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<span class="c1"># Main threads ioloop, not to be confused with current thread&#39;s ioloop</span>
+<span class="c1"># which is ioloop.IOLoop.current()</span>
+<span class="n">ioloop</span> <span class="o">=</span> <span class="n">tornado</span><span class="o">.</span><span class="n">ioloop</span><span class="o">.</span><span class="n">IOLoop</span><span class="o">.</span><span class="n">instance</span><span class="p">()</span>
+
+
+<span class="c1"># Handles the general HTTP connections</span>
+<div class="viewcode-block" id="IndexHandler"><a class="viewcode-back" href="../../../../modules/mainview.html#rabbitChat.apps.main.views.IndexHandler">[docs]</a><span class="k">class</span> <span class="nc">IndexHandler</span><span class="p">(</span><span class="n">tornado</span><span class="o">.</span><span class="n">web</span><span class="o">.</span><span class="n">RequestHandler</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;This handler is a basic regular HTTP handler to serve the chatroom page.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="IndexHandler.get"><a class="viewcode-back" href="../../../../modules/mainview.html#rabbitChat.apps.main.views.IndexHandler.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method is called when a client does a simple GET request,</span>
+<span class="sd">        all other HTTP requests like POST, PUT, DELETE, etc are ignored.</span>
+
+<span class="sd">        :return: Returns the rendered main requested page, in this case its the chat page, index.html</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;[IndexHandler] HTTP connection opened&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="s1">&#39;index.html&#39;</span><span class="p">)</span>
+
+        <span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;[IndexHandler] index.html served&#39;</span><span class="p">)</span></div></div>
+
+
+<span class="c1"># no. of websocket connections</span>
+<span class="n">websocketParticipants</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+
+
+<span class="c1"># Handler for Websocket Connections or Sockjs Connections</span>
+<div class="viewcode-block" id="ChatWebsocketHandler"><a class="viewcode-back" href="../../../../modules/mainview.html#rabbitChat.apps.main.views.ChatWebsocketHandler">[docs]</a><span class="k">class</span> <span class="nc">ChatWebsocketHandler</span><span class="p">(</span><span class="n">SockJSConnection</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Websocket Handler implementing the sockjs Connection Class which will</span>
+<span class="sd">    handle the websocket/sockjs connections.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ChatWebsocketHandler.on_open"><a class="viewcode-back" href="../../../../modules/mainview.html#rabbitChat.apps.main.views.ChatWebsocketHandler.on_open">[docs]</a>    <span class="k">def</span> <span class="nf">on_open</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">info</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method is called when a websocket/sockjs connection is opened for the first time.</span>
+<span class="sd">        </span>
+<span class="sd">        :param      self  The object</span>
+<span class="sd">        :param      info  The information</span>
+<span class="sd">        </span>
+<span class="sd">        :return:    It returns the websocket object</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;[ChatWebsocketHandler] Websocket connecition opened: </span><span class="si">%s</span><span class="s1"> &#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="p">)</span>
+
+        <span class="c1"># Initialize new pika rabbitmq client object for this websocket.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span> <span class="o">=</span> <span class="n">RabbitMqClient</span><span class="p">()</span>
+        <span class="c1"># Assign websocket object to a Pika client object attribute.</span>
+        <span class="n">websocketParticipants</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">websocket</span> <span class="o">=</span> <span class="bp">self</span>
+        <span class="c1"># connect to rabbitmq</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">start</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="ChatWebsocketHandler.on_message"><a class="viewcode-back" href="../../../../modules/mainview.html#rabbitChat.apps.main.views.ChatWebsocketHandler.on_message">[docs]</a>    <span class="k">def</span> <span class="nf">on_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method is called when a message is received via the websocket/sockjs connection</span>
+<span class="sd">        created initially.</span>
+<span class="sd">        </span>
+<span class="sd">        :param      self     The object</span>
+<span class="sd">        :param      message  The message received via the connection.</span>
+<span class="sd">        </span>
+<span class="sd">        :return:     Returns the published message back to all other subscribers.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;[ChatWebsocketHandler] message received on Websocket: </span><span class="si">%s</span><span class="s1"> &#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="p">)</span>
+
+        <span class="n">res</span> <span class="o">=</span> <span class="n">tornado</span><span class="o">.</span><span class="n">escape</span><span class="o">.</span><span class="n">json_decode</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="n">routing_key</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="s1">&#39;routing_key&#39;</span><span class="p">]</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="s1">&#39;msg&#39;</span><span class="p">]</span>
+        <span class="n">stage</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;stage&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">stage</span> <span class="o">==</span> <span class="s1">&#39;start&#39;</span><span class="p">:</span>
+            <span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;[ChatWebsocketHandler] Message Stage : START&#39;</span><span class="p">)</span>
+
+            <span class="n">name</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span>
+            <span class="c1"># assign name to rabbit client</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">_person</span> <span class="o">=</span> <span class="n">name</span>
+            <span class="c1"># assign clientid to rabbit client</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">_clientid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">genid</span><span class="p">()</span>
+            <span class="c1"># add no. of current participants/websocket connections</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">_participants</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">websocketParticipants</span><span class="p">)</span>
+            <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;participants&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">websocketParticipants</span><span class="p">)</span>
+
+        <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;clientid&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">_clientid</span>
+
+        <span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;[ChatWebsocketHandler] Publishing the received message to RabbitMQ&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">routing_key</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ChatWebsocketHandler.on_close"><a class="viewcode-back" href="../../../../modules/mainview.html#rabbitChat.apps.main.views.ChatWebsocketHandler.on_close">[docs]</a>    <span class="k">def</span> <span class="nf">on_close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method is called when a websocket/sockjs connection is closed.</span>
+<span class="sd">        </span>
+<span class="sd">        :param      self  The object</span>
+<span class="sd">        </span>
+<span class="sd">        :return:     Doesn&#39;t return anything, except a confirmation of closed connection back to web app.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;[ChatWebsocketHandler] Websocket conneciton close event </span><span class="si">%s</span><span class="s1"> &#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="p">)</span>
+
+        <span class="n">msg</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">_person</span><span class="p">,</span>
+            <span class="s1">&#39;stage&#39;</span><span class="p">:</span> <span class="s1">&#39;stop&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;msg_type&#39;</span><span class="p">:</span> <span class="s1">&#39;public&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;msg&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">_person</span> <span class="o">+</span> <span class="s1">&#39; left&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clientid&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">_clientid</span><span class="p">,</span>
+            <span class="s1">&#39;participants&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">websocketParticipants</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="p">}</span>
+
+        <span class="n">routing_key</span> <span class="o">=</span> <span class="s1">&#39;public.*&#39;</span>
+
+        <span class="c1"># publishing the close connection info to rest of the rabbitmq subscribers/clients</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rabbit_client</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">routing_key</span><span class="p">)</span>
+
+        <span class="c1"># removing the connection of global list</span>
+        <span class="n">websocketParticipants</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;[ChatWebsocketHandler] Websocket connection closed&#39;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ChatWebsocketHandler.genid"><a class="viewcode-back" href="../../../../modules/mainview.html#rabbitChat.apps.main.views.ChatWebsocketHandler.genid">[docs]</a>    <span class="k">def</span> <span class="nf">genid</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">base64</span><span class="o">.</span><span class="n">urlsafe_b64encode</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">urandom</span><span class="p">(</span><span class="mi">32</span><span class="p">))</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="s1">&#39;e&#39;</span><span class="p">)</span></div></div>
+
+
+
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Anirban Roy DAs.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../../',
+            VERSION:'1.0.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
