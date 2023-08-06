@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+
+import argparse
+import configparser
+import fnmatch
+import logging
+import os
+import os.path
+import subprocess
+import sys
+
+import xdg.BaseDirectory
+
+LOGGER = logging.getLogger()
+CONFIG_FILE_NAME = 'git-pass-mapping.ini'
+DEFAULT_CONFIG_FILE = os.path.join(
+    xdg.BaseDirectory.save_config_path('pass-git-helper'),
+    CONFIG_FILE_NAME)
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description='Git credential helper using pass as the data source.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '-m', '--mapping',
+        type=argparse.FileType('r'),
+        metavar='MAPPING_FILE',
+        default=None,
+        help='A mapping file to be used, specifying how hosts '
+             'map to pass entries. Overrides the default mapping files from '
+             'XDG config locations, usually: {}'.format(DEFAULT_CONFIG_FILE))
+    parser.add_argument(
+        '-l', '--logging',
+        action='store_true',
+        default=False,
+        help='Print debug messages on stderr. '
+             'Might include sensitive information')
+    parser.add_argument(
+        'action',
+        type=str,
+        metavar='ACTION',
+        help='Action to preform as specified in the git credential API')
+
+    args = parser.parse_args()
+
+    return args
+
+
+def parse_mapping(mapping_file):
+    LOGGER.debug('Parsing mapping file. Command line: %s', mapping_file)
+
+    def parse(mapping_file):
+        config = configparser.ConfigParser()
+        config.read_file(mapping_file)
+        return config
+
+    # give precedence to the user-specified file
+    if mapping_file is not None:
+        LOGGER.debug('Parsing command line mapping file')
+        return parse(mapping_file)
+
+    # fall back on XDG config location
+    xdg_config_dir = xdg.BaseDirectory.load_first_config('pass-git-helper')
+    if xdg_config_dir is None:
+        raise RuntimeError(
+            'No mapping configured so far at any XDG config location. '
+            'Please create {}'.format(DEFAULT_CONFIG_FILE))
+    mapping_file = os.path.join(xdg_config_dir, CONFIG_FILE_NAME)
+    LOGGER.debug('Parsing mapping file %s', mapping_file)
+    with open(mapping_file, 'r') as file_handle:
+        return parse(file_handle)
+
+
+def parse_request():
+    in_lines = sys.stdin.readlines()
+    LOGGER.debug('Received request "%s"', in_lines)
+
+    request = {}
+    for line in in_lines:
+        # skip empty lines to be a bit resilient against protocol errors
+        if not line.strip():
+            continue
+
+        parts = line.split('=')
+        assert len(parts) == 2
+        request[parts[0].strip()] = parts[1].strip()
+
+    return request
+
+
+def get_password(request, mapping):
+    LOGGER.debug('Received request "%s"', request)
+    if 'host' not in request:
+        LOGGER.error('host= entry missing in request. '
+                     'Cannot query without a host')
+        return
+
+    host = request['host']
+    if 'path' in request:
+        host = os.path.join(host, request['path'])
+
+    def decode_skip(line, skip):
+        return line.decode('utf-8')[skip:]
+
+    LOGGER.debug('Iterating mapping to match against host "%s"', host)
+    for section in mapping.sections():
+        if fnmatch.fnmatch(host, section):
+            LOGGER.debug('Section "%s" matches requested host "%s"',
+                         section, host)
+            # TODO handle exceptions
+            pass_target = mapping.get(section, 'target')
+            skip_password_chars = mapping.getint(
+                section, 'skip_password', fallback=0)
+            skip_username_chars = mapping.getint(
+                section, 'skip_username', fallback=0)
+            LOGGER.debug('Requesting entry "%s" from pass', pass_target)
+            output = subprocess.check_output(['pass', 'show', pass_target])
+            lines = output.splitlines()
+            if len(lines) >= 1:
+                print('password={}'.format(
+                    decode_skip(lines[0], skip_password_chars)))
+            if 'username' not in request and len(lines) >= 2:
+                print('username={}'.format(
+                    decode_skip(lines[1], skip_username_chars)))
+            return
+
+    LOGGER.warning('No mapping matched')
+    sys.exit(1)
+
+
+def handle_skip():
+    if 'PASS_GIT_HELPER_SKIP' in os.environ:
+        LOGGER.info(
+            'Skipping processing as requested via environment variable')
+        sys.exit(1)
+
+
+def main():
+    args = parse_arguments()
+
+    if args.logging:
+        logging.basicConfig(level=logging.DEBUG)
+
+    handle_skip()
+
+    action = args.action
+    request = parse_request()
+    LOGGER.debug('Received action %s with request:\n%s',
+                 action, request)
+
+    try:
+        mapping = parse_mapping(args.mapping)
+    except Exception as error:
+        LOGGER.critical('Unable to parse mapping file', exc_info=True)
+        print('Unable to parse mapping file: {}'.format(error),
+              file=sys.stderr)
+        sys.exit(1)
+
+    if action == 'get':
+        get_password(request, mapping)
+    else:
+        LOGGER.info('Action %s is currently not supported', action)
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
