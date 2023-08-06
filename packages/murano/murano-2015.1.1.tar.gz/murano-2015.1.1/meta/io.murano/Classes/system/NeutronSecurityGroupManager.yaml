@@ -1,0 +1,92 @@
+Namespaces:
+  =: io.murano.system
+  std: io.murano
+
+Name: NeutronSecurityGroupManager
+
+Extends: SecurityGroupManager
+
+Methods:
+  addGroupIngress:
+    Arguments:
+      - rules:
+          Contract:
+            - FromPort: $.int().notNull()
+              ToPort: $.int().notNull()
+              IpProtocol: $.string().notNull()
+              External: $.bool().notNull()
+              Ethertype: $.string().check($ in list(null, 'IPv4', 'IPv6'))
+      - groupName:
+          Contract: $.string().notNull()
+          Default: $this.defaultGroupName
+    Body:
+      - $._addGroup(ingress, $rules, $groupName)
+
+  addGroupEgress:
+    Arguments:
+      - rules:
+          Contract:
+            - FromPort: $.int().notNull()
+              ToPort: $.int().notNull()
+              IpProtocol: $.string().notNull()
+              External: $.bool().notNull()
+              Ethertype: $.string().check($ in list(null, 'IPv4', 'IPv6'))
+      - groupName:
+          Contract: $.string().notNull()
+          Default: $this.defaultGroupName
+    Body:
+      - $._addGroup(egress, $rules, $groupName)
+
+  _addGroup:
+    Arguments:
+      - direction:
+          Contract: $.string().notNull().check($ in list(ingress, egress))
+          Default: ingress
+      - rules:
+          Contract:
+            - FromPort: $.int().notNull()
+              ToPort: $.int().notNull()
+              IpProtocol: $.string().notNull()
+              External: $.bool().notNull()
+              Ethertype: $.string().check($ in list(null, 'IPv4', 'IPv6'))
+      - groupName:
+          Contract: $.string().notNull()
+    Body:
+      - $ext_keys:
+          true:
+            ext_key: remote_ip_prefix
+            ext_val: '0.0.0.0/0'
+          false:
+            ext_key: remote_mode
+            ext_val: remote_group_id
+
+      - $stack: $.environment.stack
+      - $template:
+          resources:
+            $groupName:
+              type: 'OS::Neutron::SecurityGroup'
+              properties:
+                description: format('Composite security group of Murano environment {0}', $.environment.name)
+                rules:
+                  - port_range_min: null
+                    port_range_max: null
+                    protocol: icmp
+                    remote_ip_prefix: '0.0.0.0/0'
+      - $.environment.stack.updateTemplate($template)
+
+      - $rulesList: $rules.select(dict(
+            port_range_min => $.FromPort,
+            port_range_max => $.ToPort,
+            protocol => $.IpProtocol,
+            ethertype => coalesce($.get(Ethertype), IPv4),
+            $ext_keys.get($.External).ext_key => $ext_keys.get($.External).ext_val,
+            direction => $direction
+          ))
+
+      - $template:
+          resources:
+            $groupName:
+              type: 'OS::Neutron::SecurityGroup'
+              properties:
+                rules: $rulesList
+      - $.environment.stack.updateTemplate($template)
