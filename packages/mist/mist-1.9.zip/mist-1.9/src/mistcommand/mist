@@ -1,0 +1,1249 @@
+#!/usr/bin/env python
+# PYTHON_ARGCOMPLETE_OK
+
+import sys
+import argparse
+import argcomplete
+
+from ansible.runner import Runner
+from ansible.inventory import Inventory
+
+from mistcommand.helpers.login import user_info
+from mistcommand.helpers.clouds import cloud_action
+from mistcommand.helpers.providers import provider_action
+from mistcommand.helpers.keys import key_action
+from mistcommand.helpers.machines import machine_action
+from mistcommand.helpers.templates import template_action
+from mistcommand.helpers.stacks import stack_action
+from mistcommand.helpers.images import image_action
+from mistcommand.helpers.sizes import size_action
+from mistcommand.helpers.locations import location_action
+from mistcommand.helpers.networks import network_action
+from mistcommand.helpers.metrics import metric_action
+from mistcommand.helpers.scripts import script_action
+from mistcommand.helpers.mistansible import ansible_action
+from mistcommand.helpers.ssh import ssh_action
+from mistcommand.helpers.tunnels import tunnel_action
+
+from requests.packages import urllib3
+urllib3.disable_warnings()
+
+
+def main():
+
+    main_parser = argparse.ArgumentParser(description="Mist.io command line tool")
+    subparsers = main_parser.add_subparsers(help='action to perform',
+                                            dest='action')
+
+    # -------------SUPPORTED PROVIDERS----------------
+    p_list_providers = subparsers.add_parser(
+        'list-providers',
+        description="List all supported providers"
+    )
+
+    p_list_providers.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    # ---------------BACKEND ACTIONS------------------
+    p_list_clouds = subparsers.add_parser(
+        'list-clouds',
+        description="List all of your added clouds"
+    )
+
+    p_list_clouds.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    p_rename_cloud = subparsers.add_parser(
+        'rename-cloud',
+        description="Rename a specified cloud"
+    )
+
+    p_rename_cloud.add_argument(
+        '--new-name', required=True,
+        help="New name for the key"
+    )
+
+    p_delete_cloud = subparsers.add_parser(
+        'delete-cloud',
+        description="Delete the specified cloud"
+    )
+
+    p_describe_cloud = subparsers.add_parser(
+        'describe-cloud',
+        description="Show information about a specified cloud"
+    )
+
+    for parser in [p_rename_cloud, p_delete_cloud, p_describe_cloud]:
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument(
+            '--id',
+            help="Id of the specified cloud"
+        )
+        group.add_argument(
+            '--name',
+            help="Name of the specified cloud"
+        )
+        group.add_argument(
+            'cloud', nargs="?",
+            help="Name or id of the cloud you want to specify"
+        )
+
+    p_add_cloud = subparsers.add_parser(
+        'add-cloud',
+        description="Add a new cloud"
+    )
+
+    provider_choices = [
+        'bare_metal',
+        'coreos',
+        'ec2',
+        'gce',
+        'nephoscale',
+        'digitalocean',
+        'linode',
+        'openstack',
+        'rackspace',
+        'softlayer',
+        # 'hpcloud',
+        'docker',
+        'azure',
+        'vcloud',
+        'indonesian_vcloud',
+        'libvirt',
+        'hostvirtual',
+        'vultr',
+        'vsphere',
+        'packet'
+    ]
+    p_add_cloud.add_argument(
+        '--provider', required=True, choices=provider_choices,
+        help="The provider id for the new cloud, e.g. ec2_ap_northeast. You can"
+             " list supported-providers to see all available provider ids"
+    )
+
+    p_add_cloud.add_argument(
+        '--name', required=True,
+        help="Name for the new cloud"
+    )
+
+    ec2_group = p_add_cloud.add_argument_group('EC2')
+    ec2_regions = [
+        'ec2_ap_northeast',
+        'ec2_ap_southeast',
+        'ec2_ap_southeast_2',
+        'ec2_eu_west',
+        'ec2-eu-central1',
+        'ec2_sa_east',
+        'ec2_us_east',
+        'ec2_us_west',
+        'ec2_us_west_oregon'
+    ]
+
+    ec2_group.add_argument(
+        '--ec2-region', choices=ec2_regions,
+        help="Region for the EC2 cloud"
+    )
+    ec2_group.add_argument(
+        '--ec2-api-key',
+        help="The ec2 API key"
+    )
+    ec2_group.add_argument(
+        '--ec2-api-secret',
+        help="The ec2 API secret"
+    )
+
+    rackspace_group = p_add_cloud.add_argument_group('Rackspace')
+    rackspace_regions = [
+        'dfw',
+        'ord',
+        'iad',
+        'lon',
+        'syd',
+        'hkg',
+        'rackspace_first_gen:us',
+        'rackspace_first_gen:uk'
+    ]
+    rackspace_group.add_argument(
+        '--rackspace-region', choices=rackspace_regions,
+        help="Region for the Rackspace cloud"
+    )
+    rackspace_group.add_argument(
+        '--rackspace-username',
+        help="Username for Rackspace"
+    )
+    rackspace_group.add_argument(
+        '--rackspace-api-key',
+        help="API Key for Rackspace"
+    )
+
+    nephoscale_group = p_add_cloud.add_argument_group('NephoScale')
+    nephoscale_group.add_argument(
+        '--nepho-username',
+        help="Username for NephoScale"
+    )
+    nephoscale_group.add_argument(
+        '--nepho-password',
+        help="Password for nephoscale"
+    )
+
+    digital_group = p_add_cloud.add_argument_group('DigitalOcean')
+    digital_group.add_argument(
+        '--digi-token',
+        help="Token for the DigitalOcean cloud"
+    )
+
+    linode_group = p_add_cloud.add_argument_group("Linode")
+    linode_group.add_argument(
+        '--linode-api-key',
+        help="API Key for the Linode cloud"
+    )
+
+    openstack_group = p_add_cloud.add_argument_group("Openstack")
+    openstack_group.add_argument(
+        '--openstack-username',
+        help="Username for the Openstack cloud"
+    )
+    openstack_group.add_argument(
+        '--openstack-password',
+        help="Password for the Openstack cloud"
+    )
+    openstack_group.add_argument(
+        '--openstack-auth-url',
+        help="Auth url, e.g. http://10.0.0.2:5000"
+    )
+    openstack_group.add_argument(
+        '--openstack-tenant',
+        help="Tenant name"
+    )
+    openstack_group.add_argument(
+        '--openstack-region',
+        help="OPTIONAL. Normally you do not have to explicitly set a region"
+    )
+
+    softlayer_group = p_add_cloud.add_argument_group("SoftLayer")
+    softlayer_group.add_argument(
+        '--softlayer-username',
+        help="Username for the softlayer cloud"
+    )
+    softlayer_group.add_argument(
+        '--softlayer-api-key',
+        help="API Key for the SoftLayer cloud"
+    )
+
+    # hp_group = p_add_cloud.add_argument_group("HP")
+    # hp_regions = [
+    #     'region-a.geo-1',
+    #     'region-b.geo-1'
+    # ]
+    #
+    # hp_group.add_argument(
+    #     '--hp-region', choices=hp_regions,
+    #     help="Region for the HP Cloud Cloud"
+    # )
+    # hp_group.add_argument(
+    #     '--hp-username',
+    #     help="Username for the HP cloud"
+    # )
+    # hp_group.add_argument(
+    #     '--hp-password',
+    #     help="Passord for the HP cloud"
+    # )
+    # hp_group.add_argument(
+    #     '--hp-tenant',
+    #     help="Tenant name for the HP cloud"
+    # )
+
+    docker_group = p_add_cloud.add_argument_group("Docker")
+    docker_group.add_argument(
+        '--docker-host',
+        help="Ip of the Docker host"
+    )
+    docker_group.add_argument(
+        '--docker-port', default="4243",
+        help="Port for the Docker API. By default 4243."
+    )
+    docker_group.add_argument(
+        '--docker-auth-user',
+        help="OPTIONAL. In case you have a basic auth set up."
+    )
+    docker_group.add_argument(
+        '--docker-auth-password',
+        help="OPTIONAL. In case you have a basic auth set up"
+    )
+    docker_group.add_argument(
+        '--docker-key-file',
+        help="OPTIONAL. Path of your key file used for TLS"
+    )
+    docker_group.add_argument(
+        '--docker-cert-file',
+        help="OPTIONAL. Path of your cert file used for TLS"
+    )
+    docker_group.add_argument(
+        '--docker-ca-cert-file',
+        help="OPTIONAL. Path to your CA cert file used for TLS"
+    )
+
+    bare_group = p_add_cloud.add_argument_group("Bare Metal Server")
+    bare_group.add_argument(
+        '--bare-hostname',
+        help="Hostname of the machine"
+    )
+    bare_group.add_argument(
+        '--bare-user', default="root",
+        help="By default root"
+    )
+    bare_group.add_argument(
+        '--bare-port', default="22",
+        help="Port of the ssh-server. By default 22"
+    )
+    bare_group.add_argument(
+        '--bare-ssh-key-id',
+        help="The name of the ssh key that is associated with the machine"
+    )
+
+    core_group = p_add_cloud.add_argument_group("CoreOS")
+    core_group.add_argument(
+        '--core-hostname',
+        help="Hostname of the machine"
+    )
+    core_group.add_argument(
+        '--core-user', default="root",
+        help="By default root"
+    )
+    core_group.add_argument(
+        '--core-port', default="22",
+        help="Port of the ssh-server. By default 22"
+    )
+    core_group.add_argument(
+        '--core-ssh-key-id',
+        help="The name of the ssh key that is associated with the machine"
+    )
+
+    azure_group = p_add_cloud.add_argument_group("Azure")
+    azure_group.add_argument(
+        '--azure-sub-id',
+        help="Subscription ID of azure account "
+    )
+    azure_group.add_argument(
+        '--azure-cert-path',
+        help="Path of azure cert file"
+    )
+
+    vcloud_group = p_add_cloud.add_argument_group("vCloud")
+    vcloud_group.add_argument(
+        '--vcloud-username',
+        help="Username for vCloud cloud"
+    )
+    vcloud_group.add_argument(
+        '--vcloud-password',
+        help="Password for vCloud cloud"
+    )
+    vcloud_group.add_argument(
+        '--vcloud-host',
+        help="Host for vCloud cloud"
+    )
+    vcloud_group.add_argument(
+        '--vcloud-organization',
+        help="Your organization's name - "
+             "the one you are registered to vCloud with"
+    )
+
+    vsphere_group = p_add_cloud.add_argument_group("vSphere")
+    vsphere_group.add_argument(
+        '--vsphere-username',
+        help="Username for the vSphere cloud"
+    )
+    vsphere_group.add_argument(
+        '--vsphere-password',
+        help="Password for the vSphere cloud"
+    )
+    vsphere_group.add_argument(
+        '--vsphere-host',
+        help="Hostname"
+    )
+
+    indonesian_group = p_add_cloud.add_argument_group("Indonesian vCloud")
+    indonesian_group.add_argument(
+        '--indonesian-username',
+        help="Username for vCloud cloud"
+    )
+    indonesian_group.add_argument(
+        '--indonesian-password',
+        help="Password for vCloud cloud"
+    )
+    indonesian_group.add_argument(
+        '--indonesian-organization',
+        help="Your organization's name - "
+             "the one you are registered to vCloud with"
+    )
+    indonesian_group.add_argument(
+        '--indonesian-region', choices=['my.idcloudonline.com', 'compute.idcloudonline.com'],
+        help="Region of the Indonesian vCloud"
+    )
+
+    libvirt_group = p_add_cloud.add_argument_group("KVM via libvirt")
+    libvirt_group.add_argument(
+        '--libvirt-hostname',
+        help="The hostname of your libvirt machine"
+    )
+    libvirt_group.add_argument(
+        '--libvirt-user', default="root",
+        help="User for your libvirt machine. By default root"
+    )
+    libvirt_group.add_argument(
+        '--libvirt-key',
+        help="The SSH Key name that you have added to Mist.io "
+             "and is associated with your libvirt machine"
+    )
+    libvirt_group.add_argument(
+        '--libvirt-ssh-port', default="22",
+        help="Port of the ssh-server. Defaults to 22"
+    )
+    libvirt_group.add_argument(
+        '--libvirt-images',
+        help="Path to *.iso images"
+    )
+
+    gce_group = p_add_cloud.add_argument_group("GCE")
+    gce_group.add_argument(
+        '--gce-email',
+        help="Email of your Google Compute Engine account"
+    )
+    gce_group.add_argument(
+        '--gce-project-id',
+        help="Your Google Compute Engine's Project ID"
+    )
+    gce_group.add_argument(
+        '--gce-private-key',
+        help="Path of file that contains your GCE private key"
+    )
+
+    hostvirtual_group = p_add_cloud.add_argument_group("Hostvirtual")
+    hostvirtual_group.add_argument(
+        '--hostvirtual-api-key',
+        help="API Key"
+    )
+
+    vultr_group = p_add_cloud.add_argument_group("Vultr")
+    vultr_group.add_argument(
+        '--vultr-api-key',
+        help="API Key"
+    )
+
+    packet_group = p_add_cloud.add_argument_group("Packet.net")
+    packet_group.add_argument(
+        '--packet-api-key',
+        help="API Key"
+    )
+    packet_group.add_argument(
+        '--packet-project',
+        help="Optional project name"
+    )
+
+    # ---------------KEY ACTIONS----------------------
+    p_list_keys = subparsers.add_parser(
+        'list-keys',
+        description="List added keys",
+    )
+
+    p_list_keys.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    p_add_key = subparsers.add_parser(
+        'add-key',
+        description="Add a new SSH Key"
+    )
+
+    p_add_key.add_argument(
+        '--name', required=True,
+        help="Name of the new SSH Key"
+    )
+
+    group = p_add_key.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        '--key-path',
+        help="Path to private SSH Key file"
+    )
+    group.add_argument(
+        '--auto-generate', action='store_true',
+        help="If given, then mist.io will auto-generate an SSH Key"
+    )
+
+    p_delete_key = subparsers.add_parser(
+        'delete-key',
+        description="Delete a key"
+    )
+
+    p_rename_key = subparsers.add_parser(
+        'rename-key',
+        description="Rename key"
+    )
+
+    p_rename_key.add_argument(
+        '--new-name', required=True,
+        help="New name for the key"
+    )
+
+    p_describe_key = subparsers.add_parser(
+        'describe-key',
+        description="Show information about a specified key"
+    )
+
+    p_associate_key = subparsers.add_parser(
+        'associate-key',
+        description="Associate a private/public key pair to a machine"
+    )
+
+    p_associate_key.add_argument(
+        '--key', required=True,
+        help="Id of the key you want to act on"
+    )
+
+    p_disassociate_key = subparsers.add_parser(
+        'disassociate-key',
+        description="Undo a key-machine association"
+    )
+
+    p_disassociate_key.add_argument(
+        '--key', required=True,
+        help="Name of the key you want to act on"
+    )
+
+    for parser in [p_delete_key, p_rename_key, p_describe_key]:
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument(
+            '--key-id',
+            help="ID of the key you want to act on. "
+                 "You can retrieve all key IDs via list-keys"
+        )
+
+    for parser in [p_associate_key, p_disassociate_key]:
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument(
+            '--machine-id',
+            help="Id of the machine"
+        )
+        group.add_argument(
+            '--machine-name',
+            help="Name of the machine"
+        )
+        # group.add_argument(
+        #     'machine', nargs="?",
+        #     help="Id or name of the machine"
+        # )
+
+    # ----------------SCRIPT ACTIONS------------------
+    p_list_scripts = subparsers.add_parser(
+        'list-scripts',
+        description="List scripts"
+    )
+
+    p_list_scripts.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    p_add_script = subparsers.add_parser(
+        'add-script',
+        description="Add a script"
+    )
+
+    p_add_script.add_argument(
+        '--name', required=True,
+        help="Name of the script"
+    )
+
+    p_add_script.add_argument(
+        '--description',
+        help="Script description"
+    )
+
+    p_add_script.add_argument(
+        '--location', required=True, choices=['inline', 'url', 'github'],
+        help="Location of script"
+    )
+
+    p_add_script.add_argument(
+        '--type', required=True, choices=['executable', 'ansible',
+                                          'collectd_python_plugin'],
+        help="Script execution type"
+    )
+
+    p_add_script.add_argument(
+        '--entrypoint',
+        help="Entrypoint"
+    )
+
+    p_add_script.add_argument(
+        '--run', action='store_true', default=False,
+        help="Run the script immediately on the specified machine"
+    )
+
+    add_script_group0 = p_add_script.add_mutually_exclusive_group(required=True)
+    add_script_group0.add_argument(
+        '--script',
+        help='Script to be executed. Can be either source code, url, or repo, '
+             'depending on location type'
+    )
+    add_script_group0.add_argument(
+        '--script-file',
+        help='Add inline script from local file'
+    )
+
+    add_script_group1 = p_add_script.add_mutually_exclusive_group()
+    add_script_group1.add_argument(
+        '--machine-id',
+        help="Id of the machine to run the script on"
+    )
+    add_script_group1.add_argument(
+        '--machine-name',
+        help="Name of the machine to run the script on"
+    )
+
+    p_remove_script = subparsers.add_parser(
+        'remove-script',
+        description="Remove a script"
+    )
+
+    p_remove_script.add_argument(
+        '--id', required=True,
+        help="Id of the script to be removed.\n"
+             "You can use list-scripts to retrieve the scripts' IDs"
+    )
+
+    p_run_script = subparsers.add_parser(
+        'run-script',
+        description="Run a script"
+    )
+
+    p_run_script.add_argument(
+        '--id',
+        help="Id of the script to be run.\n"
+             "You can use list-scripts to retrieve the scripts' IDs"
+    )
+
+    run_script_group = p_run_script.add_mutually_exclusive_group(required=True)
+    run_script_group.add_argument(
+        '--machine-id',
+        help="Id of the machine"
+    )
+    run_script_group.add_argument(
+        '--machine-name',
+        help="Name of the machine"
+    )
+    # script_group.add_argument(
+    #     'machine', nargs="?",
+    #     help="Id or name of the machine"
+    # )
+
+    # ----------------IMAGES/SIZES/LOCATIONS/NETWORKS------------------
+    p_list_images = subparsers.add_parser(
+        'list-images',
+        description="List images for a specified cloud"
+    )
+
+    p_list_images.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    p_list_images.add_argument(
+        '--search', required=False,
+        help="Search for OS Images that contain this."
+    )
+
+    p_list_sizes = subparsers.add_parser(
+        'list-sizes',
+        description="List sizes for a specified cloud"
+    )
+
+    p_list_sizes.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    p_list_locations = subparsers.add_parser(
+        'list-locations',
+        description="List images for a specified cloud"
+    )
+
+    p_list_locations.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    p_list_networks = subparsers.add_parser(
+        'list-networks',
+        description="List available networks for specified provider "
+                    "(currently only OPENSTACK support)"
+    )
+
+    p_list_networks.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    for parser in [p_list_images, p_list_sizes, p_list_locations, p_list_networks]:
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument(
+            '--cloud-id',
+            help="Specify a cloud's id"
+        )
+        group.add_argument(
+            '--cloud-name',
+            help="Specify a cloud's name"
+        )
+
+    # --------------MACHINE ACTIONS-------------------------
+    p_list_machines = subparsers.add_parser(
+        'list-machines',
+        description="List all machines or on a specific cloud"
+    )
+
+    group = p_list_machines.add_mutually_exclusive_group()
+    group.add_argument(
+        '--cloud',
+        help="This can be either a cloud's name or id"
+    )
+    group.add_argument(
+        '--cloud-id',
+        help="Specify a cloud's id"
+    )
+    group.add_argument(
+        '--cloud-name',
+        help="Specify a cloud's name"
+    )
+
+    p_list_machines.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    p_describe_machine = subparsers.add_parser(
+        'describe-machine',
+        description="Show information about a specified machine"
+    )
+
+    p_probe = subparsers.add_parser(
+        'probe',
+        description="Probe a specified machine"
+    )
+
+    p_start = subparsers.add_parser(
+        'start',
+        description='Start a stopped machine'
+    )
+
+    p_stop = subparsers.add_parser(
+        'stop',
+        description="Stop a running machine"
+    )
+
+    p_reboot = subparsers.add_parser(
+        'reboot',
+        description="Reboot a machine"
+    )
+
+    p_destroy = subparsers.add_parser(
+        'destroy',
+        description="Destroy a machine"
+    )
+
+    p_add_tag = subparsers.add_parser(
+        'add-tag',
+        description="Tag a machine"
+    )
+
+    p_add_tag.add_argument(
+        '--key', required=True,
+        help="Specifies the key of the tag to be added to the machine"
+    )
+
+    p_add_tag.add_argument(
+        '--value', required=True,
+        help="Specifies the value of the tag to be added to the machine"
+    )
+
+    p_remove_tag = subparsers.add_parser(
+        'remove-tag',
+        description="Remove a tag from a machine"
+    )
+
+    p_remove_tag.add_argument(
+        '--key', required=True,
+        help="Specifies the key of the tag to be removed from a machine"
+    )
+
+    p_remove_tag.add_argument(
+        '--value', required=True,
+        help="Specifies the value of the tag to be removed from a machine"
+    )
+
+    p_enable_monitoring = subparsers.add_parser(
+        'enable-monitoring',
+        description="Enable monitoring on a machine"
+    )
+
+    p_disable_monitoring = subparsers.add_parser(
+        'disable-monitoring',
+        description="Disable monitoring on a machine"
+    )
+
+    for parser in [p_describe_machine, p_probe, p_start, p_stop, p_reboot,
+                   p_destroy, p_add_tag, p_remove_tag,
+                   p_enable_monitoring, p_disable_monitoring]:
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument(
+            '--machine-id',
+            help="Id of the specified machine"
+        )
+        group.add_argument(
+            '--machine-name',
+            help="Name of the specified machine"
+        )
+        group.add_argument(
+            'machine', nargs="?",
+            help="Name or id of the machine you want to specify"
+        )
+
+    p_create_machine = subparsers.add_parser(
+        'create-machine',
+        description="Create a new machine"
+    )
+
+    group = p_create_machine.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        '--cloud',
+        help="This can be either a cloud's name or id"
+    )
+    group.add_argument(
+        '--cloud-id',
+        help="Specify a cloud's id"
+    )
+    group.add_argument(
+        '--cloud-name',
+        help="Specify a cloud's name"
+    )
+
+    p_create_machine.add_argument(
+        '--machine-name', required=True,
+        help="Name for the new machine"
+    )
+
+    p_create_machine.add_argument(
+        '--key-id',
+        help="Name of SSH Key to associate with the machine"
+    )
+
+    p_create_machine.add_argument(
+        '--image-id', required=True,
+        help="Id of OS Image. You can list images for the "
+             "given cloud to find their ids"
+    )
+
+    p_create_machine.add_argument(
+        '--size-id', required=True,
+        help="Id of machine size. You can list sizes for the "
+             "given cloud to find their ids"
+    )
+
+    p_create_machine.add_argument(
+        '--location-id',
+        help="Id of the cloud location. "
+             "You can list locations for the given cloud to find their ids"
+    )
+
+    p_create_machine.add_argument(
+        '--network-id', required=False,
+        help="Currently supported only for Openstack. "
+             "Required if multiple openstack networks are available"
+    )
+
+    p_create_machine.add_argument(
+        '--script-id', required=False,
+        help="The id of a script to run after machine is deployed"
+    )
+
+    p_create_machine.add_argument(
+        '--script-params', required=False,
+        help="Optional params for the script"
+    )
+
+    p_create_machine.add_argument(
+        '--monitoring', action='store_true',
+        help='Enable machine monitoring immediately after deployment'
+    )
+
+    # -------------------TEMPLATE ACTIONS-------------------
+    p_add_template = subparsers.add_parser(
+        'add-template',
+        description="Add a template"
+    )
+    p_add_template.add_argument(
+        '--name', required=True,
+        help="Name of the template"
+    )
+    add_template_group = p_add_template.add_mutually_exclusive_group(required=True)
+    add_template_group.add_argument(
+        '--template',
+        help="Template"
+    )
+    add_template_group.add_argument(
+        '--template-file',
+        help='Template input from file'
+    )
+    p_add_template.add_argument(
+        '--location', required=True, choices=['inline', 'github', 'url'],
+        help="Template location"
+    )
+    p_add_template.add_argument(
+        '--type', required=True, choices=['cloudify'],
+        help="Execution type"
+    )
+    p_add_template.add_argument(
+        '--entrypoint',
+        help="Entrypoint"
+    )
+    p_add_template.add_argument(
+        '--description',
+        help="Description of the template"
+    )
+
+    p_delete_template = subparsers.add_parser(
+        'delete-template',
+        description="Delete a template"
+    )
+    p_delete_template.add_argument(
+        '--template-id', required=True,
+        help="The ID of the template to be deleted. "
+             "You can retrieve all the template IDs by invoking list-templates"
+    )
+
+    p_list_templates = subparsers.add_parser(
+        'list-templates',
+        description="List all templates"
+    )
+    p_list_templates.add_argument(
+        '--pretty', action="store_true",
+        help='Print in a table format'
+    )
+
+    p_show_template = subparsers.add_parser(
+        'show-template',
+        description='Show template information'
+    )
+    p_show_template.add_argument(
+        '--template-id', required=True,
+        help="The ID of the template to be looked up. "
+             "You can retrieve templates' IDs by invoking list-templates"
+    )
+    p_show_template.add_argument(
+        '--pretty', action='store_true',
+        help='Print in a table format'
+    )
+
+    # -------------------STACK ACTIONS-------------------
+    p_list_stacks = subparsers.add_parser(
+        'list-stacks',
+        description="List all available stacks"
+    )
+    p_list_stacks.add_argument(
+        '--pretty', action="store_true",
+        help="Print in a table format"
+    )
+
+    p_add_stack = subparsers.add_parser(
+        'create-stack',
+        description="Start a template job"
+    )
+    p_add_stack.add_argument(
+        '--template-id', required=True,
+        help="Id of the template to be used"
+    )
+    p_add_stack.add_argument(
+        '--stack-name', required=True,
+        help="The name of the new stack"
+    )
+    p_add_stack.add_argument(
+        '--stack-description',
+        help="Description of the stack"
+    )
+    p_add_stack.add_argument(
+        '--deploy', action="store_true",
+        help="Deploy the stack"
+    )
+    p_add_stack.add_argument(
+        '--inputs',
+        help="Workflow inputs"
+    )
+
+    p_delete_stack = subparsers.add_parser(
+        'delete-stack',
+        description="Remove a stack"
+    )
+    p_delete_stack.add_argument(
+        '--stack-id', required=True,
+        help="ID of the stack to be removed. "
+             "You can retrieve all stack IDs by invoking list-stacks"
+    )
+    p_delete_stack.add_argument(
+        '--inputs',
+        help="Workflow inputs"
+    )
+
+    p_run_workflow = subparsers.add_parser(
+        'run-workflow',
+        description="Run a template job"
+    )
+    p_run_workflow.add_argument(
+        '--stack-id', required=True,
+        help="Id of the targeted stack"
+    )
+    p_run_workflow.add_argument(
+        '--inputs',
+        help="Workflow inputs"
+    )
+    p_run_workflow.add_argument(
+        '--workflow', required=True,
+        help="Workflow to be run"
+    )
+
+    # -------------------VPN ACTIONS-------------------
+    p_list_tunnels = subparsers.add_parser(
+        'list-tunnels',
+        description='List all available VPN Tunnels'
+    )
+    p_list_tunnels.add_argument(
+        '--pretty', action='store_true',
+        help='Print in a table format'
+    )
+
+    p_add_tunnel = subparsers.add_parser(
+        'add-tunnel',
+        description='Add a new VPN Tunnel'
+    )
+    p_add_tunnel.add_argument(
+        '--name', required=True,
+        help='Tunnel name'
+    )
+    p_add_tunnel.add_argument(
+        '--cidrs', nargs='+', required=True,
+        help='List of private networks in CIDR notation '
+             'accessible via this tunnel'
+    )
+    p_add_tunnel.add_argument(
+        '--exclude-cidrs', nargs='+',
+        help='List of private networks in CIDR notation you wish to exclude '
+             'from your VPN configuration in order to avoid potential, local '
+             'routing conflicts (OPTIONAL)'
+    )
+    p_add_tunnel.add_argument(
+        '--description',
+        help='Description (OPTIONAL)'
+    )
+
+    p_edit_tunnel = subparsers.add_parser(
+        'edit-tunnel',
+        description='Edit an existing VPN Tunnel'
+    )
+    p_edit_tunnel.add_argument(
+        'tunnel',
+        help='ID of the tunnel to be edited.'
+             'You can retrieve all tunnel IDs by invoking list-tunnels'
+    )
+    p_edit_tunnel.add_argument(
+        '--name', required=True,
+        help='Existing/new name of the specified tunnel'
+    )
+    p_edit_tunnel.add_argument(
+        '--cidrs', nargs='+', required=True,
+        help='Existing/new list of the reachable private'
+             'networks in CIDR notation'
+    )
+    p_edit_tunnel.add_argument(
+        '--description',
+        help='Description (OPTIONAL)'
+    )
+
+    p_delete_tunnel = subparsers.add_parser(
+        'delete-tunnel',
+        description='Delete an existing VPN Tunnel'
+    )
+    p_delete_tunnel.add_argument(
+        'tunnel',
+        help='ID of the tunnel to be deleted.'
+             'You can retrieve all tunnel IDs by invoking list-tunnels'
+    )
+
+    p_tunnel_script = subparsers.add_parser(
+        'tunnel-script',
+        description='Configuration script for setting up the VPN Tunnel'
+    )
+    p_tunnel_script.add_argument(
+        'tunnel',
+        help='Get the configuration script of the VPN Tunnel.'
+             'You can retrieve the tunnel ID by invoking list-tunnels'
+    )
+
+    p_tunnel_command = subparsers.add_parser(
+        'tunnel-command',
+        description='Shell command to automatically download and install'
+                    'the VPN client\'s configuration'
+    )
+    p_tunnel_command.add_argument(
+        'tunnel',
+        help='Get the shell command for downloading and running the VPN '
+             'configuration script. '
+             'You can retrieve the tunnel ID by invoking list-tunnels'
+    )
+    # -------------------METRICS ACTIONS-------------------
+    p_list_metrics = subparsers.add_parser(
+        'list-metrics',
+        description="List available metrics for this monitored machine"
+    )
+
+    p_list_metrics.add_argument(
+        '--pretty', action='store_true', default=False,
+        help="Print in a table format"
+    )
+
+    p_add_metric = subparsers.add_parser(
+        'add-metric',
+        description="Add a new metric to the machine"
+    )
+
+    p_add_metric.add_argument(
+        '--metric-id',
+        help="The id of the metric you want to add"
+    )
+
+    p_add_custom_metric = subparsers.add_parser(
+        'add-custom-metric',
+        description="Add custom python metric"
+    )
+
+    p_add_custom_metric.add_argument(
+        '--metric-name', required=True,
+        help="Name of the new custom metric"
+    )
+
+    p_add_custom_metric.add_argument(
+        '--file-path', required=True,
+        help="Path of the python metric"
+    )
+
+    p_add_custom_metric.add_argument(
+        '--value-type', default='gauge', choices=['gauge', 'derive'],
+        help="Value type can be gauge or derive"
+    )
+
+    p_add_custom_metric.add_argument(
+        '--unit', default=None,
+        help="Unit of the new custom metric"
+    )
+
+    for parser in [p_list_metrics, p_add_metric, p_add_custom_metric]:
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument(
+            '--machine-id',
+            help="Id of the specified machine"
+        )
+        group.add_argument(
+            '--machine-name',
+            help="Name of the specified machine"
+        )
+        group.add_argument(
+            'machine', nargs="?",
+            help="Name or id of the machine you want to specify"
+        )
+
+    # p_get_stats = subparsers.add_parser(
+    #     'get-stats',
+    #     description="Get stats from a monitored machine"
+    # )
+
+    # p_run = subparsers.add_parser(
+    #     'run',
+    #     description="Run a command in multiple machines"
+    # )
+    #
+    # p_run.add_argument(
+    #     '--command', required=True,
+    #     help="Run this command"
+    # )
+    #
+    # p_run.add_argument(
+    #     '--tag', required=True,
+    #     help="Run the command in machines that have this tag"
+    # )
+
+    # ----------------MIST SSH-------------------------
+    p_ssh = subparsers.add_parser(
+        'ssh',
+        description="Open ssh connection and interactive shell to machine"
+    )
+
+    p_ssh.add_argument(
+        'machine',
+        help="Name of the machine you want to ssh into"
+    )
+
+    # ----------------USER ACTIONS---------------------
+    p_user_info = subparsers.add_parser(
+        'user-info',
+        help='Get info about the user'
+    )
+
+    argcomplete.autocomplete(main_parser)
+    args = main_parser.parse_args()
+
+    if args.action == 'run':
+        ansible_action(args, Runner, Inventory)
+    elif args.action == 'ssh':
+        ssh_action(args)
+    elif args.action == 'list-providers':
+        provider_action(args)
+    elif args.action in ['list-keys', 'add-key', 'delete-key', 'rename-key',
+                         'describe-key', 'associate-key', 'disassociate-key']:
+        key_action(args)
+    elif args.action in ['list-clouds', 'rename-cloud', 'delete-cloud',
+                         'describe-cloud', 'add-cloud']:
+        cloud_action(args)
+    elif args.action == 'list-images':
+        image_action(args)
+    elif args.action == 'list-sizes':
+        size_action(args)
+    elif args.action == 'list-locations':
+        location_action(args)
+    elif args.action in ['list-scripts', 'add-script', 'remove-script',
+                         'run-script']:
+        script_action(args)
+    elif args.action == 'list-networks':
+        network_action(args)
+    elif args.action in ['list-machines', 'create-machine', 'describe-machine',
+                         'probe', 'start', 'stop', 'reboot', 'destroy',
+                         'enable-monitoring', 'disable-monitoring',
+                         'add-tag', 'remove-tag']:
+        machine_action(args)
+    elif args.action in ['list-templates', 'add-template', 'delete-template',
+                         'show-template']:
+        template_action(args)
+    elif args.action in ['list-stacks', 'create-stack', 'delete-stack',
+                         'run-workflow']:
+        stack_action(args)
+    elif args.action in ['list-tunnels', 'add-tunnel', 'edit-tunnel',
+                         'delete-tunnel', 'tunnel-script', 'tunnel-command']:
+        tunnel_action(args)
+    elif args.action in ['list-metrics', 'add-metric', 'add-custom-metric']:
+        metric_action(args)
+    elif args.action == 'user-info':
+        user_info()
+
+if __name__ == "__main__":
+    main()
